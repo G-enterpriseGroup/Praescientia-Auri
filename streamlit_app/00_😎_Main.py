@@ -6,14 +6,14 @@ st.set_page_config(
 )
 
 st.markdown(
-    """# 📈 **Stockastic**
+    """# 📈 **Equitrend**
 ### **Predicting Stocks with ML**
 
-**Stockastic is an ML-powered stock price prediction app built with Python and Streamlit. It utilizes machine learning models to forecast stock prices and help investors make data-driven decisions.**
+**Equitrend is an ML-powered stock price prediction app built with Python and Streamlit. It utilizes machine learning models to forecast stock prices and help investors make data-driven decisions.**
 
 ## 🏗️ **How It's Built**
 
-Stockastic is built with these core frameworks and modules:
+Equitrend is built with these core frameworks and modules:
 
 - **Streamlit** - To create the web app UI and interactivity 
 - **YFinance** - To fetch financial data from Yahoo Finance API
@@ -36,44 +36,7 @@ The app workflow is:
 - **Backtesting** - Evaluate model performance
 - **Responsive design** - Works on all devices
 
-## 🚀 **Getting Started**
 
-### **Local Installation**
-
-1. Clone the repo
-
-```bash
-git clone https://github.com/user/stockastic.git
-```
-
-2. Install requirements
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Change directory
-```bash
-cd streamlit_app
-```
-
-4. Run the app
-
-```bash
-streamlit run 00_😎_Main.py
-```
-
-The app will be live at ```http://localhost:8501```
-
-## 📈 **Future Roadmap**
-
-Some potential features for future releases:
-
-- **More advanced forecasting models like LSTM**
-- **Quantitative trading strategies**
-- **Portfolio optimization and tracking**
-- **Additional fundamental data**
-- **User account system**
 
 ## **⚖️ Disclaimer**
 **This is not financial advice! Use forecast data to inform your own investment research. No guarantee of trading performance.**
