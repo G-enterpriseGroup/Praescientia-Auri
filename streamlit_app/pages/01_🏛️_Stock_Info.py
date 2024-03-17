@@ -71,6 +71,10 @@ if st.button('Run SARIMAX Model'):
         df = yf.Ticker(Ticker)
         ### - DO NOT CHANGE THIS, THIS IS SET TO THE MAX TO IMPORT ALL THE HISTORICAL DATA TO LOCATE
         df = df.history(period="max")
+        import pandas as pd
+        # Convert start_date1 to datetime and localize to New York time
+        start_date1 = pd.to_datetime(start_date1).tz_localize('America/New_York')
+
         df = df.loc[start_date1:].copy()
         df.index = df.index.strftime('%Y-%m-%d')
         df.index = pd.to_datetime(df.index)
