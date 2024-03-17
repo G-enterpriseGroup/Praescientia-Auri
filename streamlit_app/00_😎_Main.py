@@ -10,15 +10,12 @@ import streamlit as st
 linkedin_url = "https://www.linkedin.com/in/balraj-s-ba0b32108"
 
 # Using st.markdown to create a clickable link with custom text
-st.markdown(f'<a href="{linkedin_url}" target="_blank">LinkedIn</a>', unsafe_allow_html=True)
-
+st.markdown(f'<a href="{linkedin_url}" target="_blank" style="font-size: 32px;">LinkedIn</a>', unsafe_allow_html=True)
 st.markdown(
     """# 📈 **Equitrend**
 ### **Predicting Stocks with Equitrend**
 
 **Equitrend is an AI-powered stock price prediction app built with Python and Streamlit. It utilizes machine learning models to forecast stock prices and help investors make data-driven decisions.**
-
-[LinkedIn](https://www.linkedin.com/in/balraj-s-ba0b32108
 
 Hello, my name is Raj. As of 2024, at 24 years of age, I am launching my company. My engagement with finance began at 17 in 2017. At that time, my career path was not clear, but I aimed to generate wealth and create a lasting impact. I opted against purchasing stock trading courses, questioning their value and the intentions of their sellers. Instead, I chose self-education, relying on the internet for articles and books on candlestick charts, price actions, and trend analysis to develop my trading skills.
 
