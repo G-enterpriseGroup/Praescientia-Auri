@@ -505,8 +505,9 @@ if st.button('Run SARIMAX Model'):
             btn = st.download_button(
                     label="Download Figure",
                     data=file,
-                    file_name=f"{Ticker}-{today_date}-Zoomed.png",
-                    mime="image/png"
-                )        
+                    file_name=f"{Ticker}-{today_date}-Consolidated.png",
+                    mime="image/png",
+                    key=f"download_{today_date}_{Ticker}"  # Unique key using today's date and Ticker
+                )  
         progress_bar.progress(100)
         st.success("Model run successfully!")
