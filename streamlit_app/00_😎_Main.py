@@ -42,8 +42,6 @@ The app workflow is:
 - **Backtesting** - Evaluate model performance
 - **Responsive design** - Works on all devices
 
-## Who I Am
-
 
 ## **⚖️ Disclaimer**
 **This is not financial advice! Use forecast data to inform your own investment research. No guarantee of trading performance.**
