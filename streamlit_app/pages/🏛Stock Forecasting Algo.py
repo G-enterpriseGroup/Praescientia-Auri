@@ -423,7 +423,7 @@ if st.button('Run SARIMAX Model'):
             btn = st.download_button(
                     label="Download Figure",
                     data=file,
-                    file_name="figure.png",
+                    file_name=f"{Ticker}-{today_date}-Zoomed.png",
                     mime="image/png"
                 )        
         progress_bar.progress(49)
