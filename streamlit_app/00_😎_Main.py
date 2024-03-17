@@ -13,9 +13,9 @@ st.markdown(
 
 [LinkedIn](https://www.linkedin.com/in/balraj-s-ba0b32108
 
-**Hello, my name is Raj. As of 2024, at 24 years of age, I am launching my company. My engagement with finance began at 17 in 2017. At that time, my career path was not clear, but I aimed to generate wealth and create a lasting impact. I opted against purchasing stock trading courses, questioning their value and the intentions of their sellers. Instead, I chose self-education, relying on the internet for articles and books on candlestick charts, price actions, and trend analysis to develop my trading skills.
+Hello, my name is Raj. As of 2024, at 24 years of age, I am launching my company. My engagement with finance began at 17 in 2017. At that time, my career path was not clear, but I aimed to generate wealth and create a lasting impact. I opted against purchasing stock trading courses, questioning their value and the intentions of their sellers. Instead, I chose self-education, relying on the internet for articles and books on candlestick charts, price actions, and trend analysis to develop my trading skills.
 
-**My technical skills development started at 13 in 2013, through coding and jailbreaking iPods and iPads using software like Greenp0isen and BlackRa1n. I sold these devices on eBay for profit, gaining early experience in market dynamics. This period also marked the introduction of Bitcoin, signaling a new era in cryptography and algorithms. My transition from technology and trading to founding my company reflects a commitment to leveraging financial knowledge and market insights to establish a durable and influential presence in the investment world.
+My technical skills development started at 13 in 2013, through coding and jailbreaking iPods and iPads using software like Greenp0isen and BlackRa1n. I sold these devices on eBay for profit, gaining early experience in market dynamics. This period also marked the introduction of Bitcoin, signaling a new era in cryptography and algorithms. My transition from technology and trading to founding my company reflects a commitment to leveraging financial knowledge and market insights to establish a durable and influential presence in the investment world.
 
 ## 🏗️ **How It's Built**
 
