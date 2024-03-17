@@ -4,6 +4,13 @@ st.set_page_config(
     page_title="Stock Prediction App",
     page_icon="😎",
 )
+import streamlit as st
+
+# Your LinkedIn profile URL
+linkedin_url = "https://www.linkedin.com/in/balraj-s-ba0b32108"
+
+# Using st.markdown to create a clickable link with custom text
+st.markdown(f'<a href="{linkedin_url}" target="_blank">LinkedIn</a>', unsafe_allow_html=True)
 
 st.markdown(
     """# 📈 **Equitrend**
