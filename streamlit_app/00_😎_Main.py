@@ -15,7 +15,7 @@ st.markdown(
     """# 📈 **Equitrend**
 ### **Predicting Stocks with Equitrend**
 
-**Equitrend is an AI-powered stock price prediction app built with Python and Streamlit. It utilizes machine learning models to forecast stock prices and help investors make data-driven decisions.**
+**Equitrend is an Quantitative Algorithmic-powered stock price prediction app built with Python and Streamlit. It utilizes machine learning models to forecast stock prices and help investors make data-driven decisions.**
 
 Hello, my name is Raj. As of 2024, at 24 years of age, I am launching my company. My engagement with finance began at 17 in 2017. At that time, my career path was not clear, but I aimed to generate wealth and create a lasting impact. I opted against purchasing stock trading courses, questioning their value and the intentions of their sellers. Instead, I chose self-education, relying on the internet for articles and books on candlestick charts, price actions, and trend analysis to develop my trading skills.
 
