@@ -413,12 +413,20 @@ if st.button('Run SARIMAX Model'):
 
 
         plt.tight_layout()  # Adjusts the subplot params so that subplots are nicely fit in the figure
+        # Assume 'fig' is your matplotlib figure object
+        fig_path = "figure.png"  # Specify the path and file name to save the figure
+        fig.savefig(fig_path)  # Save the figure to a file
         st.pyplot(fig)  # Display the figure in Streamlit
+        
+        # Read the file into a buffer
+        with open(fig_path, "rb") as file:
+            btn = st.download_button(
+                    label="Download Figure",
+                    data=file,
+                    file_name="figure.png",
+                    mime="image/png"
+                )        
         progress_bar.progress(49)
-
-        # Print the path for confirmation
-        print(f"File saved as: {path}")
-        plt.show()
 
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
