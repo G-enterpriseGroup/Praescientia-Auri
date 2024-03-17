@@ -496,6 +496,17 @@ if st.button('Run SARIMAX Model'):
             ax.set_xlabel('Date')
             ax.set_ylabel('Value')
         plt.tight_layout(pad=1)
+                fig_path = "figure.png"  # Specify the path and file name to save the figure
+        fig.savefig(fig_path)  # Save the figure to a file
         st.pyplot(fig)  # Display the figure in Streamlit
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        # Read the file into a buffer
+        with open(fig_path, "rb") as file:
+            btn = st.download_button(
+                    label="Download Figure",
+                    data=file,
+                    file_name=f"{Ticker}-{today_date}-Zoomed.png",
+                    mime="image/png"
+                )        
         progress_bar.progress(100)
         st.success("Model run successfully!")
