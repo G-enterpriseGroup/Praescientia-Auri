@@ -376,7 +376,7 @@ if st.button('Run SARIMAX Model'):
 
         import matplotlib.pyplot as plt
         import pandas as pd
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        today = datetime.now().strftime("%Y-%m-%d")
         # Assuming df3 and df are already defined and Ticker is defined
         progress_bar.progress(45)
 
