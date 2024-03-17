@@ -442,18 +442,8 @@ if st.button('Run SARIMAX Model'):
         import matplotlib.dates as mdates
         import pandas as pd
         import numpy as np
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
-        progress_bar.progress(50)
-        progress_bar.progress(54)
-        progress_bar.progress(55)
-        progress_bar.progress(56)
-        progress_bar.progress(57)
-        progress_bar.progress(58)
-        progress_bar.progress(59)
-        progress_bar.progress(60)
-        progress_bar.progress(61)
-        progress_bar.progress(62)
-        progress_bar.progress(63)
+        today = datetime.now().strftime("%Y-%m-%d")
+
         # Assuming 'df' and 'df3' are your DataFrames, and their indexes are of datetime type.
         # Also assuming 'df' already has 'MACD', 'Signal', 'Close' columns calculated.
         # 'df3' should contain your future predictions 'Mpred_future', 'Spred_future', 'Cpred_future', 'Hpred_future'.
