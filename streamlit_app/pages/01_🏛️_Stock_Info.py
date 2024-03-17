@@ -6,10 +6,6 @@ import seaborn as sns
 import matplotlib.dates as mdates
 import yfinance as yf
 import datetime
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 from datetime import datetime, timedelta
 import os, pickle
 import streamlit as st
