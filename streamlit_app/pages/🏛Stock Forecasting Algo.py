@@ -41,7 +41,7 @@ The forecasting model presented operates strictly on historical quantitative dat
 
 # Create sliders for each variable
 DD = 30
-SN = st.slider('Seasonality', min_value=7, max_value=30, value=7)
+SN = st.slider('Seasonality', min_value=7, max_value=30, value=22)
 EMA12 = st.slider('EMA12', min_value=0, max_value=100, value=13)
 EMA26 = st.slider('EMA26', min_value=0, max_value=100, value=39)
 EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
