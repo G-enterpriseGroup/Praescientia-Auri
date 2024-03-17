@@ -74,6 +74,8 @@ if st.button('Run SARIMAX Model'):
         df = df.loc[start_date1:].copy()
         df.index = df.index.strftime('%Y-%m-%d')
         df.index = pd.to_datetime(df.index)
+        df.index = df.index.tz_localize('America/New_York')
+
         del df['Open']
         del df['High']
         del df['Low']
