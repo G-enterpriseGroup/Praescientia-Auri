@@ -416,24 +416,6 @@ if st.button('Run SARIMAX Model'):
         st.pyplot(fig)  # Display the figure in Streamlit
         progress_bar.progress(49)
 
-        # Construct the filename with today's date and ticker symbol
-        filename = f"{today}_{Ticker}_Forecast.png"
-
-        # Construct the path
-        path = f"/Users/rajghotra/Library/CloudStorage/GoogleDrive-enterpriseghotra@gmail.com/My Drive/FileDrop/{Ticker}/{filename}"
-
-        # Extract the directory path
-        dir_path = os.path.dirname(path)
-
-        # Check if the directory exists, if not create it
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path)
-            print(f"Directory {dir_path} created.")
-        else:
-            print(f"Directory {dir_path} already exists.")
-
-        plt.savefig(path)
-
         # Print the path for confirmation
         print(f"File saved as: {path}")
         plt.show()
