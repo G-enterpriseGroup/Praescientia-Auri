@@ -496,7 +496,7 @@ if st.button('Run SARIMAX Model'):
             ax.set_xlabel('Date')
             ax.set_ylabel('Value')
         plt.tight_layout(pad=1)
-                fig_path = "figure.png"  # Specify the path and file name to save the figure
+        fig_path = "figure.png"  # Specify the path and file name to save the figure
         fig.savefig(fig_path)  # Save the figure to a file
         st.pyplot(fig)  # Display the figure in Streamlit
         today_date = datetime.now().strftime("%Y-%m-%d")
