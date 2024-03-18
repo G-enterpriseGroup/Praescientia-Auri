@@ -27,8 +27,6 @@ Equitrend is built with these core frameworks and modules:
 
 - **Streamlit** - To create the web app UI and interactivity 
 - **YFinance** - To fetch financial data from Yahoo Finance API
-- **StatsModels** - To build the ARIMA time series forecasting model
-- **Plotly** - To create interactive financial charts
 
 The app workflow is:
 
