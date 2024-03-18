@@ -75,10 +75,6 @@ business_days_ago_date = calculate_business_days_ago(today, 30)
 date_str = business_days_ago_date.strftime('%Y-%m-%d')
 st.write(f"Date 30 business days ago: {date_str}")
 
-# Copy to clipboard button
-if st.button('Copy Date'):
-    pyperclip.copy(date_str)
-    st.success('Date copied to clipboard!')
 # Display the result for manual copy
 st.text_input("Copy the date from here:", date_str, help="Select and copy this date manually.")
 
