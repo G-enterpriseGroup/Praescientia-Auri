@@ -42,10 +42,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-business_days_ago_date = calculate_business_days_ago(today, 30)
-
-# Display the result
-date_str = business_days_ago_date.strftime('%Y-%m-%d')
 
 # Default to the date one year ago from today for start date
 default_start_date = datetime.today() - timedelta(days=365)
