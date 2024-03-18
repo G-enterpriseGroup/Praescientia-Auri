@@ -79,6 +79,8 @@ st.write(f"Date 30 business days ago: {date_str}")
 if st.button('Copy Date'):
     pyperclip.copy(date_str)
     st.success('Date copied to clipboard!')
+# Display the result for manual copy
+st.text_input("Copy the date from here:", date_str, help="Select and copy this date manually.")
 
 
 
