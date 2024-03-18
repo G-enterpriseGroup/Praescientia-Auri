@@ -29,9 +29,23 @@ if not data.empty:
                 high=data['High'],
                 low=data['Low'],
                 close=data['Close'])])
+
+    # Update layout for a better visual
+    fig.update_layout(
+        title=f'{stock_ticker} Stock Price',
+        xaxis_title='Date',
+        yaxis_title='Price (USD)',
+        xaxis_rangeslider_visible=False, # Hide the range slider
+        xaxis=dict(
+            tickmode='array', # Use an array of custom tick values
+            tickvals=data.index[::3], # Show every 3rd label to prevent overlap
+            ticktext=[date.strftime('%Y-%m-%d') for date in data.index][::3] # Format date
+        )
+    )
     
-    fig.update_layout(title=f'{stock_ticker} Stock Price', xaxis_title='Date', yaxis_title='Price (USD)')
-    fig.update_xaxes(type='category')
+    # Update layout to make it wider
+    fig.update_layout(autosize=False, width=800, height=600)
+
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.write("No data available for the given ticker.")
