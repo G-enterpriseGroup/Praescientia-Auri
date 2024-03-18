@@ -49,3 +49,15 @@ if not data.empty:
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.write("No data available for the given ticker.")
+
+
+# Today's date
+today = datetime.now()
+
+# Calculate 30 business days ago
+business_days_ago_date = calculate_business_days_ago(today, 30)
+
+# Display the result
+st.write(f"Date 30 business days ago: {business_days_ago_date.strftime('%Y-%m-%d')}")
+
+
