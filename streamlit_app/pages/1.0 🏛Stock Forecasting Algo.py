@@ -35,7 +35,7 @@ EMA26 = st.slider('EMA26', min_value=0, max_value=100, value=39)
 EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
 
 # Text input for Ticker
-Ticker = st.text_input('Ticker', value="DMLP")
+Ticker = st.text_input('Ticker', value="AAPL")
 
 # Default to the date one year ago from today
 default_start_date = datetime.today() - timedelta(days=365)
