@@ -53,6 +53,7 @@ else:
 
 import streamlit as st
 from datetime import datetime, timedelta
+import pyperclip
 
 def calculate_business_days_ago(start_date, business_days):
     while business_days > 0:
@@ -71,7 +72,15 @@ today = datetime.now()
 business_days_ago_date = calculate_business_days_ago(today, 30)
 
 # Display the result
-st.write(f"Date 30 business days ago: {business_days_ago_date.strftime('%Y-%m-%d')}")
+date_str = business_days_ago_date.strftime('%Y-%m-%d')
+st.write(f"Date 30 business days ago: {date_str}")
+
+# Copy to clipboard button
+if st.button('Copy Date'):
+    pyperclip.copy(date_str)
+    st.success('Date copied to clipboard!')
+
+
 
 
 
