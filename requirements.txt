@@ -12,3 +12,5 @@ streamlit
 datetime
 kaleido
 seaborn
+pyperclip
+
