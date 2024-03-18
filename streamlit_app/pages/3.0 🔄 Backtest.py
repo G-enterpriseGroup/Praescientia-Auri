@@ -44,9 +44,9 @@ import pandas as pd
 
 
 # Default to the date one year ago from today for start date
-default_start_date = datetime.today() - timedelta(days=365)
+default_start_date = datetime.today() - timedelta(days=395)
 # Default to today's date for end date
-default_end_date = datetime.today()
+default_end_date = datetime.today() - timedelta(days=30)
 # Input for start date
 start_date1 = st.date_input('Start Date', value=default_start_date)
 # Input for end date
