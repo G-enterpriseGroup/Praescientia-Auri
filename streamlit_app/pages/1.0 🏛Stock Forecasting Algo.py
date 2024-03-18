@@ -398,7 +398,7 @@ if st.button('Run SARIMAX Model'):
         axs[1].legend()
         axs[1].grid(True)
         axs[1].tick_params(axis='x', rotation=45)
-
+        axs[1].set_xticks(df3.index)
 
         plt.tight_layout()  # Adjusts the subplot params so that subplots are nicely fit in the figure
         # Assume 'fig' is your matplotlib figure object
