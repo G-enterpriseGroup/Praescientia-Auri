@@ -43,10 +43,33 @@ import yfinance as yf
 import pandas as pd
 
 
-# Default to the date one year ago from today for start date
-default_start_date = datetime.today() - timedelta(days=395)
-# Default to today's date for end date
-default_end_date = datetime.today() - timedelta(days=30)
+
+# Function to calculate the start date excluding weekends
+def calculate_start_date(days):
+    start_date = datetime.today()
+    delta_days = 0
+    while delta_days < days:
+        start_date -= timedelta(days=1)
+        if start_date.weekday() < 5:  # 0-4 are Monday to Friday
+            delta_days += 1
+    return start_date
+
+# Function to calculate the end date excluding weekends
+def calculate_end_date(days):
+    end_date = datetime.today()
+    delta_days = 0
+    while delta_days < days:
+        end_date -= timedelta(days=1)
+        if end_date.weekday() < 5:  # 0-4 are Monday to Friday
+            delta_days += 1
+    return end_date
+
+# Modified code
+default_start_date = calculate_start_date(395)
+default_end_date = calculate_end_date(30)
+
+
+
 # Input for start date
 start_date1 = st.date_input('Start Date', value=default_start_date)
 # Input for end date
