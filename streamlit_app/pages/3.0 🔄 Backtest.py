@@ -51,6 +51,19 @@ else:
     st.write("No data available for the given ticker.")
 
 
+import streamlit as st
+from datetime import datetime, timedelta
+
+def calculate_business_days_ago(start_date, business_days):
+    while business_days > 0:
+        start_date -= timedelta(days=1)
+        if start_date.weekday() < 5:  # Monday = 0, Sunday = 6
+            business_days -= 1
+    return start_date
+
+# Display the app title
+st.title('Date 30 Business Days Ago')
+
 # Today's date
 today = datetime.now()
 
@@ -59,5 +72,6 @@ business_days_ago_date = calculate_business_days_ago(today, 30)
 
 # Display the result
 st.write(f"Date 30 business days ago: {business_days_ago_date.strftime('%Y-%m-%d')}")
+
 
 
