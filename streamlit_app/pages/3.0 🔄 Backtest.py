@@ -51,7 +51,6 @@ Ticker = st.text_input('Ticker', value="DMLP")
 
 # Default to the date one year ago from today
 default_start_date_business = calculate_business_days_ago(datetime.today(), 30)
-
 start_date1 = st.date_input('Start Date', value=default_start_date)
 
 # Display the current values of the variables
