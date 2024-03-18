@@ -56,7 +56,6 @@ default_start_date = datetime.today() - timedelta(days=30)
 
 # Display the start date in Streamlit, making it non-editable
 st.text(f"Start Date (fixed): {default_start_date.strftime('%Y-%m-%d')}")
-start_date1 = st.date_input('Start Date', value=default_start_date)
 
 # Display the current values of the variables
 st.write('Days Predicting:', DD)
