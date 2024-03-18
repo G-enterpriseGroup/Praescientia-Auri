@@ -37,10 +37,20 @@ EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
 # Text input for Ticker
 Ticker = st.text_input('Ticker', value="AAPL")
 
-# Default to the date one year ago from today
-default_start_date = datetime.today() - timedelta(days=365)
+from datetime import datetime, timedelta
+import streamlit as st
+import yfinance as yf
+import pandas as pd
 
+# Default to the date one year ago from today for start date
+default_start_date = datetime.today() - timedelta(days=365)
+# Default to today's date for end date
+default_end_date = datetime.today()
+
+# Input for start date
 start_date1 = st.date_input('Start Date', value=default_start_date)
+# Input for end date
+end_date1 = st.date_input('End Date', value=default_end_date)
 
 # Display the current values of the variables
 st.write('Days Predicting:', DD)
@@ -50,23 +60,26 @@ st.write('EMA26:', EMA26)
 st.write('EMA9:', EMA9)
 st.write('Ticker:', Ticker)
 st.write('Start Date:', start_date1)
+st.write('End Date:', end_date1)
 
 if st.button('Run SARIMAX Model'):
     with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
         progress_bar = st.progress(0)
-    
-        ### - CHANGE THE TICKER IN THE "" WITH THE STOCK YOU WISH TO VIEW
-        df = yf.Ticker(Ticker)
-        ### - DO NOT CHANGE THIS, THIS IS SET TO THE MAX TO IMPORT ALL THE HISTORICAL DATA TO LOCATE
-        df = df.history(period="max")
-        import pandas as pd
-        # Convert start_date1 to datetime and localize to New York time
-        start_date1 = pd.to_datetime(start_date1).tz_localize('America/New_York')
 
-        df = df.loc[start_date1:].copy()
+        # Retrieve data for the specified ticker
+        df = yf.Ticker(Ticker)
+        df = df.history(period="max")
+
+        # Convert start and end dates to datetime and localize to New York time
+        start_date1 = pd.to_datetime(start_date1).tz_localize('America/New_York')
+        end_date1 = pd.to_datetime(end_date1).tz_localize('America/New_York')
+
+        # Filter the DataFrame for the date range
+        df = df.loc[start_date1:end_date1].copy()
         df.index = df.index.strftime('%Y-%m-%d')
         df.index = pd.to_datetime(df.index)
         df.index = df.index.tz_localize('America/New_York')
+
 
         del df['Open']
         del df['High']
