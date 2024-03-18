@@ -73,7 +73,6 @@ business_days_ago_date = calculate_business_days_ago(today, 30)
 
 # Display the result
 date_str = business_days_ago_date.strftime('%Y-%m-%d')
-st.write(f"Date 30 business days ago: {date_str}")
 
 # Display the result for manual copy
 st.text_input("Copy the date from here:", date_str, help="Select and copy this date manually.")
