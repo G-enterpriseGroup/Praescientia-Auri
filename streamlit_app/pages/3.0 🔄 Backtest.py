@@ -50,7 +50,7 @@ date_str = business_days_ago_date.strftime('%Y-%m-%d')
 # Default to the date one year ago from today for start date
 default_start_date = datetime.today() - timedelta(days=365)
 # Default to today's date for end date
-default_end_date = date_str
+default_end_date = datetime.today()
 # Input for start date
 start_date1 = st.date_input('Start Date', value=default_start_date)
 # Input for end date
