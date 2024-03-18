@@ -32,8 +32,7 @@ The app workflow is:
 
 1. User selects a stock ticker
 2. Historical data is fetched with YFinance
-3. ARIMA model is trained on the data 
-4. Model makes multi-day price forecasts
+.4. Model makes multi-day price forecasts
 5. Results are plotted with Plotly
 
 ## 🎯 **Key Features**
