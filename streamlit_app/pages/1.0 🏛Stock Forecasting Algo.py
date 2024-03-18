@@ -25,13 +25,6 @@ def hide_streamlit_branding():
 # Set the title of the app
 st.write("""
 # Forecasting Stock - Designed & Implemented by Raj Ghotra
-
-
-
-
-
-
-
 """)
 
 # Create sliders for each variable
