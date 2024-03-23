@@ -127,59 +127,6 @@ if st.button('Run SARIMAX Model'):
         progress_bar.progress(2)
 
 
-        df
-
-        import matplotlib.pyplot as plt
-        import matplotlib.dates as mdates
-        import pandas as pd
-
-        # Assuming 'df' is your DataFrame, and its index is of datetime type. If not, you've already converted it.
-        # Also assuming 'df' already has 'MACD', 'Signal', and 'Close' columns calculated.
-
-        # Sorting the DataFrame by the index (date) to ensure the data is in chronological order
-        df = df.sort_index()
-        progress_bar.progress(3)
-
-
-
-        # Creating a figure and a grid of subplots
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 7))
-
-        # Plotting the Close price on ax1
-        ax1.plot(df.index, df['Close'], label='Close', color='skyblue')
-        ax1.set_title('Close Price')
-        ax1.legend(loc='upper left')
-        ax1.grid(True)
-
-        # Formatting the date to ensure that the date does not overlap
-        ax1.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
-        ax1.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax1.xaxis.get_major_locator()))
-
-        # Plotting MACD and Signal Line on ax2
-
-        ax2.plot(df.index, df['MACD'], label='MACD', color='blue', linewidth=1.5)
-        ax2.plot(df.index, df['Signal'], label='Signal Line', color='red', linewidth=1.5)
-
-        # Plotting the Histogram as bar plot on ax2
-        ax2.bar(df.index, df['Histogram'], label='Histogram', color='grey', alpha=0.3)
-
-        ax2.set_title('MACD, Signal Line, and Histogram')
-        ax2.legend(loc='upper left')
-        ax2.grid(True)
-
-        # Formatting the date for the second subplot
-        ax2.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
-        ax2.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax2.xaxis.get_major_locator()))
-
-        ax2.set_xlabel('Date')
-        ax2.set_ylabel('Value')
-
-        # Adjusting layout
-        plt.tight_layout()
-
-        # Show the plot
-        plt.show()
-
         C = df["Close"].dropna().tolist()
         M = df["MACD"].dropna().tolist()
         S = df["Signal"].dropna().tolist()
