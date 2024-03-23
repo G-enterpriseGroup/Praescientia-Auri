@@ -36,7 +36,7 @@ EMA26 = st.slider('EMA26', min_value=0, max_value=100, value=39)
 EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
 split_percentage = st.slider('Training set proportion %', min_value=0, max_value=100, value=80)
 # Text input for Ticker
-Ticker = st.text_input('Ticker', value="AAPL")
+Ticker = st.text_input('Ticker', value="SPY")
 
 from datetime import datetime, timedelta
 import streamlit as st
@@ -326,7 +326,7 @@ def fetch_stock_data(ticker, start_date, end_date):
 st.title('30 Days Stock Price Candlestick Chart')
 
 # User input for stock ticker
-stock_ticker = st.text_input('Enter Stock Ticker:', 'AAPL').upper()
+stock_ticker = st.text_input('Enter Stock Ticker:', Ticker).upper()
 
 # Calculate dates for the last 30 business days
 end_date = datetime.today()
