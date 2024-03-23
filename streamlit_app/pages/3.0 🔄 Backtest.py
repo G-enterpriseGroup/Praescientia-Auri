@@ -130,7 +130,6 @@ if st.button('Run SARIMAX Model'):
         C = df["Close"].dropna().tolist()
         M = df["MACD"].dropna().tolist()
         S = df["Signal"].dropna().tolist()
-        H = df["Histogram"].dropna().tolist()
         progress_bar.progress(4)
 
         from statsmodels.tsa.arima.model import ARIMA
@@ -306,7 +305,7 @@ if st.button('Run SARIMAX Model'):
         Date
         progress_bar.progress(41)
 
-        df3 = pd.DataFrame({'Date':Date,'Cpred_future': Cpred_future, 'Mpred_future': Mpred_future, 'Spred_future': Spred_future, 'Hpred_future': Hpred_future})
+        df3 = pd.DataFrame({'Date':Date,'Cpred_future': Cpred_future, 'Mpred_future': Mpred_future, 'Spred_future': Spred_future})
         df3
         progress_bar.progress(42)
 
@@ -377,10 +376,6 @@ if st.button('Run SARIMAX Model'):
         # Sorting the DataFrame by the index (date) to ensure the data is in chronological order
         df = df.sort_index()
         progress_bar.progress(51)
-
-        # Calculate the Histogram if not already done
-        df['Histogram'] = df['MACD'] - df['Signal']
-        progress_bar.progress(52)
 
         fig, axs = plt.subplots(4, 1, figsize=(14.875, 19.25), dpi=300)
         fig.suptitle(f"{Ticker}-Data Used for Forecasting {start_date1} to {today} for {DD} Days Forecast", fontsize=25, y=.99)
