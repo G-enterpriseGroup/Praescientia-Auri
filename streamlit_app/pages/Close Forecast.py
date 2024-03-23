@@ -219,7 +219,7 @@ if st.button('Run SARIMAX Model'):
         progress_bar.progress(47)
 
         # Create a figure and a set of subplots
-        fig, axs = plt.subplots(1, 2, figsize=(20, 12))  # Adjusts the figure size for two subplots
+        fig, axs = plt.subplots(1, 0, figsize=(20, 12))
         progress_bar.progress(48)
 
 
