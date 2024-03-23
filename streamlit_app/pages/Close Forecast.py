@@ -219,7 +219,7 @@ if st.button('Run SARIMAX Model'):
         progress_bar.progress(47)
 
         # Create a figure and a set of subplots
-        fig, ax = plt.subplots(figsize=(20, 12))
+        fig, ax = plt.subplots(figsize=(16, 12))
         
         # Plotting Close Future predictions
         ax.plot(df3.index, df3['Cpred_future'], label='Close Future', marker='o', color='blue')
@@ -263,7 +263,7 @@ if st.button('Run SARIMAX Model'):
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
         
-        fig, axs = plt.subplots(1, 2, figsize=(14.875, 19.25), dpi=300)
+        fig, axs = plt.subplots(2, 1, figsize=(14.875, 19.25), dpi=300)
         fig.suptitle(f"{Ticker}-Data Used for Forecasting {start_date1} to {today} for {DD} Days Forecast", fontsize=25, y=.99)
         
         # Plot Close price
