@@ -159,13 +159,8 @@ if st.button('Run SARIMAX Model'):
         arima_order = stepwise_fit.order
         arima_order
         cp, cd, cq = arima_order
-        progress_bar.progress(17)
-        
-        stepwise_fit = auto_arima(M,trace=True,suppress_warnings=True)
-        stepwise_fit
 
         progress_bar.progress(25)
-
 
         import statsmodels.api as sm
 
