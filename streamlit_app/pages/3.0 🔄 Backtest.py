@@ -130,6 +130,8 @@ if st.button('Run SARIMAX Model'):
         C = df["Close"].dropna().tolist()
         M = df["MACD"].dropna().tolist()
         S = df["Signal"].dropna().tolist()
+        from statsmodels.tsa.arima.model import ARIMA
+        from pmdarima import auto_arima
         progress_bar.progress(4)
 
         split_percentage = 0.80  # % for training
