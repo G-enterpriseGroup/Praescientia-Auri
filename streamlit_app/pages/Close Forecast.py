@@ -85,6 +85,7 @@ st.write('EMA9:', EMA9)
 st.write('Ticker:', Ticker)
 st.write('Start Date:', start_date1)
 st.write('End Date:', end_date1)
+st.write('Training Data:', split_percentage)
 
 if st.button('Run SARIMAX Model'):
     with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
