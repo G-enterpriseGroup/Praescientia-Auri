@@ -260,29 +260,28 @@ if st.button('Run SARIMAX Model'):
         # Sorting the DataFrame by the index (date) to ensure the data is in chronological order
         df = df.sort_index()
         progress_bar.progress(51)
-        fig, axs = plt.subplots(1, 1, figsize=(14.875, 19.25), dpi=300)  # Changed from (1, 1) to (1, 2)
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        
+        fig, axs = plt.subplots(1, 2, figsize=(14.875, 19.25), dpi=300)
         fig.suptitle(f"{Ticker}-Data Used for Forecasting {start_date1} to {today} for {DD} Days Forecast", fontsize=25, y=.99)
-
-        # Plotting the Close price on the second axis (indexing starts at 0, so it should be axs[1] -> axs[0])
-        axs[0].plot(df.index, df['Close'], label='Close', color='Black')  # Changed axs[1] to axs[0]
+        
+        # Plot Close price
+        axs[0].plot(df.index, df['Close'], label='Close', color='Black')
         axs[0].set_title('Close Price')
         axs[0].legend(loc='upper left')
         axs[0].grid(True)
-
-        # Correcting the date formatter setup (It referred to axs[0] which is now corrected to axs[1] for the second subplot)
-        # Formatting the date to ensure that the dates do not overlap for the first subplot
         axs[0].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
         axs[0].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[0].xaxis.get_major_locator()))
-
-        # Formatting the date for the second subplot (axs[1])
-        axs[1].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
-        axs[1].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[1].xaxis.get_major_locator()))
-
-        # Plotting closing price and future prediction on the second subplot
+        
+        # Plot Forecast Closing Price
         axs[1].plot(df.index, df['Close'], label='Closed', color='Black')
         axs[1].plot(df3.index[-1000:], df3['Cpred_future'][-1000:], label='Closing Future', linestyle='--', color='Blue')
         axs[1].set_title('Forecast Closing Price')
         axs[1].legend(loc='upper left')
+        axs[1].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
+        axs[1].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[1].xaxis.get_major_locator()))
+
         
         # General settings for all subplots
         for ax in axs:
