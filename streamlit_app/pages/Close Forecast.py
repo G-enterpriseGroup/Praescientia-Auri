@@ -219,7 +219,7 @@ if st.button('Run SARIMAX Model'):
         progress_bar.progress(47)
 
         # Create a figure and a set of subplots
-        fig, axs = plt.subplots(2, 1, figsize=(20, 12))  # Adjusts the figure size for two subplots
+        fig, axs = plt.subplots(1, 1, figsize=(20, 12))  # Adjusts the figure size for two subplots
         progress_bar.progress(48)
 
 
@@ -262,7 +262,7 @@ if st.button('Run SARIMAX Model'):
         # Sorting the DataFrame by the index (date) to ensure the data is in chronological order
         df = df.sort_index()
         progress_bar.progress(51)
-        fig, axs = plt.subplots(1, 2, figsize=(14.875, 19.25), dpi=300)  # Changed from (1, 1) to (1, 2)
+        fig, axs = plt.subplots(1, 1, figsize=(14.875, 19.25), dpi=300)  # Changed from (1, 1) to (1, 2)
         fig.suptitle(f"{Ticker}-Data Used for Forecasting {start_date1} to {today} for {DD} Days Forecast", fontsize=25, y=.99)
 
         # Plotting the Close price on the second axis (indexing starts at 0, so it should be axs[1] -> axs[0])
