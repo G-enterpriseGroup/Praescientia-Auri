@@ -34,7 +34,7 @@ SN = st.slider('Seasonality', min_value=7, max_value=30, value=22)
 EMA12 = st.slider('EMA12', min_value=0, max_value=100, value=13)
 EMA26 = st.slider('EMA26', min_value=0, max_value=100, value=39)
 EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
-
+split_percentage = st.slider('split_percentage', min_value=0, max_value=100, value=80)
 # Text input for Ticker
 Ticker = st.text_input('Ticker', value="AAPL")
 
