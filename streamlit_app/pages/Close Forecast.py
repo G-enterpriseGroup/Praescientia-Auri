@@ -197,7 +197,7 @@ if st.button('Run SARIMAX Model'):
         progress_bar.progress(40)
 
         Date = pd.Series(market_dates )
-        Date
+        
         progress_bar.progress(41)
 
         df3 = pd.DataFrame({'Date':Date,'Cpred_future': Cpred_future})
@@ -217,35 +217,6 @@ if st.button('Run SARIMAX Model'):
         # Set the 'Date' column as the index of the DataFrame
         df3.set_index('Date', inplace=True)
         progress_bar.progress(47)
-
-        # Create a figure and a set of subplots
-        fig, ax = plt.subplots(figsize=(10, 5))
-        
-        # Plotting Close Future predictions
-        ax.plot(df3.index, df3['Cpred_future'], label='Close Future', marker='o', color='blue')
-        ax.set_title(f'Forecast Closing of {Ticker} from Start Date: {start_date1}')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Values')
-        ax.legend()
-        ax.grid(True)
-        ax.tick_params(axis='x', rotation=45)
-        ax.set_xticks(df3.index) 
-
-        plt.tight_layout()  # Adjusts the subplot params so that subplots are nicely fit in the figure
-        # Assume 'fig' is your matplotlib figure object
-        fig_path = "figure.png"  # Specify the path and file name to save the figure
-        fig.savefig(fig_path)  # Save the figure to a file
-        st.pyplot(fig)  # Display the figure in Streamlit
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        # Read the file into a buffer
-        with open(fig_path, "rb") as file:
-            btn = st.download_button(
-                    label="Download Figure",
-                    data=file,
-                    file_name=f"{Ticker}-{today_date}-Zoomed.png",
-                    mime="image/png"
-                )        
-        progress_bar.progress(49)
 
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
@@ -304,7 +275,36 @@ if st.button('Run SARIMAX Model'):
                     mime="image/png",
                     key=f"download_{today_date}_{Ticker}"  # Unique key using today's date and Ticker
                 )  
+        progress_bar.progress(49)
+        # Create a figure and a set of subplots
+        fig, ax = plt.subplots(figsize=(10, 5))
+        
+        # Plotting Close Future predictions
+        ax.plot(df3.index, df3['Cpred_future'], label='Close Future', marker='o', color='blue')
+        ax.set_title(f'Forecast Closing of {Ticker} from Start Date: {start_date1}')
+        ax.set_xlabel('Date')
+        ax.set_ylabel('Values')
+        ax.legend()
+        ax.grid(True)
+        ax.tick_params(axis='x', rotation=45)
+        ax.set_xticks(df3.index) 
+
+        plt.tight_layout()  # Adjusts the subplot params so that subplots are nicely fit in the figure
+        # Assume 'fig' is your matplotlib figure object
+        fig_path = "figure.png"  # Specify the path and file name to save the figure
+        fig.savefig(fig_path)  # Save the figure to a file
+        st.pyplot(fig)  # Display the figure in Streamlit
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        # Read the file into a buffer
+        with open(fig_path, "rb") as file:
+            btn = st.download_button(
+                    label="Download Figure",
+                    data=file,
+                    file_name=f"{Ticker}-{today_date}-Zoomed.png",
+                    mime="image/png"
+                )        
         progress_bar.progress(100)
+        
         st.success("Model run successfully!")
         
         
