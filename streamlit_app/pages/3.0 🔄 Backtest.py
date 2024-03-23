@@ -121,7 +121,6 @@ if st.button('Run SARIMAX Model'):
         df['MACD'] = df['EMA_19'] - df['EMA_39']
         # Assuming df['MACD'] is already calculated as shown in your code
         df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-        df['Histogram'] = df['MACD'] - df['Signal']
         del df['EMA_19']
         del df['EMA_39']
         del df['EMA_9']
@@ -141,8 +140,7 @@ if st.button('Run SARIMAX Model'):
         df = df.sort_index()
         progress_bar.progress(3)
 
-        # Calculate the Histogram if not already done
-        df['Histogram'] = df['MACD'] - df['Signal']
+
 
         # Creating a figure and a grid of subplots
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 7))
@@ -226,27 +224,7 @@ if st.button('Run SARIMAX Model'):
         S_train = S[:split_index]
         S_test = S[split_index:]
         print(len(S_train), len(S_test))
-        progress_bar.progress(13)
 
-        stepwise_fit = auto_arima(H,trace=True,suppress_warnings=True)
-        stepwise_fit
-        progress_bar.progress(14)
-
-        def extract_best_arima_order(stepwise_fit):
-            # Search for the line starting with "Best model:"
-            for line in stepwise_fit.split('\n'):
-                if line.startswith("Best model:"):
-                    # Extract numbers within parentheses
-                    order = tuple(map(int, line.split('ARIMA')[1].split('(')[1].split(')')[0].split(',')))
-                    return order
-            return None
-        arima_order = stepwise_fit.order
-        arima_order
-        hp, hd, hq = arima_order
-        progress_bar.progress(15)
-
-        stepwise_fit = auto_arima(C,trace=True,suppress_warnings=True)
-        stepwise_fit
         progress_bar.progress(16)
 
         def extract_best_arima_order(stepwise_fit):
@@ -297,22 +275,8 @@ if st.button('Run SARIMAX Model'):
         progress_bar.progress(21)
 
 
-        import statsmodels.api as sm
 
-        arima_order = arima_order
-        seasonal_order = (hp, hd, hq, SN)  
-        progress_bar.progress(22)
 
-        model = sm.tsa.statespace.SARIMAX(H, order=arima_order, seasonal_order=seasonal_order)
-        model = model.fit()
-        progress_bar.progress(23)
-
-        start=len(H_train)
-        end=len(H_train)+len(C_test)-1
-        Hpred = model.predict(start=start,end=end)
-        progress_bar.progress(24)
-
-        Hpred_future = model.predict(start=end,end=end+DD)
         progress_bar.progress(25)
 
 
@@ -471,48 +435,48 @@ if st.button('Run SARIMAX Model'):
         df['Histogram'] = df['MACD'] - df['Signal']
         progress_bar.progress(52)
 
-        # Creating a figure and a grid of subplots
-        fig, axs = plt.subplots(5, 1, figsize=(14.875, 19.25), dpi=300)
+        fig, axs = plt.subplots(4, 1, figsize=(14.875, 19.25), dpi=300)
         fig.suptitle(f"{Ticker}-Data Used for Forecasting {start_date1} to {today} for {DD} Days Forecast", fontsize=25, y=.99)
         # Plotting the Close price on axs[0]
-        axs[4].plot(df.index, df['Close'], label='Close', color='Black')
-        axs[4].set_title('Close Price')
-        axs[4].legend(loc='upper left')
-        axs[4].grid(True)
-
+        axs[3].plot(df.index, df['Close'], label='Close', color='Black')
+        axs[3].set_title('Close Price')
+        axs[3].legend(loc='upper left')
+        axs[3].grid(True)
+        
         # Formatting the date to ensure that the date does not overlap
-        axs[4].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
-        axs[4].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[0].xaxis.get_major_locator()))
-        # Plotting MACD and Signal Line on axs[1]
-        axs[1].plot(df.index, df['MACD'], label='MACD', color='blue', linewidth=1.5)
-        axs[1].plot(df.index, df['Signal'], label='Signal Line', color='red', linewidth=1.5)
-        # Plotting the Histogram as bar plot on axs[1]
-        axs[1].bar(df.index, df['Histogram'], label='Histogram', color='grey', alpha=0.3)
-        axs[1].set_title('MACD, Signal Line, and Histogram')
-        axs[1].legend(loc='upper left')
-        axs[1].grid(True)
+        axs[3].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
+        axs[3].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[0].xaxis.get_major_locator()))
+        
+        # Plotting MACD and Signal Line on axs[0]
+        axs[0].plot(df.index, df['MACD'], label='MACD', color='blue', linewidth=1.5)
+        axs[0].plot(df.index, df['Signal'], label='Signal Line', color='red', linewidth=1.5)
+        
+        # Plotting the Histogram as bar plot on axs[0]
+        axs[0].bar(df.index, df['Histogram'], label='Histogram', color='grey', alpha=0.3)
+        
+        axs[0].set_title('MACD, Signal Line, and Histogram')
+        axs[0].legend(loc='upper left')
+        axs[0].grid(True)
+        
         # Formatting the date for the second subplot
-        axs[1].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
-        axs[1].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[1].xaxis.get_major_locator()))
+        axs[0].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
+        axs[0].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[0].xaxis.get_major_locator()))
+        
         # Forecast plots
         # MACD and Signal future predictions
-        axs[2].plot(df.index, df['MACD'], label='MACD', color='blue')
-        axs[2].plot(df.index, df['Signal'], label='Signal', color='red')
-        axs[2].plot(df3.index[-1000:], df3['Mpred_future'][-1000:], label='MACD Future', linestyle='--', color='blue')
-        axs[2].plot(df3.index[-1000:], df3['Spred_future'][-1000:], label='Signal Future', linestyle='--', color='red')
-        axs[2].set_title('Forecast MACD and Signal Line')
-        axs[2].legend()
+        axs[1].plot(df.index, df['MACD'], label='MACD', color='blue')
+        axs[1].plot(df.index, df['Signal'], label='Signal', color='red')
+        axs[1].plot(df3.index[-1000:], df3['Mpred_future'][-1000:], label='MACD Future', linestyle='--', color='blue')
+        axs[1].plot(df3.index[-1000:], df3['Spred_future'][-1000:], label='Signal Future', linestyle='--', color='red')
+        axs[1].set_title('Forecast MACD and Signal Line')
+        axs[1].legend()
+        
         # Closing price and future prediction
-        axs[3].plot(df.index, df['Close'], label='Closed', color='Black')
-        axs[3].plot(df3.index[-1000:], df3['Cpred_future'][-1000:], label='Closing Future', linestyle='--', color='Blue')
-        axs[3].set_title('Forecast Closing Price')
-        axs[3].legend()
-        # Histogram and future prediction
-        width = 0.22
-        axs[0].bar(df.index, df['Histogram'], width, label='Histogram', color='blue')
-        axs[0].bar(df3.index[-1000:], df3['Hpred_future'][-1000:], width, label='Histogram Future', color='green')
-        axs[0].set_title('Forecast Histogram')
-        axs[0].legend()
+        axs[2].plot(df.index, df['Close'], label='Closed', color='Black')
+        axs[2].plot(df3.index[-1000:], df3['Cpred_future'][-1000:], label='Closing Future', linestyle='--', color='Blue')
+        axs[2].set_title('Forecast Closing Price')
+        axs[2].legend()
+        
         # General settings for all subplots
         for ax in axs:
             ax.xaxis.set_major_locator(mdates.AutoDateLocator())
@@ -521,29 +485,29 @@ if st.button('Run SARIMAX Model'):
             ax.set_xlabel('Date')
             ax.set_ylabel('Value')
         plt.tight_layout(pad=1)
-        fig_path = "figure.png"  # Specify the path and file name to save the figure
-        fig.savefig(fig_path)  # Save the figure to a file
-        st.pyplot(fig)  # Display the figure in Streamlit
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        # Read the file into a buffer
-        with open(fig_path, "rb") as file:
-            btn = st.download_button(
-                    label="Download Figure",
-                    data=file,
-                    file_name=f"{Ticker}-{today_date}-Consolidated.png",
-                    mime="image/png",
-                    key=f"download_{today_date}_{Ticker}"  # Unique key using today's date and Ticker
-                )  
-        progress_bar.progress(100)
-        st.success("Model run successfully!")
-
-
-
-
-
-
-
-
+                fig_path = "figure.png"  # Specify the path and file name to save the figure
+                fig.savefig(fig_path)  # Save the figure to a file
+                st.pyplot(fig)  # Display the figure in Streamlit
+                today_date = datetime.now().strftime("%Y-%m-%d")
+                # Read the file into a buffer
+                with open(fig_path, "rb") as file:
+                    btn = st.download_button(
+                            label="Download Figure",
+                            data=file,
+                            file_name=f"{Ticker}-{today_date}-Consolidated.png",
+                            mime="image/png",
+                            key=f"download_{today_date}_{Ticker}"  # Unique key using today's date and Ticker
+                        )  
+                progress_bar.progress(100)
+                st.success("Model run successfully!")
+        
+        
+        
+        
+        
+        
+        
+        
 
 #_______________________________________________________________________________________________________________________________________________________________
 # Function to fetch data
