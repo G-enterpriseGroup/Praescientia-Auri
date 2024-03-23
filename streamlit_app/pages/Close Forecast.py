@@ -219,19 +219,17 @@ if st.button('Run SARIMAX Model'):
         progress_bar.progress(47)
 
         # Create a figure and a set of subplots
-        fig, axs = plt.subplots(1, 0, figsize=(20, 12))
-        progress_bar.progress(48)
-
-
-        # Plotting Close Future predictions on the second subplot
-        axs[1].plot(df3.index, df3['Cpred_future'], label='Close Future', marker='o', color='blue')
-        axs[1].set_title(f'Zoomed Forecast Closing of {Ticker} Start Date {start_date1}')
-        axs[1].set_xlabel('Date')
-        axs[1].set_ylabel('Values')
-        axs[1].legend()
-        axs[1].grid(True)
-        axs[1].tick_params(axis='x', rotation=45)
-        axs[1].set_xticks(df3.index)
+        fig, ax = plt.subplots(figsize=(20, 12))
+        
+        # Plotting Close Future predictions
+        ax.plot(df3.index, df3['Cpred_future'], label='Close Future', marker='o', color='blue')
+        ax.set_title(f'Forecast Closing of {Ticker} from Start Date: {start_date1}')
+        ax.set_xlabel('Date')
+        ax.set_ylabel('Values')
+        ax.legend()
+        ax.grid(True)
+        ax.tick_params(axis='x', rotation=45)
+        ax.set_xticks(df3.index) 
 
         plt.tight_layout()  # Adjusts the subplot params so that subplots are nicely fit in the figure
         # Assume 'fig' is your matplotlib figure object
