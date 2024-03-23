@@ -277,7 +277,7 @@ if st.button('Run SARIMAX Model'):
                 )  
         progress_bar.progress(49)
         # Create a figure and a set of subplots
-        fig, ax = plt.subplots(figsize=(10, 5))
+        fig, ax = plt.subplots(figsize=(15, 5))
         
         # Plotting Close Future predictions
         ax.plot(df3.index, df3['Cpred_future'], label='Close Future', marker='o', color='blue')
