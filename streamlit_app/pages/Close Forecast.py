@@ -234,7 +234,7 @@ if st.button('Run SARIMAX Model'):
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
         
-        fig, axs = plt.subplots(2, 1, figsize=(14.875, 19.25), dpi=300)
+        fig, axs = plt.subplots(2, 1, figsize=(14.875, 10.25), dpi=1080)
         fig.suptitle(f"{Ticker}-Data Used for Forecasting {start_date1} to {today} for {DD} Days Forecast", fontsize=25, y=.99)
         
         # Plot Close price
