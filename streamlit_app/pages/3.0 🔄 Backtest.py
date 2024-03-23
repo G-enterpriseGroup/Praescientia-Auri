@@ -132,19 +132,6 @@ if st.button('Run SARIMAX Model'):
         S = df["Signal"].dropna().tolist()
         progress_bar.progress(4)
 
-        from statsmodels.tsa.arima.model import ARIMA
-        from pmdarima import auto_arima
-        progress_bar.progress(5)
-
-        split_percentage = 0.80  # % for training
-        split_index = int(len(H) * split_percentage)
-        progress_bar.progress(6)
-
-        H_train = M[:split_index]
-        H_test = M[split_index:]
-        print(len(H_train), len(H_test))
-        progress_bar.progress(7)
-
         split_percentage = 0.80  # % for training
         split_index = int(len(C) * split_percentage)
         progress_bar.progress(8)
