@@ -158,8 +158,10 @@ if st.button('Run SARIMAX Model'):
         S_test = S[split_index:]
         print(len(S_train), len(S_test))
 
+        stepwise_fit = auto_arima(C,trace=True,suppress_warnings=True)
+        stepwise_fit
         progress_bar.progress(16)
-
+        
         def extract_best_arima_order(stepwise_fit):
             # Search for the line starting with "Best model:"
             for line in stepwise_fit.split('\n'):
