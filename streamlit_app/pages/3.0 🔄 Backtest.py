@@ -137,7 +137,7 @@ stock_ticker = st.text_input('Enter Stock Ticker:', Ticker).upper()
 
 # Calculate dates for the last 30 business days
 end_date = datetime.today()
-start_date = end_date - timedelta(days=31) # Extend the days to ensure we cover 30 business days approximately
+start_date = end_date - timedelta(days=43) # Extend the days to ensure we cover 30 business days approximately
 
 # Fetching the stock data
 data = fetch_stock_data(stock_ticker, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
