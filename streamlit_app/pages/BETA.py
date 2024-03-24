@@ -104,7 +104,6 @@ if st.button('Run SARIMAX Model'):
         
         # Plotting historical data and future predictions
         plt.figure(figsize=(15, 7))
-        plt.plot(df.index, df['Close'], label='Historical Close Price')
         plt.plot(future_df.index, future_df['Forecasted Price'], label='Forecasted Price', linestyle='--', color='red')
         plt.title(f'{Ticker} Historical and Forecasted Stock Price')
         plt.xlabel('Date')
