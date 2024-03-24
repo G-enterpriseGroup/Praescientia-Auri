@@ -81,7 +81,11 @@ if st.button('Run SARIMAX Model'):
         future_dates = future_dates[~future_dates.isin(holidays)][:30]
 
         predictions = model.predict(start=len(C), end=len(C) + len(future_dates) - 1, dynamic=True)
-        future_dates_index = pd.date_range(start=future_dates[0], periods=len(predictions), freq='B')
+        # Use a built-in holiday calendar
+        custom_business_day = CustomBusinessDay(calendar=USFederalHolidayCalendar())
+        
+        # Generate the date range
+        future_dates_index = pd.date_range(start=future_dates[0], periods=len(predictions), freq=custom_business_day)
         predictions.index = future_dates_index
 
         plt.figure(figsize=(10, 6))
