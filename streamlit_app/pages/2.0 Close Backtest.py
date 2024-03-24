@@ -202,7 +202,7 @@ if st.button('Run SARIMAX Model'):
         
         progress_bar.progress(41)
 
-        df3 = pd.DataFrame({'Date':Date,'Cpred_future': Cpred_future})
+        df3 = pd.DataFrame({'Date':Date,'Cpred_future': Future Closing})
         df3
         progress_bar.progress(42)
 
@@ -226,9 +226,6 @@ if st.button('Run SARIMAX Model'):
         import numpy as np
         today = datetime.now().strftime("%Y-%m-%d")
 
-        # Assuming 'df' and 'df3' are your DataFrames, and their indexes are of datetime type.
-        # Also assuming 'df' already has 'MACD', 'Signal', 'Close' columns calculated.
-        # 'df3' should contain your future predictions 'Mpred_future', 'Spred_future', 'Cpred_future', 'Hpred_future'.
 
         # Sorting the DataFrame by the index (date) to ensure the data is in chronological order
         df = df.sort_index()
