@@ -191,4 +191,15 @@ date_str = business_days_ago_date.strftime('%Y-%m-%d')
 
 # Display the result for manual copy
 st.text_input("Copy the date from here:", date_str, help="Select and copy this date manually.")
+
+# Check if data is not empty
+if not data.empty:
+    # Extract dates and closing prices into a new DataFrame
+    closing_prices_df = data[['Close']].copy()
+    
+    # Display the DataFrame in Streamlit
+    st.write("Closing Prices DataFrame:", closing_prices_df)
+else:
+    st.write("No data available for the given ticker.")
+
 #_______________________________________________________________________________________________________________________________________________________________
