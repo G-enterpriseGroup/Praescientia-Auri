@@ -94,5 +94,26 @@ if st.button('Run SARIMAX Model'):
         plt.tight_layout()
 
         st.pyplot(plt)
+        # Assuming 'predictions' is your forecasted values and 'future_dates_index' are the corresponding future dates
+        
+        # Create a DataFrame for the forecasted values
+        future_df = pd.DataFrame({'Forecasted Price': predictions.values}, index=future_dates_index)
+        
+        # Display the DataFrame in Streamlit
+        st.write(future_df)
+        
+        # Plotting historical data and future predictions
+        plt.figure(figsize=(15, 7))
+        plt.plot(df.index, df['Close'], label='Historical Close Price')
+        plt.plot(future_df.index, future_df['Forecasted Price'], label='Forecasted Price', linestyle='--', color='red')
+        plt.title(f'{Ticker} Historical and Forecasted Stock Price')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.legend()
+        plt.tight_layout()
+        
+        # Show the plot in Streamlit
+        st.pyplot(plt)
+        
         progress_bar.progress(100)
         st.success("Model run successfully!")
