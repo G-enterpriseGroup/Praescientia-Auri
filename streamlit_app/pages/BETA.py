@@ -57,8 +57,11 @@ if st.button('Run SARIMAX Model'):
         progress_bar = st.progress(0)
         df = yf.Ticker(Ticker).history(period="max")
         df = df.loc[pd.to_datetime(start_date1).tz_localize('America/New_York'):pd.to_datetime(end_date1).tz_localize('America/New_York')]
-        df.index = pd.to_datetime(df.index).tz_localize('America/New_York')
-
+        # Before trying to localize the timezone, check if the index is already timezone-aware
+        if df.index.tz is None:
+            df.index = pd.to_datetime(df.index).tz_localize('America/New_York')
+        else:
+            df.index = pd.to_datetime(df.index).tz_convert('America/New_York')
         # Removing unnecessary columns in one line
         df = df[['Close']].copy()
         progress_bar.progress(10)
