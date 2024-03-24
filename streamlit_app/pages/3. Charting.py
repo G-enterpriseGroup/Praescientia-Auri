@@ -49,23 +49,6 @@ if ticker:
     # Fetch data
     df = fetch_data(ticker, '1d', start_date, end_date)
     
-    # Display next earnings date
-    stock_info = yf.Ticker(ticker)
-    earnings_date = stock_info.calendar.loc['Earnings Date'][0] if not stock_info.calendar.empty else "Not Available"
-    st.write(f"Next Earnings Date: {earnings_date}")
-    
-    # Plotly candlestick chart
-    fig = go.Figure(data=[go.Candlestick(x=df.index,
-                open=df['Open'],
-                high=df['High'],
-                low=df['Low'],
-                close=df['Close'])])
-    
-    fig.update_layout(title=f'{ticker} Candlestick Chart', xaxis_rangeslider_visible=False)
-    st.plotly_chart(fig)
-    
-    # For pattern recognition, implement specific pattern analysis here
-    # This requires further development based on pattern analysis algorithms or indicators
 
 
 #_______________________________________________________________________________________________________________________________________________________________
