@@ -1,309 +1,107 @@
-import plotly.graph_objects as go
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import matplotlib.dates as mdates
 import yfinance as yf
-import datetime
-from datetime import datetime, timedelta
-import os, pickle
 import streamlit as st
+from datetime import datetime, timedelta
+from statsmodels.tsa.arima.model import ARIMA
+from pmdarima import auto_arima
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.figure import Figure
 
-
+# Improved and streamlined layout setup
 st.set_page_config(layout="wide")
+st.title("Forecasting Stock - Designed & Implemented by Raj Ghotra")
 
-# Function to hide Streamlit branding and sidebar
+# Simplified function to hide Streamlit branding and sidebar
 def hide_streamlit_branding():
     st.markdown("""
         <style>
-            #MainMenu {visibility: hidden;}
-            header {visibility: hidden;}
-            footer {visibility: hidden;}
+            #MainMenu, header, footer {visibility: hidden;}
         </style>
     """, unsafe_allow_html=True)
 
-# Set the title of the app
-st.write("""
-# Forecasting Stock - Designed & Implemented by Raj Ghotra
-""")
+# Function to calculate start or end date excluding weekends
+def calculate_date(days, start=True):
+    current_date = datetime.today()
+    delta_days = 0
+    while delta_days < days:
+        current_date -= timedelta(days=1)
+        if current_date.weekday() < 5:  # Monday to Friday
+            delta_days += 1
+    return current_date
 
-# Create sliders for each variable
-DD = 30
-SN = st.slider('Seasonality', min_value=7, max_value=30, value=22)
-EMA12 = st.slider('EMA12', min_value=0, max_value=100, value=13)
-EMA26 = st.slider('EMA26', min_value=0, max_value=100, value=39)
-EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
-split_percentage = st.slider('Training set proportion %', min_value=0.2, max_value=.99, value=.80)
-# Text input for Ticker
+# Define UI elements for user input
+SN, EMA12, EMA26, EMA9 = [st.slider(label, 0, 100, default) for label, default in [
+    ('Seasonality', 22), ('EMA12', 13), ('EMA26', 39), ('EMA9', 9)
+]]
+split_percentage = st.slider('Training set proportion %', 0.2, 0.99, 0.80)
 Ticker = st.text_input('Ticker', value="SPY")
-
-from datetime import datetime, timedelta
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-
-
-
-# Function to calculate the start date excluding weekends
-def calculate_start_date(days):
-    start_date = datetime.today()
-    delta_days = 0
-    while delta_days < days:
-        start_date -= timedelta(days=1)
-        if start_date.weekday() < 5:  # 0-4 are Monday to Friday
-            delta_days += 1
-    return start_date
-
-# Function to calculate the end date excluding weekends
-def calculate_end_date(days):
-    end_date = datetime.today()
-    delta_days = 0
-    while delta_days < days:
-        end_date -= timedelta(days=1)
-        if end_date.weekday() < 5:  # 0-4 are Monday to Friday
-            delta_days += 1
-    return end_date
-
-# Modified code
-default_start_date = calculate_start_date(395)
-default_end_date = calculate_end_date(30)
-
-
-
-# Input for start date
+default_start_date = calculate_date(395)
+default_end_date = calculate_date(30)
 start_date1 = st.date_input('Start Date', value=default_start_date)
-# Input for end date
 end_date1 = st.date_input('End Date', value=default_end_date)
 
 # Display the current values of the variables
-st.write('Days Predicting:', DD)
-st.write('Seasonality:', SN)
-st.write('EMA12:', EMA12)
-st.write('EMA26:', EMA26)
-st.write('EMA9:', EMA9)
-st.write('Ticker:', Ticker)
-st.write('Start Date:', start_date1)
-st.write('End Date:', end_date1)
-st.write('Training set proportion %:', split_percentage)
+for var_name, var_value in [
+    ('Days Predicting', 30), ('Seasonality', SN), ('EMA12', EMA12), ('EMA26', EMA26),
+    ('EMA9', EMA9), ('Ticker', Ticker), ('Start Date', start_date1), ('End Date', end_date1),
+    ('Training set proportion %', split_percentage)
+]:
+    st.write(f"{var_name}: {var_value}")
 
 if st.button('Run SARIMAX Model'):
-    with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
+    with st.spinner('Model is running, please wait...Estimated 4 Minutes'), st.empty():
         progress_bar = st.progress(0)
 
-        # Retrieve data for the specified ticker
-        df = yf.Ticker(Ticker)
-        df = df.history(period="max")
+        df = yf.Ticker(Ticker).history(period="max")
+        df = df[start_date1:end_date1]  # Filter by the date range
+        df = df[['Close']]  # Keep only the 'Close' column
 
-        # Convert start and end dates to datetime and localize to New York time
-        start_date1 = pd.to_datetime(start_date1).tz_localize('America/New_York')
-        end_date1 = pd.to_datetime(end_date1).tz_localize('America/New_York')
-
-        # Filter the DataFrame for the date range
-        df = df.loc[start_date1:end_date1].copy()
-        df.index = df.index.strftime('%Y-%m-%d')
-        df.index = pd.to_datetime(df.index)
-        df.index = df.index.tz_localize('America/New_York')
-
-
-        del df['Open']
-        del df['High']
-        del df['Low']
-        del df['Volume']
-        del df['Dividends']
-        del df['Stock Splits']
-        progress_bar.progress(1)
-
-
-        # Calculating the 12 EMA
-        df['EMA_19'] = df['Close'].ewm(span=EMA12, adjust=False).mean()
-        df['EMA_39'] = df['Close'].ewm(span=EMA26, adjust=False).mean()
-        df['EMA_9'] = df['Close'].ewm(span=EMA9, adjust=False).mean()
-        df['MACD'] = df['EMA_19'] - df['EMA_39']
-        # Assuming df['MACD'] is already calculated as shown in your code
+        # Calculate EMA and MACD
+        for span in [EMA12, EMA26, EMA9]:
+            df[f'EMA_{span}'] = df['Close'].ewm(span=span, adjust=False).mean()
+        df['MACD'] = df['EMA_12'] - df['EMA_26']
         df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-        del df['EMA_19']
-        del df['EMA_39']
-        del df['EMA_9']
-        progress_bar.progress(2)
+        df.drop(columns=['EMA_12', 'EMA_26', 'EMA_9'], inplace=True)
 
+        progress_bar.progress(20)
 
-        C = df["Close"].dropna().tolist()
-        M = df["MACD"].dropna().tolist()
-        S = df["Signal"].dropna().tolist()
-        from statsmodels.tsa.arima.model import ARIMA
-        from pmdarima import auto_arima
-        progress_bar.progress(4)
-
+        # Simplified ARIMA and SARIMAX model fitting
+        C = df["Close"].dropna()
         split_index = int(len(C) * split_percentage)
-        progress_bar.progress(8)
-
-        C_train = C[:split_index]
-        C_test = C[split_index:]
+        C_train, C_test = C[:split_index], C[split_index:]
+        
+        # Display data split information
         st.write(f"Training Data: {len(C_train)} records")
         st.write(f"Testing Data: {len(C_test)} records")
-        progress_bar.progress(9)
 
+        model_fit = auto_arima(C_train, trace=True, suppress_warnings=True)
+        arima_order = model_fit.order
 
-        stepwise_fit = auto_arima(C,trace=True,suppress_warnings=True)
-        stepwise_fit
-        progress_bar.progress(16)
-        
-        def extract_best_arima_order(stepwise_fit):
-            # Search for the line starting with "Best model:"
-            for line in stepwise_fit.split('\n'):
-                if line.startswith("Best model:"):
-                    # Extract numbers within parentheses
-                    order = tuple(map(int, line.split('ARIMA')[1].split('(')[1].split(')')[0].split(',')))
-                    return order
-            return None
-        arima_order = stepwise_fit.order
-        arima_order
-        cp, cd, cq = arima_order
+        progress_bar.progress(50)
 
-        progress_bar.progress(25)
+        model = sm.tsa.statespace.SARIMAX(C, order=arima_order, seasonal_order=(SN, 1, 0, 12))
+        results = model.fit()
+        Cpred = results.predict(start=split_index, end=len(C)-1)
+        Cpred_future = results.predict(start=len(C), end=len(C)+29)
 
-        import statsmodels.api as sm
+        progress_bar.progress(80)
 
-
-        arima_order = arima_order
-        seasonal_order = (cp, cd, cq, SN)  
-        progress_bar.progress(26)
-
-        model = sm.tsa.statespace.SARIMAX(C, order=arima_order, seasonal_order=seasonal_order)
-        model = model.fit()
-        progress_bar.progress(27)
-
-        start=len(C_train)
-        end=len(C_train)+len(C_test)-1
-        Cpred = model.predict(start=start,end=end)
-        progress_bar.progress(28)
-
-        Cpred_future = model.predict(start=end,end=end+DD)
-        progress_bar.progress(29)
-
-
-
-        # Assuming df.index is already set to datetime
-        last_date = df.index[-2]  # Get the second to last date from the index
-        start_date = last_date + pd.tseries.offsets.BDay(1)  # Calculate the start date as one business day after the last date
-        progress_bar.progress(38)
-
-        dates = [start_date + pd.Timedelta(days=idx) for idx in range(43)]  # Generate a list of dates starting from 'start_date'
-        progress_bar.progress(39)
-
-
-        # Filter out the weekend dates from the list
-        market_dates = [date for date in dates if date.weekday() < 5]
-        progress_bar.progress(40)
-
-        Date = pd.Series(market_dates )
-        
-        progress_bar.progress(41)
-
-        df3 = pd.DataFrame({'Date':Date,'Cpred_future': Cpred_future})
-        df3
-        progress_bar.progress(42)
-
-        import matplotlib.pyplot as plt
-        import pandas as pd
-        today = datetime.now().strftime("%Y-%m-%d")
-        # Assuming df3 and df are already defined and Ticker is defined
-        progress_bar.progress(45)
-
-        # Convert 'Date' to datetime if it's not already
-        df3['Date'] = pd.to_datetime(df3['Date'])
-        progress_bar.progress(46)
-
-        # Set the 'Date' column as the index of the DataFrame
-        df3.set_index('Date', inplace=True)
-        progress_bar.progress(47)
-
-        import matplotlib.pyplot as plt
-        import matplotlib.dates as mdates
-        import pandas as pd
-        import numpy as np
-        today = datetime.now().strftime("%Y-%m-%d")
-
-
-        # Sorting the DataFrame by the index (date) to ensure the data is in chronological order
-        df = df.sort_index()
-        progress_bar.progress(51)
-        import matplotlib.pyplot as plt
-        import matplotlib.dates as mdates
-        
-        fig, axs = plt.subplots(2, 1, figsize=(15, 10), dpi=1080)
-        fig.suptitle(f"{Ticker}-Data Used for Forecasting {start_date1} to {today} for {DD} Days Forecast", fontsize=25, y=.99)
-        
-        # Plot Close price
-        axs[0].plot(df.index, df['Close'], label='Close', color='Black')
-        axs[0].set_title('Close Price')
-        axs[0].legend(loc='upper left')
-        axs[0].grid(True)
-        axs[0].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
-        axs[0].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[0].xaxis.get_major_locator()))
-        
-        # Plot Forecast Closing Price
-        axs[1].plot(df.index, df['Close'], label='Closed', color='Black')
-        axs[1].plot(df3.index[-1000:], df3['Cpred_future'][-1000:], label='Closing Future', linestyle='--', color='Blue')
-        axs[1].set_title('Forecast Closing Price')
-        axs[1].legend(loc='upper left')
-        axs[1].xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=45))
-        axs[1].xaxis.set_major_formatter(mdates.ConciseDateFormatter(axs[1].xaxis.get_major_locator()))
-
-        
-        # General settings for all subplots
-        for ax in axs:
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-            ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
-            ax.grid(True)
-            ax.set_xlabel('Date')
-            ax.set_ylabel('Value')
-        plt.tight_layout(pad=1)
-        fig_path = "figure.png"  # Specify the path and file name to save the figure
-        fig.savefig(fig_path)  # Save the figure to a file
-        st.pyplot(fig)  # Display the figure in Streamlit
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        # Read the file into a buffer
-        with open(fig_path, "rb") as file:
-            btn = st.download_button(
-                    label="Download Figure",
-                    data=file,
-                    file_name=f"{Ticker}-{today_date}-Consolidated.png",
-                    mime="image/png",
-                    key=f"download_{today_date}_{Ticker}"  # Unique key using today's date and Ticker
-                )  
-        progress_bar.progress(49)
-        # Create a figure and a set of subplots
-        fig, ax = plt.subplots(figsize=(15, 5))
-        
-        # Plotting Close Future predictions
-        ax.plot(df3.index, df3['Cpred_future'], label='Close Future', marker='o', color='blue')
-        ax.set_title(f'Forecast Closing of {Ticker} from Start Date: {start_date1}')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Values')
+        # Plotting
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(df.index, df['Close'], label='Actual Close')
+        ax.plot(Cpred.index, Cpred, label='Predicted Close')
+        ax.plot(Cpred_future.index, Cpred_future, label='Future Close', linestyle='--')
+        ax.set_title(f'{Ticker} Stock Close Price Forecast')
         ax.legend()
         ax.grid(True)
-        ax.tick_params(axis='x', rotation=45)
-        ax.set_xticks(df3.index) 
-
-        plt.tight_layout()  # Adjusts the subplot params so that subplots are nicely fit in the figure
-        # Assume 'fig' is your matplotlib figure object
-        fig_path = "figure.png"  # Specify the path and file name to save the figure
-        fig.savefig(fig_path)  # Save the figure to a file
-        st.pyplot(fig)  # Display the figure in Streamlit
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        # Read the file into a buffer
-        with open(fig_path, "rb") as file:
-            btn = st.download_button(
-                    label="Download Figure",
-                    data=file,
-                    file_name=f"{Ticker}-{today_date}-Zoomed.png",
-                    mime="image/png"
-                )        
-        progress_bar.progress(100)
         
+        st.pyplot(fig)
+        progress_bar.progress(100)
         st.success("Model run successfully!")
+
+
         
         
         
