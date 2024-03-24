@@ -61,8 +61,6 @@ if st.button('Run SARIMAX Model'):
 
 
 
-        df['MACD'] = df['EMA12'] - df['EMA26']
-        df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
         C = df["Close"].dropna()
         progress_bar.progress(30)
 
