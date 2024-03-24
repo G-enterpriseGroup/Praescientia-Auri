@@ -34,7 +34,7 @@ SN = st.slider('Seasonality', min_value=7, max_value=30, value=22)
 EMA12 = st.slider('EMA12', min_value=0, max_value=100, value=13)
 EMA26 = st.slider('EMA26', min_value=0, max_value=100, value=39)
 EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
-split_percentage = st.slider('Training set proportion %', min_value=0, max_value=100, value=80)
+split_percentage = st.slider('Training set proportion %', min_value=0.2, max_value=.99, value=.80)
 # Text input for Ticker
 Ticker = st.text_input('Ticker', value="SPY")
 
@@ -135,7 +135,6 @@ if st.button('Run SARIMAX Model'):
         from pmdarima import auto_arima
         progress_bar.progress(4)
 
-        split_percentage = 0.80  # % for training
         split_index = int(len(C) * split_percentage)
         progress_bar.progress(8)
 
