@@ -41,8 +41,6 @@ def calculate_date(days, start=True):
 default_start_date = calculate_date(395)
 default_end_date = calculate_date(30, start=False)
 
-SN = st.slider('Seasonality', 7, 30, 22)
-EMA_values = {f'EMA{i}': st.slider(f'EMA{i}', 0, 100, default) for i, default in zip([12, 26, 9], [13, 39, 9])}
 split_percentage = st.slider('Training set proportion %', 0.2, 0.99, 0.80)
 Ticker = st.text_input('Ticker', value="SPY")
 start_date1 = st.date_input('Start Date', value=default_start_date)
