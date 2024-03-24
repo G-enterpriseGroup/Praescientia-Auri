@@ -170,7 +170,7 @@ if st.button('Run SARIMAX Model'):
         seasonal_order = (cp, cd, cq, SN)  
         progress_bar.progress(26)
 
-        model = sm.tsa.statespace.SARIMAX(C_train, order=arima_order, seasonal_order=seasonal_order)
+        model = sm.tsa.statespace.SARIMAX(C, order=arima_order, seasonal_order=seasonal_order)
         model = model.fit()
         progress_bar.progress(27)
 
@@ -196,7 +196,6 @@ if st.button('Run SARIMAX Model'):
         # Filter out the weekend dates from the list
         market_dates = [date for date in dates if date.weekday() < 5]
         progress_bar.progress(40)
-
 
         Date = pd.Series(market_dates )
         
