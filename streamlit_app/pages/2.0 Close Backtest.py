@@ -202,7 +202,7 @@ if st.button('Run SARIMAX Model'):
         
         progress_bar.progress(41)
 
-        df3 = pd.DataFrame({'Date':Date,'Future Closing': Cpred_future})
+        df3 = pd.DataFrame({'Date':Date,'Cpred_future': Cpred_future})
         df3
         progress_bar.progress(42)
 
