@@ -138,8 +138,8 @@ if st.button('Run SARIMAX Model'):
         split_index = int(len(C) * split_percentage)
         progress_bar.progress(8)
 
-        C_train = M[:split_index]
-        C_test = M[split_index:]
+        C_train = C[:split_index]
+        C_test = C[split_index:]
         st.write(f"Training Data: {len(C_train)} records")
         st.write(f"Testing Data: {len(C_test)} records")
         progress_bar.progress(9)
