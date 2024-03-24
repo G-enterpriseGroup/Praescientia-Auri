@@ -1,6 +1,5 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 
 # Title of the app
 st.title('Stock Information and Financials App')
@@ -17,16 +16,18 @@ st.write("**Sector:**", stock_info.info['sector'])
 st.write("**Full Time Employees:**", stock_info.info['fullTimeEmployees'])
 st.write("**Business Summary:**", stock_info.info['longBusinessSummary'])
 
-# Displaying stock statistics
+# Manually displaying stock statistics
 st.subheader("Stock Statistics")
-st.write(stock_info.stats())
+statistics_keys = ['marketCap', 'forwardPE', 'dividendYield', 'profitMargins']
+for key in statistics_keys:
+    st.write(f"**{key}:** {stock_info.info.get(key, 'N/A')}")
 
-# Displaying financials
+# Financials
 st.subheader("Financials")
 financials = stock_info.financials
 st.dataframe(financials)
 
-# Displaying balance sheet
+# Balance Sheet
 st.subheader("Balance Sheet")
 balance_sheet = stock_info.balance_sheet
 st.dataframe(balance_sheet)
