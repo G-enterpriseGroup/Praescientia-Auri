@@ -46,7 +46,6 @@ Ticker = st.text_input('Ticker', value="SPY")
 start_date1 = st.date_input('Start Date', value=default_start_date)
 end_date1 = st.date_input('End Date', value=default_end_date)
 
-         f'\nTicker: {Ticker}\nStart Date: {start_date1}\nEnd Date: {end_date1}\nTraining set proportion %: {split_percentage}')
 
 if st.button('Run SARIMAX Model'):
     with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
