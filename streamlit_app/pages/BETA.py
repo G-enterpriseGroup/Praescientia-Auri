@@ -196,19 +196,7 @@ if st.button('Run SARIMAX Model'):
         # Filter out the weekend dates from the list
         market_dates = [date for date in dates if date.weekday() < 5]
         progress_bar.progress(40)
-        # Dynamic forecasting for test data
-        Cpred_test = model_fitted.predict(start=split_index, end=split_index+len(C_test)-1, dynamic=True)
-        Cpred_test
-        Cpred_future = model_fitted.predict(start=len(C), end=len(C)+DD-1, dynamic=True)
-        Cpred_future
-        # Visualizing the forecast against actual test data
-        plt.figure(figsize=(10,6))
-        plt.plot(C_train, label='Training Data')
-        plt.plot(range(split_index, split_index+len(C_test)), C_test, label='Actual Test Data')
-        plt.plot(range(split_index, split_index+len(C_test)), Cpred_test, label='Forecasted Test Data', alpha=0.7)
-        plt.legend()
-        plt.show()
-        st.pyplot(fig)  # Display the figure in Streamlit
+
 
         Date = pd.Series(market_dates )
         
