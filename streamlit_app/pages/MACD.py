@@ -1,4 +1,3 @@
-        import pandas as pd
         import numpy as np
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
@@ -10,6 +9,8 @@
         from pmdarima import auto_arima
         from sklearn.metrics import mean_squared_error
         from math import sqrt
+        import pandas as pd
+
         
         # Set Streamlit page config
         st.set_page_config(layout="wide")
