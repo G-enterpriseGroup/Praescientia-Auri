@@ -46,7 +46,6 @@ Ticker = st.text_input('Ticker', value="SPY")
 start_date1 = st.date_input('Start Date', value=default_start_date)
 end_date1 = st.date_input('End Date', value=default_end_date)
 
-st.write(f'Days Predicting: 30\nSeasonality: {SN}\n' + '\n'.join([f'{k}: {v}' for k, v in EMA_values.items()]) +
          f'\nTicker: {Ticker}\nStart Date: {start_date1}\nEnd Date: {end_date1}\nTraining set proportion %: {split_percentage}')
 
 if st.button('Run SARIMAX Model'):
