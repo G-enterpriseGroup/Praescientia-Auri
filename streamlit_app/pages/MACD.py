@@ -6,127 +6,78 @@ import plotly.graph_objects as go
 import yfinance as yf
 from datetime import datetime, timedelta
 import streamlit as st
-from statsmodels.tsa.arima.model import ARIMA
-import statsmodels.api as sm
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 from pmdarima import auto_arima
+from sklearn.metrics import mean_squared_error
+from math import sqrt
 
 # Set Streamlit page config
 st.set_page_config(layout="wide")
 
-# Function to hide Streamlit branding
-def hide_streamlit_branding():
-    st.markdown("""
-        <style>
-            #MainMenu {visibility: hidden;}
-            header {visibility: hidden;}
-            footer {visibility: hidden;}
-        </style>
-    """, unsafe_allow_html=True)
-
-hide_streamlit_branding()
+# Hide Streamlit branding
+st.markdown('''
+    <style>
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+    </style>
+''', unsafe_allow_html=True)
 
 # Streamlit app title
-st.write("# Forecasting Stock - Designed & Implemented by Raj Ghotra")
+st.write("# Stock Forecasting - Designed & Implemented by Raj Ghotra")
 
-# Sliders for model parameters
-DD = 30
-SN = st.slider('Seasonality', min_value=7, max_value=30, value=22)
-EMA12 = st.slider('EMA12', min_value=0, max_value=100, value=13)
-EMA26 = st.slider('EMA26', min_value=0, max_value=100, value=39)
-EMA9 = st.slider('EMA9', min_value=0, max_value=100, value=9)
-split_percentage = st.slider('Training set proportion %', min_value=0.2, max_value=0.99, value=0.80)
-Ticker = st.text_input('Ticker', value="SPY")
+# Input widgets for model parameters
+SN = st.slider('Seasonality', min_value=7, max_value=30, value=22, step=1)
+split_percentage = st.slider('Training set proportion %', min_value=0.2, max_value=0.8, value=0.8, step=0.05)
+Ticker = st.text_input('Ticker', value="SPY").upper()
 
-# Calculate start and end dates excluding weekends
-def calculate_start_date(days):
-    start_date = datetime.today()
-    delta_days = 0
-    while delta_days < days:
-        start_date -= timedelta(days=1)
-        if start_date.weekday() < 5:  # Monday to Friday
-            delta_days += 1
-    return start_date
+# Displaying the model parameters
+st.write(f"Seasonality: {SN}, Ticker: {Ticker}, Training set proportion %: {split_percentage*100}")
 
-default_start_date = calculate_start_date(395)
-default_end_date = calculate_start_date(30)
+# Function to calculate start and end dates
+def calculate_start_end_dates(days):
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    return start_date, end_date
 
-start_date1 = st.date_input('Start Date', value=default_start_date)
-end_date1 = st.date_input('End Date', value=default_end_date)
+# Fetching stock data
+def fetch_stock_data(ticker, start_date, end_date):
+    df = yf.download(ticker, start=start_date, end=end_date)
+    return df
 
-# Display variable values
-st.write(f"""Days Predicting: {DD}, Seasonality: {SN}, EMA12: {EMA12}, EMA26: {EMA26}, 
-EMA9: {EMA9}, Ticker: {Ticker}, Start Date: {start_date1}, End Date: {end_date1}, 
-Training set proportion %: {split_percentage}""")
+# Running the forecasting model
+if st.button('Run Forecasting Model'):
+    with st.spinner('Model is running...'):
+        start_date, end_date = calculate_start_end_dates(365 * 2) # Last 2 years
+        df = fetch_stock_data(Ticker, start_date, end_date)
 
-if st.button('Run SARIMAX Model'):
-    with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
-        progress_bar = st.progress(0)
-        
-        df = yf.Ticker(Ticker).history(period="max")
-        df = df.loc[pd.to_datetime(start_date1).tz_localize('America/New_York'):pd.to_datetime(end_date1).tz_localize('America/New_York')]
+        # Splitting the dataset
+        split_point = int(len(df) * split_percentage)
+        train, test = df['Close'][:split_point], df['Close'][split_point:]
 
-        # Data preparation
-        df.drop(columns=['Open', 'High', 'Low', 'Volume', 'Dividends', 'Stock Splits'], inplace=True)
-        df['EMA_12'] = df['Close'].ewm(span=EMA12, adjust=False).mean()
-        df['EMA_26'] = df['Close'].ewm(span=EMA26, adjust=False).mean()
-        df['EMA_9'] = df['Close'].ewm(span=EMA9, adjust=False).mean()
-        df['MACD'] = df['EMA_12'] - df['EMA_26']
-        df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-        df.drop(columns=['EMA_12', 'EMA_26', 'EMA_9'], inplace=True)
-
-        progress_bar.progress(10)
-
-        # SARIMAX Model
-        stepwise_fit = auto_arima(df['Close'], trace=True, suppress_warnings=True)
-        model = sm.tsa.statespace.SARIMAX(df['Close'], order=stepwise_fit.order, seasonal_order=(stepwise_fit.order[0], stepwise_fit.order[1], stepwise_fit.order[2], SN)).fit()
-
-        progress_bar.progress(20)
+        # Model fitting
+        stepwise_model = auto_arima(train, start_p=1, start_q=1, max_p=3, max_q=3, m=SN, start_P=0, seasonal=True, d=1, D=1, trace=True, error_action='ignore', suppress_warnings=True)
+        model = SARIMAX(train, order=stepwise_model.order, seasonal_order=stepwise_model.seasonal_order)
+        model_fit = model.fit(disp=False)
 
         # Forecast
-        Cpred_future = model.predict(start=len(df), end=len(df)+DD)
-        progress_bar.progress(30)
+        forecast = model_fit.forecast(steps=len(test))
+        
+        # Evaluation
+        mse = mean_squared_error(test, forecast)
+        rmse = sqrt(mse)
 
-        # Plotting
-        fig, axs = plt.subplots(2, 1, figsize=(15, 10))
-        axs[0].plot(df.index, df['Close'], label='Close Price', color='blue')
-        axs[1].plot(Cpred_future.index, Cpred_future, label='Forecasted Close Price', color='red')
-        for ax in axs:
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-            ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
-            ax.grid(True)
-            ax.legend()
+        # Plotting results
+        plt.figure(figsize=(10, 6))
+        plt.plot(train.index, train, label='Train')
+        plt.plot(test.index, test, label='Test')
+        plt.plot(forecast.index, forecast, label='Forecast')
+        plt.legend()
+        plt.title('Stock Price Forecasting')
+        st.pyplot(plt)
+        
+        st.write(f"RMSE: {rmse:.2f}")
 
-        axs[0].set_title('Historical Close Prices')
-        axs[1].set_title('Forecasted Close Prices')
-
-        fig.tight_layout()
-        st.pyplot(fig)
-
-        progress_bar.progress(100)
-        st.success("Model run successfully!")
-
-# Function to fetch and display stock data using a candlestick chart
-def display_candlestick_chart(ticker):
-    end_date = datetime.today()
-    start_date = end_date - timedelta(days=45)  # Adjust to ensure covering 30 business days
-
-    data = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
-
-    if not data.empty:
-        fig = go.Figure(data=[go.Candlestick(x=data.index,
-                                             open=data['Open'],
-                                             high=data['High'],
-                                             low=data['Low'],
-                                             close=data['Close'])])
-
-        fig.update_layout(title=f'{ticker} Stock Price', xaxis_title='Date', yaxis_title='Price (USD)',
-                          xaxis_rangeslider_visible=False, xaxis=dict(tickmode='array',
-                          tickvals=data.index[::3], ticktext=[date.strftime('%Y-%m-%d') for date in data.index][::3]))
-
-        fig.update_layout(autosize=False, width=800, height=600)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.write("No data available for the given ticker.")
-
-# Display candlestick chart for the entered stock ticker
-display_candlestick_chart(Ticker.upper())
+# Displaying a note
+st.write("Model accuracy is influenced by the selected parameters and the inherent predictability of the stock market.")
+"""
