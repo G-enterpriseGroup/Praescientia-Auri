@@ -308,6 +308,58 @@ if st.button('Run SARIMAX Model'):
         
         
         
+if st.button('Run SARIMAX Model'):
+    with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
+        progress_bar = st.progress(0)
+        
+        # Retrieve and prepare data
+        ticker_data = yf.Ticker(Ticker)
+        df = ticker_data.history(period="max")
+        df = df.loc[start_date1:end_date1]
+        df = df[['Close']]  # Keep only the 'Close' column
+
+        # Update progress
+        progress_bar.progress(10)
+
+        # Ensure the index is a datetime type and localize to avoid timezone issues
+        df.index = pd.to_datetime(df.index).tz_localize('America/New_York')
+
+        # Calculate MACD and Signal lines to include in the model
+        df['EMA_12'] = df['Close'].ewm(span=EMA12, adjust=False).mean()
+        df['EMA_26'] = df['Close'].ewm(span=EMA26, adjust=False).mean()
+        df['MACD'] = df['EMA_12'] - df['EMA_26']
+        df['Signal'] = df['MACD'].ewm(span=EMA9, adjust=False).mean()
+
+        # Prepare the Close price data for training and testing
+        C = df["Close"].dropna()
+
+        # Split the data
+        split_index = int(len(C) * split_percentage)
+        C_train = C.iloc[:split_index]
+        C_test = C.iloc[split_index:]
+
+        # Update progress
+        progress_bar.progress(30)
+
+        # Fit the model on the training set
+        model = SARIMAX(C_train, order=(0,1,1), seasonal_order=(1,1,1,SN))
+        result = model.fit()
+
+        # Make predictions
+        predictions = result.predict(start=len(C_train), end=len(C_train)+len(C_test)-1, dynamic=False)
+        
+        # Future predictions
+        future_predictions = result.predict(start=len(C), end=len(C)+DD-1, dynamic=False)
+        
+        # Update progress
+        progress_bar.progress(60)
+        
+        # Plotting and further steps...
+        # Ensure your plotting includes both the training data, test data, and predictions
+
+        # Finalize and show progress
+        progress_bar.progress(100)
+        st.success("Model run successfully!")
         
         
         
