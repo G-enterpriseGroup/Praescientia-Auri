@@ -190,7 +190,7 @@ st.title('Date 30 Business Days Ago')
 today = datetime.now()
 
 # Calculate 30 business days ago
-business_days_ago_date = calculate_business_days_ago(today, 29)
+business_days_ago_date = calculate_business_days_ago(today, 30)
 
 # Display the result
 date_str = business_days_ago_date.strftime('%Y-%m-%d')
