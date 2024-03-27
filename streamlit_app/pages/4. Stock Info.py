@@ -47,3 +47,17 @@ with tab4:
     st.dataframe(balance_sheet_quarterly)
 
 #______________________________________________
+
+import matplotlib.pyplot as plt
+
+# Fetch historical stock prices
+historical_prices = stock_info.history(period="1y")
+
+# Calculate Moving Averages
+historical_prices['MA50'] = historical_prices['Close'].rolling(window=50).mean()
+historical_prices['MA200'] = historical_prices['Close'].rolling(window=200).mean()
+
+# Plot
+fig, ax = plt.subplots()
+historical_prices[['Close', 'MA50', 'MA200']].plot(ax=ax)
+st.pyplot(fig)
