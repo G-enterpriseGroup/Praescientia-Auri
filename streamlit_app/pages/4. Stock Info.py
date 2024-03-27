@@ -46,16 +46,4 @@ with tab3:
 with tab4:
     st.dataframe(balance_sheet_quarterly)
 
-# Attempt to fetch earnings data with error handling
-try:
-    earnings_yearly = stock_info.earnings
-    earnings_quarterly = stock_info.quarterly_earnings
-    # Display earnings if fetching was successful
-    st.subheader("Earnings")
-    tab5, tab6 = st.tabs(["Yearly Earnings", "Quarterly Earnings"])
-    with tab5:
-        st.dataframe(earnings_yearly)
-    with tab6:
-        st.dataframe(earnings_quarterly)
-except Exception as e:
-    st.error("Failed to fetch earnings data. This data might not be available for the selected ticker.")
+#______________________________________________
