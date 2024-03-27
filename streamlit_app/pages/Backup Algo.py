@@ -1,13 +1,20 @@
 import pandas as pd
-import yfinance as yf
-import datetime
+import numpy as np
 import streamlit as st
+import yfinance as yf
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import datetime, timedelta
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from pmdarima import auto_arima
+import plotly.graph_objects as go
+from pandas.tseries.holiday import USFederalHolidayCalendar
+from pandas.tseries.offsets import CustomBusinessDay
 
-# Streamlit app setup
 st.set_page_config(layout="wide")
+
 def hide_streamlit_branding():
+    """Hide Streamlit's default branding"""
     st.markdown("""
         <style>
             #MainMenu {visibility: hidden;}
@@ -16,51 +23,79 @@ def hide_streamlit_branding():
         </style>
     """, unsafe_allow_html=True)
 
-# Application title
+hide_streamlit_branding()
+
 st.write("# Forecasting Stock - Designed & Implemented by Raj Ghotra")
 
-# Sliders and input for model parameters and stock ticker
-SN = st.slider('Seasonality', min_value=7, max_value=30, value=22)
-Ticker = st.text_input('Ticker', value="AAPL")
-default_start_date = datetime.datetime.today() - datetime.timedelta(days=365)
+def calculate_date(days, start=True):
+    current_date = datetime.today()
+    delta_days = 0
+    while delta_days < days:
+        current_date -= timedelta(days=1)
+        if current_date.weekday() < 5:
+            delta_days += 1
+    return current_date
+
+default_start_date = calculate_date(395)
+default_end_date = calculate_date(30, start=False)
+
+SN = st.slider('Seasonality', 7, 30, 22)
+Ticker = st.text_input('Ticker', value="SPY")
 start_date1 = st.date_input('Start Date', value=default_start_date)
+end_date1 = st.date_input('End Date', value=default_end_date)
 
-# Fetch historical data
-@st.cache
-def get_data(ticker):
-    df = yf.Ticker(ticker).history(period="max")
-    return df
-
-# Preprocess data
-def preprocess_data(df, start_date):
-    df = df.loc[start_date:].copy()
-    df = df[['Close']]
-    return df
-
-# Auto ARIMA to find best order
-def find_best_order(series):
-    return auto_arima(series, trace=True, suppress_warnings=True, seasonal=True, m=SN).order
-
-# Fit SARIMAX model
-def fit_model(series, order):
-    model = SARIMAX(series, order=order, seasonal_order=(1, 1, 1, SN)).fit(disp=0)
-    return model
+st.write(f'Days Predicting: 30\nSeasonality: {SN}\nTicker: {Ticker}\nStart Date: {start_date1}\nEnd Date: {end_date1}')
 
 if st.button('Run SARIMAX Model'):
-    with st.spinner('Model is running, please wait...'):
-        df = get_data(Ticker)
-        df_preprocessed = preprocess_data(df, start_date1)
+    with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
+        progress_bar = st.progress(0)
+        df = yf.Ticker(Ticker).history(period="max")
+        df = df.loc[pd.to_datetime(start_date1).tz_localize('America/New_York'):pd.to_datetime(end_date1).tz_localize('America/New_York')]
+        if df.index.tz is None:
+            df.index = pd.to_datetime(df.index).tz_localize('America/New_York')
+        else:
+            df.index = pd.to_datetime(df.index).tz_convert('America/New_York')
+        df = df[['Close']].copy()
+        progress_bar.progress(10)
         
-        # Find the best ARIMA order
-        order = find_best_order(df_preprocessed['Close'])
+        C = df["Close"].dropna()
+        progress_bar.progress(30)
+        auto_model = auto_arima(C, trace=True, suppress_warnings=True)
+        arima_order = auto_model.order
+        seasonal_order = (arima_order[0], arima_order[1], arima_order[2], SN)
+        model = SARIMAX(C, order=arima_order, seasonal_order=seasonal_order).fit()
+        progress_bar.progress(80)
+        cal = USFederalHolidayCalendar()
+        holidays = cal.holidays(start=df.index.max(), end=df.index.max() + pd.DateOffset(days=90))
+        future_dates = pd.bdate_range(start=df.index.max(), periods=30 + len(holidays), freq='B')
+        future_dates = future_dates[~future_dates.isin(holidays)][:30]
+        predictions = model.predict(start=len(C), end=len(C) + len(future_dates) - 1, dynamic=True)
         
-        # Fit SARIMAX model
-        model = fit_model(df_preprocessed['Close'], order)
+        custom_business_day = CustomBusinessDay(calendar=USFederalHolidayCalendar())
+        future_dates_index = pd.date_range(start=future_dates[0], periods=len(predictions), freq=custom_business_day)
+        predictions.index = future_dates_index
         
-        # Forecast
-        forecast_steps = 30  # For example, forecast 30 days ahead
-        forecast = model.forecast(steps=forecast_steps)
+        plt.figure(figsize=(10, 6))
+        plt.plot(df.index, df['Close'], label='Actual Close')
+        plt.plot(predictions.index, predictions, label='Forecast', linestyle='--')
+        plt.title(f'{Ticker} Stock Price Forecast')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.legend()
+        plt.tight_layout()
+        st.pyplot(plt)
         
-        # Plotting the forecast
-        st.line_chart(forecast)
+        future_df = pd.DataFrame({'Forecasted Price': predictions.values}, index=future_dates_index)
+        st.write(future_df)
+        
+        plt.figure(figsize=(15, 7))
+        plt.plot(future_df.index, future_df['Forecasted Price'], label='Forecasted Price', linestyle='--', color='red')
+        plt.title(f'{Ticker} Historical and Forecasted Stock Price')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.legend()
+        plt.tight_layout()
+        st.pyplot(plt)
+        
+        progress_bar.progress(100)
         st.success("Model run successfully!")
