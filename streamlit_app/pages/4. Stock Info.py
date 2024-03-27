@@ -46,19 +46,16 @@ with tab3:
 with tab4:
     st.dataframe(balance_sheet_quarterly)
 
-# Earnings and Stock Price History
-st.subheader("Earnings")
-earnings_yearly = stock_info.earnings
-earnings_quarterly = stock_info.quarterly_earnings
-tab5, tab6 = st.tabs(["Yearly Earnings", "Quarterly Earnings"])
-with tab5:
-    st.dataframe(earnings_yearly)
-with tab6:
-    st.dataframe(earnings_quarterly)
-
-st.subheader("Stock Price History")
-date_range = st.slider("Select Date Range for Stock Price History:", value=(pd.to_datetime('2020-01-01'), pd.to_datetime('today')))
-stock_history = stock_info.history(start=date_range[0], end=date_range[1])
-st.line_chart(stock_history['Close'])
-
-# Implementing error handling and data validation can significantly improve user experience and application robustness.
+# Attempt to fetch earnings data with error handling
+try:
+    earnings_yearly = stock_info.earnings
+    earnings_quarterly = stock_info.quarterly_earnings
+    # Display earnings if fetching was successful
+    st.subheader("Earnings")
+    tab5, tab6 = st.tabs(["Yearly Earnings", "Quarterly Earnings"])
+    with tab5:
+        st.dataframe(earnings_yearly)
+    with tab6:
+        st.dataframe(earnings_quarterly)
+except Exception as e:
+    st.error("Failed to fetch earnings data. This data might not be available for the selected ticker.")
