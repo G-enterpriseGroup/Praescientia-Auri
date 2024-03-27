@@ -52,4 +52,4 @@ if st.button('Run Model'):
                 df[f'{series_name}_pred'] = future.result().forecast(steps=30)
 
         # Display forecasted data (this part can be expanded based on how you want to use/display the predictions)
-        st.write(df[['Close_pred', 'MACD_pred', 'Signal_pred
+    st.write(df[['Close_pred', 'MACD_pred', 'Signal_pred']])
