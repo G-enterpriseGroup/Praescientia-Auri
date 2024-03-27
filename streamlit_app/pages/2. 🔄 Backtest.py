@@ -156,16 +156,6 @@ def calculate_business_days_ago(start_date, business_days):
         if start_date.weekday() < 5:  # Monday = 0, Sunday = 6
             business_days -= 1
     return start_date
-# Display the app title
-st.title('Date 30 Business Days Ago')
-# Today's date
-today = datetime.now()
-# Calculate 30 business days ago
-business_days_ago_date = calculate_business_days_ago(today, 30)
-# Display the result
-date_str = business_days_ago_date.strftime('%Y-%m-%d')
-# Display the result for manual copy
-st.text_input("Copy the date from here:", date_str, help="Select and copy this date manually.")
 # Check if data is not empty
 if not data.empty:
     # Extract dates and closing prices into a new DataFrame
