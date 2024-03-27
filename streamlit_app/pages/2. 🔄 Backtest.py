@@ -176,3 +176,66 @@ if not data.empty:
 else:
     st.write("No data available for the given ticker.")
 #_______________________________________________________________________________________________________________________________________________________________
+import streamlit as st
+from datetime import datetime
+from pandas.tseries.offsets import BDay
+
+def calculate_business_days_ago(target_date, days_ago):
+    return target_date - BDay(days_ago)
+
+def get_date_metrics():
+    today = datetime.now()
+    
+    # Calculate 30 business days ago
+    business_days_ago_date = calculate_business_days_ago(today, 30).strftime('%Y-%m-%d')
+    
+    # QTD (Quarterly To Date)
+    first_day_of_current_quarter = datetime(today.year, 3 * ((today.month - 1) // 3) + 1, 1)
+    qtd_date = first_day_of_current_quarter.strftime('%Y-%m-%d')
+    
+    # YTD (Year To Date)
+    ytd_date = datetime(today.year, 1, 1).strftime('%Y-%m-%d')
+    
+    # MTD (Month To Date)
+    mtd_date = datetime(today.year, today.month, 1).strftime('%Y-%m-%d')
+    
+    # One Year Ago Date
+    one_year_ago_date = (today - BDay(365)).strftime('%Y-%m-%d')
+    
+    # Two Year Ago Date
+    two_year_ago_date = (today - BDay(365 * 2)).strftime('%Y-%m-%d')
+    
+    # Three Year Ago Date
+    three_year_ago_date = (today - BDay(365 * 3)).strftime('%Y-%m-%d')
+    
+    return business_days_ago_date, qtd_date, ytd_date, mtd_date, one_year_ago_date, two_year_ago_date, three_year_ago_date
+
+def display_dates():
+    st.title("Date Calculations")
+    
+    business_days_ago_date, qtd_date, ytd_date, mtd_date, one_year_ago_date, two_year_ago_date, three_year_ago_date = get_date_metrics()
+    
+    st.subheader("30 Business Days Ago")
+    st.text(business_days_ago_date)
+    
+    st.subheader("QTD (Quarterly To Date)")
+    st.text(qtd_date)
+    
+    st.subheader("YTD (Year To Date)")
+    st.text(ytd_date)
+    
+    st.subheader("MTD (Month To Date)")
+    st.text(mtd_date)
+    
+    st.subheader("One Year Ago Date")
+    st.text(one_year_ago_date)
+    
+    st.subheader("Two Years Ago Date")
+    st.text(two_year_ago_date)
+    
+    st.subheader("Three Years Ago Date")
+    st.text(three_year_ago_date)
+
+# Run the display function
+if __name__ == "__main__":
+    display_dates()
