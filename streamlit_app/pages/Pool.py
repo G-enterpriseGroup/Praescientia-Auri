@@ -1,43 +1,43 @@
 import streamlit as st
 
-# Title
-st.title('Pool Maintenance Calculator')
+# Pool Size Volume
+POOL_VOLUME_GALLONS = 39000
 
-# Pump Mode Confirmation
-st.markdown('**Pump should be on Mode 2 for 24-hour variable speed.**')
+def calculate_chemicals(ph, alkalinity, cyanuric_acid, pool_volume):
+    chemicals_needed = {}
+    # pH Adjustment
+    if ph < 6.5:
+        ph_up_oz = 20 * (pool_volume / 10000)
+    elif 6.5 <= ph <= 6.7:
+        ph_up_oz = 16 * (pool_volume / 10000)
+    elif 6.8 <= ph <= 7.1:
+        ph_up_oz = 12 * (pool_volume / 10000)
+    else:
+        ph_up_oz = 0
+    chemicals_needed['ph_up_oz'] = ph_up_oz
+    
+    # Alkalinity Adjustment
+    alkalinity_adjustment = max(0, 120 - alkalinity) / 10 * 1.5 * (pool_volume / 10000)  # Example calculation
+    chemicals_needed['sodium_bisulfate_oz'] = alkalinity_adjustment * 16  # Convert pounds to ounces
+    
+    # Cyanuric Acid Adjustment
+    cyanuric_acid_adjustment = max(0, 50 - cyanuric_acid) / 10 * 13 * (pool_volume / 10000)  # Example calculation
+    chemicals_needed['cyanuric_acid_oz'] = cyanuric_acid_adjustment * 16  # Convert pounds to ounces
+    
+    return chemicals_needed
 
-# Chemical Addition Section
-st.header('Weekly Chemical Additions')
-chlorine_tabs = st.number_input('Chlorine tabs in skimmer (number of tabs)', min_value=0)
-bleach_chlorine_gallons = st.number_input('Gallons of pool bleach chlorine added (gallons)', min_value=0.0, format='%f')
-algae_killer_oz = st.number_input('Algae killer added (oz)', min_value=0.0, format='%f')
-water_clarifier_oz = st.number_input('Water clarifier added (oz)', min_value=0.0, format='%f')
+st.title('Pool Maintenance Helper')
 
-# Chemistry Levels Input
-st.header('Current Chemistry Levels')
-chlorine_level = st.slider('Chlorine Level', 0.0, 5.0, 1.5)
-ph_level = st.slider('pH Level', 6.0, 8.5, 7.5)
-total_alkalinity_level = st.number_input('Total Alkalinity Level (ppm)', min_value=0)
-stabilizer_level = st.number_input('Stabilizer Level (ppm)', min_value=0)
-
-# Dosage Recommendations Based on pH Levels
-st.header('Dosage Recommendations')
-if ph_level < 7.8:
-    st.write('pH level is within the desired range.')
-elif ph_level < 8.4:
-    st.write('Add Half Gallon of Muriatic Acid.')
-else:
-    st.write('Add One Full Gallon of Muriatic Acid.')
-
-# If Alkaline Level adjustments needed
-if total_alkalinity_level > 180:
-    st.write('Reduce the pH to 7.2 by adding Muriatic Acid.')
-
-# Pool Volume
-st.markdown('**Pool Volume:** 35,500 gallons')
-
-# Run the app
-if st.button('Calculate'):
-    # This is where you would process the inputs and give out the recommendations
-    st.write('Chemical adjustments calculated.')
+with st.form("pool_chemistry"):
+    ph = st.slider('pH Level', 6.0, 8.0, 7.1)
+    alkalinity = st.slider('Alkalinity (ppm)', 0, 300, 195)
+    cyanuric_acid = st.slider('Cyanuric Acid (ppm)', 0, 100, 41)
+    pool_volume = st.slider('Pool Volume (Gallons)', 10000, 50000, 39000)
+    
+    submitted = st.form_submit_button("Calculate")
+    if submitted:
+        chemicals_needed = calculate_chemicals(ph, alkalinity, cyanuric_acid, pool_volume)
+        st.write(f"Chemicals needed to adjust pH: {chemicals_needed['ph_up_oz']:.2f} ounces")
+        st.write(f"Chemicals needed to adjust Alkalinity: {chemicals_needed['sodium_bisulfate_oz']:.2f} ounces")
+        st.write(f"Chemicals needed for Cyanuric Acid: {chemicals_needed['cyanuric_acid_oz']:.2f} ounces")
 
