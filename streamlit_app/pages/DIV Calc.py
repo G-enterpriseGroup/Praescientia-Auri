@@ -16,20 +16,28 @@ total_investment = shares_owned * average_cost
 loss_value = total_investment * (loss_percentage / 100)
 remaining_investment = total_investment - loss_value
 dividend_per_quarter = dividend_per_share * shares_owned
-quarters_needed = remaining_investment / dividend_per_quarter
-years_needed = quarters_needed / 4
+quarters_needed = np.inf if dividend_per_quarter <= 0 else remaining_investment / dividend_per_quarter
+years_needed = "Infinity" if quarters_needed == np.inf else quarters_needed / 4
+
+# Break-even without dividends
+break_even_price = total_investment / shares_owned if shares_owned else 0
 
 # Display calculations
 st.write(f'Total Investment Value: ${total_investment:.2f}')
 st.write(f'Loss Value: ${loss_value:.2f}')
 st.write(f'Remaining Investment Value: ${remaining_investment:.2f}')
-st.write(f'Quarters Needed to Recover: {quarters_needed:.2f}')
-st.write(f'Years Needed to Recover: {years_needed:.2f}')
+st.write(f'Quarters Needed to Recover (via Dividends): {quarters_needed if quarters_needed != np.inf else "Infinity"}')
+st.write(f'Years Needed to Recover: {years_needed}')
+st.write(f'Break-even Price per Share: ${break_even_price:.2f}')
 
 # Graph
 if st.button('Show Recovery Graph'):
-    quarters = np.arange(0, int(np.ceil(quarters_needed)) + 1, 1)
-    recovery_values = np.minimum(dividend_per_quarter * quarters, remaining_investment)
+    if quarters_needed != np.inf:
+        quarters = np.arange(0, int(np.ceil(quarters_needed)) + 1, 1)
+        recovery_values = np.minimum(dividend_per_quarter * quarters, remaining_investment)
+    else:
+        quarters = np.array([0, 1])
+        recovery_values = np.array([0, 0])
 
     df = pd.DataFrame({
         'Quarter': quarters,
@@ -39,4 +47,4 @@ if st.button('Show Recovery Graph'):
     st.line_chart(df.set_index('Quarter'))
 
 # Instructions
-st.write('Adjust the loss percentage to see how it affects the recovery time and visualize the recovery process.')
+st.write('Adjust the loss percentage to see its effect on recovery time. The tool provides recovery estimations through dividends and the break-even share price.')
