@@ -26,8 +26,7 @@ break_even_price = total_investment / shares_owned if shares_owned else 0
 st.write(f'Total Investment Value: ${total_investment:.2f}')
 st.write(f'Loss Value: ${loss_value:.2f}')
 st.write(f'Remaining Investment Value: ${remaining_investment:.2f}')
-st.write(f'Quarters Needed to Recover (via Dividends): {quarters_needed if quarters_needed != np.inf else "Infinity"}')
-st.write(f'Years Needed to Recover: {years_needed}')
+st.write(f'Years Needed to Recover (via Dividends): {quarters_needed if quarters_needed != np.inf else "Infinity"}')
 st.write(f'Break-even Price per Share: ${break_even_price:.2f}')
 
 # Graph
