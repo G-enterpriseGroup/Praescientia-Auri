@@ -3,7 +3,7 @@ import yfinance as yf
 from datetime import datetime
 
 # Title and date input
-st.title("Stock Financial Dashboard")
+st.title(" DivFinancial Dashboard")
 today_date = st.date_input("Today's Date", datetime.now())
 
 # Ticker input and data fetching
