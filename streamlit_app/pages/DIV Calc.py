@@ -1,44 +1,23 @@
 import streamlit as st
-import yfinance as yf
+from datetime import datetime
 
-# Function to fetch stock price and dividend yield
-def get_stock_data(ticker):
-    stock = yf.Ticker(ticker)
-    data = stock.history(period="1d")
-    price = data['Close'].iloc[0]
-    dividend_yield = stock.info.get('dividendYield', 0) * price
-    return price, dividend_yield
-
-# Streamlit UI
-st.title('Stock Information and Analysis')
-
-# User input for stock ticker
-
-ticker = st.text_input('Enter the stock ticker:', 'AAPL').upper()
-
-# Fetch stock data
-price, dividend_yield = get_stock_data(ticker)
-st.write(f"Current price of {ticker}: ${price:.2f}")
-st.write(f"Annual dividend payment per share: ${dividend_yield:.2f}")
-
-# User inputs for average cost and quantity
-avg_cost = st.number_input('Enter your average cost per share:', value=0.0, step=0.01)
-quantity = st.number_input('Enter the quantity of stocks owned:', value=0, step=1)
+# Input section with editable spaces
+st.title("Financial Dashboard")
+st.write("Today's Date:")
+today_date = st.date_input("Date", datetime(2024, 4, 12))
+average_cost_share = st.number_input("Average Cost Share", value=13.13)
+abr = st.number_input("ABR", value=12.2)
+dividend_payout = st.number_input("Dividend Payout", value=0.43)
+quantity = st.number_input("Quantity", value=76)
 
 # Calculations
-total_investment = avg_cost * quantity
-current_value = price * quantity
-loss = total_investment - current_value if total_investment > current_value else 0
+cost_value = average_cost_share * quantity
+market_value = abr * quantity
+profit_loss = market_value - cost_value
+quarters_to_recovery = profit_loss / (dividend_payout * quantity)
 
-st.write(f"Total investment: ${total_investment:.2f}")
-st.write(f"Current market value: ${current_value:.2f}")
-st.write(f"Loss: ${loss:.2f}")
-
-# Calculate dividends and recovery
-if loss > 0:
-    dividends_per_year = dividend_yield * quantity
-    payments_to_recover = loss / dividends_per_year if dividends_per_year else float('inf')
-    st.write(f"Dividends per year: ${dividends_per_year:.2f}")
-    st.write(f"Number of dividend payments to recover loss: {payments_to_recover:.2f}")
-else:
-    st.write("No loss to recover.")
+# Displaying results
+st.write("Cost Value: ", cost_value)
+st.write("Market Value: ", market_value)
+st.write("Profit (Loss): ", profit_loss)
+st.write("Quarters to Recovery: ", round(quarters_to_recovery, 2))
