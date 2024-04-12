@@ -1,49 +1,43 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
+import yfinance as yf
 
-# Title and setup
-st.title('Investment Recovery Calculator with Visuals')
+# Function to fetch stock price and dividend yield
+def get_stock_data(ticker):
+    stock = yf.Ticker(ticker)
+    data = stock.history(period="1d")
+    price = data['Close'].iloc[0]
+    dividend_yield = stock.info.get('dividendYield', 0) * price
+    return price, dividend_yield
 
-# Inputs
-shares_owned = st.number_input('Number of Shares Owned:', min_value=0, value=76, step=1)
-average_cost = st.number_input('Average Cost per Share ($):', min_value=0.0, value=13.13)
-dividend_per_share = st.number_input('Dividend per Share per Quarter ($):', min_value=0.0, value=0.43)
-loss_percentage = st.slider('Loss Percentage (%):', min_value=0.0, max_value=100.0, value=100.0)
+# Streamlit UI
+st.title('Stock Information and Analysis')
+
+# User input for stock ticker
+ticker = st.text_input('Enter the stock ticker:', 'AAPL').upper()
+
+# Fetch stock data
+price, dividend_yield = get_stock_data(ticker)
+st.write(f"Current price of {ticker}: ${price:.2f}")
+st.write(f"Annual dividend payment per share: ${dividend_yield:.2f}")
+
+# User inputs for average cost and quantity
+avg_cost = st.number_input('Enter your average cost per share:', value=0.0, step=0.01)
+quantity = st.number_input('Enter the quantity of stocks owned:', value=0, step=1)
 
 # Calculations
-total_investment = shares_owned * average_cost
-loss_value = total_investment * (loss_percentage / 100)
-remaining_investment = total_investment - loss_value
-dividend_per_quarter = dividend_per_share * shares_owned
-quarters_needed = np.inf if dividend_per_quarter <= 0 else remaining_investment / dividend_per_quarter
-years_needed = "Infinity" if quarters_needed == np.inf else quarters_needed / 4
+total_investment = avg_cost * quantity
+current_value = price * quantity
+loss = total_investment - current_value if total_investment > current_value else 0
 
-# Break-even without dividends
-break_even_price = total_investment / shares_owned if shares_owned else 0
+st.write(f"Total investment: ${total_investment:.2f}")
+st.write(f"Current market value: ${current_value:.2f}")
+st.write(f"Loss: ${loss:.2f}")
 
-# Display calculations
-st.write(f'Total Investment Value: ${total_investment:.2f}')
-st.write(f'Loss Value: ${loss_value:.2f}')
-st.write(f'Remaining Investment Value: ${remaining_investment:.2f}')
-st.write(f'Years Needed to Recover (via Dividends): {quarters_needed if quarters_needed != np.inf else "Infinity"}')
-st.write(f'Break-even Price per Share: ${break_even_price:.2f}')
-
-# Graph
-if st.button('Show Recovery Graph'):
-    if quarters_needed != np.inf:
-        quarters = np.arange(0, int(np.ceil(quarters_needed)) + 1, 1)
-        recovery_values = np.minimum(dividend_per_quarter * quarters, remaining_investment)
-    else:
-        quarters = np.array([0, 1])
-        recovery_values = np.array([0, 0])
-
-    df = pd.DataFrame({
-        'Quarter': quarters,
-        'Recovery Value ($)': recovery_values
-    })
-
-    st.line_chart(df.set_index('Quarter'))
-
-# Instructions
-st.write('Adjust the loss percentage to see its effect on recovery time. The tool provides recovery estimations through dividends and the break-even share price.')
+# Calculate dividends and recovery
+if loss > 0:
+    dividends_per_year = dividend_yield * quantity
+    payments_to_recover = loss / dividends_per_year if dividends_per_year else float('inf')
+    st.write(f"Dividends per year: ${dividends_per_year:.2f}")
+    st.write(f"Number of dividend payments to recover loss: {payments_to_recover:.2f}")
+else:
+    st.write("No loss to recover.")
