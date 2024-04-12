@@ -12,13 +12,17 @@ ticker_input = st.text_input("Enter Stock Ticker", value='ABR')
 def get_stock_data(ticker):
     stock = yf.Ticker(ticker)
     price = stock.history(period="1d")['Close'].iloc[-1]  # Latest stock price
-    dividends = stock.dividends.tail(1).values  # Fetching latest dividend payout as array
-    dividend = dividends[0] if len(dividends) > 0 else 0  # Handling no dividend case
-    return price, dividend
+    try:
+        # Attempt to get the dividend rate from the info property
+        dividend_rate = stock.info['dividendRate']
+    except KeyError:
+        # If dividendRate is not available, set it to 0
+        dividend_rate = 0
+    return price, dividend_rate
 
 latest_price, latest_dividend = get_stock_data(ticker_input)
 st.write(f"Current Price for {ticker_input}: ${latest_price}")
-st.write(f"Latest Dividend Payment for {ticker_input}: ${latest_dividend}")
+st.write(f"Annual Dividend Payment per Share for {ticker_input}: ${latest_dividend}")
 
 # Financial calculations input
 average_cost_per_share = st.number_input("Average Cost Per Share", value=13.13)
@@ -34,7 +38,10 @@ if isinstance(latest_price, (int, float)) and isinstance(average_cost_per_share,
     st.write(f"Profit (Loss): ${profit_loss}")
 
     if isinstance(latest_dividend, (int, float)) and latest_dividend > 0:
-        quarters_to_recovery = profit_loss / (latest_dividend * quantity)
+        total_annual_dividend = latest_dividend * quantity
+        quarterly_dividend = total_annual_dividend / 4  # Assuming dividends are paid quarterly
+        quarters_to_recovery = profit_loss / quarterly_dividend
+        st.write(f"Total Annual Dividend: ${total_annual_dividend}")
         st.write(f"Quarters to Recovery: {round(quarters_to_recovery, 2)}")
     else:
         st.write("Dividend data not available or dividend is zero, cannot calculate quarters to recovery.")
