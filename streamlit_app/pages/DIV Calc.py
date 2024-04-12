@@ -8,10 +8,24 @@ today_date = st.date_input("Today's Date", datetime.now())
 
 # Ticker input and data fetching
 ticker_input = st.text_input("Enter Stock Ticker", value='ABR')
+
+# Fetching data
 stock = yf.Ticker(ticker_input)
 info = stock.info
-current_price = info.get('regularMarketPrice', 0)
-latest_dividend = info.get('lastDividendValue', 0)
+
+# Safe fetching of stock information
+current_price = info.get('regularMarketPrice')
+if current_price is None:
+    current_price = "Data not available"
+    st.error("Failed to fetch current price.")
+
+latest_dividend = info.get('lastDividendValue')
+if latest_dividend is None:
+    latest_dividend = "Data not available"
+    st.error("Failed to fetch latest dividend.")
+
+st.write(f"Current Price for {ticker_input}: ${current_price}")
+st.write(f"Latest Dividend Payment for {ticker_input}: ${latest_dividend}")
 
 # Display current stock data
 st.write(f"Current Price for {ticker_input}: ${current_price}")
