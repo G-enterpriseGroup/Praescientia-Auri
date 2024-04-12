@@ -1,5 +1,6 @@
 import streamlit as st
 import yfinance as yf
+from datetime import datetime
 
 # Title and date input
 st.title("Stock Financial Dashboard")
