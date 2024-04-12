@@ -13,6 +13,7 @@ def get_stock_data(ticker):
 st.title('Stock Information and Analysis')
 
 # User input for stock ticker
+
 ticker = st.text_input('Enter the stock ticker:', 'AAPL').upper()
 
 # Fetch stock data
