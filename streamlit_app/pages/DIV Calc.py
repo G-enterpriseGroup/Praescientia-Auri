@@ -11,16 +11,17 @@ ticker_input = st.text_input("Enter Stock Ticker", value='ABR')
 
 # Fetching data
 stock = yf.Ticker(ticker_input)
-info = stock.info
+import yfinance as yf
 
-# Safe fetching of stock information
-current_price = info.get('regularMarketPrice', "Data not available")
-if current_price == "Data not available":
-    st.error("Failed to fetch current price.")
+def get_stock_data(ticker):
+    stock = yf.Ticker(ticker)
+    price = stock.history(period="1d")['Close'].iloc[-1]  # Latest stock price
+    dividends = stock.dividends.tail(1)  # Latest dividend payout
+    return price, dividends
 
-latest_dividend = info.get('lastDividendValue', "Data not available")
-if latest_dividend == "Data not available":
-    st.error("Failed to fetch latest dividend.")
+latest_price, latest_dividend = get_stock_data(ticker)
+print(f"Latest Price: {latest_price}")
+print(f"Latest Dividend: {latest_dividend}")
 
 st.write(f"Current Price for {ticker_input}: ${current_price}")
 st.write(f"Latest Dividend Payment for {ticker_input}: ${latest_dividend}")
