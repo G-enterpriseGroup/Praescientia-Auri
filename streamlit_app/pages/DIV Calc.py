@@ -40,10 +40,13 @@ if isinstance(latest_price, (int, float)) and isinstance(average_cost_per_share,
     if isinstance(latest_dividend, (int, float)) and latest_dividend > 0:
         total_annual_dividend = latest_dividend * quantity
         quarterly_dividend = total_annual_dividend / 4  # Assuming dividends are paid quarterly
+        monthly_dividend = total_annual_dividend / 12  # Assuming dividends could be divided monthly
         quarters_to_recovery = profit_loss / quarterly_dividend
+        months_to_recovery = profit_loss / monthly_dividend
         st.write(f"Total Annual Dividend: ${total_annual_dividend}")
         st.write(f"Quarters to Recovery: {round(quarters_to_recovery, 2)}")
+        st.write(f"Months to Recovery: {round(months_to_recovery, 2)}")
     else:
-        st.write("Dividend data not available or dividend is zero, cannot calculate quarters to recovery.")
+        st.write("Dividend data not available or dividend is zero, cannot calculate quarters or months to recovery.")
 else:
     st.write("Missing or invalid data, cannot perform financial calculations.")
