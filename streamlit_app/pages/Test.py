@@ -56,18 +56,16 @@ if st.button('Run SARIMAX Model'):
         # Combine and calculate differences
         combined_df = pd.concat([df, future_df], axis=1)
         combined_df['Difference'] = combined_df['Forecasted Prices'] - combined_df['Closing Prices']
-
-        # Filter the last 30 days for display and plotting
-        last_30_days = combined_df.tail(30)
-
-        # Display combined DataFrame filtered for the last 30 days
-        st.write(last_30_days)
+        
+        # Display combined DataFrame
+        st.write(combined_df)
 
         # Plotting the results
         fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(last_30_days.index, last_30_days['Closing Prices'], label='Closing Prices')
-        ax.plot(last_30_days.index, last_30_days['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
-        ax.set_title(f'{Ticker} Last 30 Days: Closing Prices vs Forecasted Prices')
+        ax.plot(combined_df.index, combined_df['Closing Prices'], label='Closing Prices')
+        ax.plot(combined_df.index, combined_df['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
+        ax.fill_between(combined_df.index, combined_df['Closing Prices'], combined_df['Forecasted Prices'], color='gray', alpha=0.2)
+        ax.set_title(f'{Ticker} Closing Prices, Forecasted Prices, and Difference')
         ax.set_xlabel('Date')
         ax.set_ylabel('Price')
         ax.legend()
