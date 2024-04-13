@@ -79,3 +79,37 @@ if st.button('Run SARIMAX Model'):
         
         progress_bar.progress(100)
         st.success("Model run successfully!")
+
+        
+        import streamlit as st
+        import yfinance as yf
+        from datetime import datetime, timedelta
+        
+        # Function to calculate start date considering only business days
+        def get_business_days_start(end_date, num_days):
+            count = 0
+            date_list = []
+            while count < num_days:
+                end_date -= timedelta(days=1)
+                if end_date.weekday() < 5:  # Monday to Friday are considered
+                    date_list.append(end_date)
+                    count += 1
+            return date_list[-1]
+        
+        # Set up the Streamlit interface
+        st.title('Stock Closing Price Viewer for the Last 30 Business Days')
+        ticker = st.text_input('Enter Ticker Symbol', value="SPY")
+        
+        # Display the stock data
+        if st.button('Show Data'):
+            end_date = datetime.today()
+            start_date = get_business_days_start(end_date, 30)
+            try:
+                data = yf.download(ticker, start=start_date, end=end_date)
+                if 'Close' in data.columns:
+                    st.line_chart(data['Close'])
+                else:
+                    st.error("Data unavailable for the given ticker.")
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+
