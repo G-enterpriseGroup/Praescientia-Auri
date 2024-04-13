@@ -1,6 +1,7 @@
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import streamlit as st
 from datetime import datetime, timedelta
 from pandas.tseries.holiday import USFederalHolidayCalendar
@@ -35,7 +36,6 @@ def calculate_date(days, start=True):
 # Constants
 default_start_date = calculate_date(395)
 default_end_date = calculate_date(30, start=False)
-actual_start_date = datetime.today() - timedelta(days=60)  # To ensure covering 30 business days
 
 # User inputs
 SN = st.slider('Seasonality', 7, 30, 22)
@@ -59,22 +59,22 @@ if st.button('Run SARIMAX Model'):
         model = SARIMAX(C, order=arima_order, seasonal_order=seasonal_order).fit()
         progress_bar.progress(80)
         
-        # Actual last 30 business days data for comparison
-        actual_end_date = datetime.today()
-        actual_start_date = actual_end_date - timedelta(days=60)  # Adjust as necessary to ensure 30 business days
-        actual_data = yf.Ticker(Ticker).history(start=actual_start_date.strftime('%Y-%m-%d'), end=actual_end_date.strftime('%Y-%m-%d'))
-        actual_business_dates = pd.bdate_range(start=actual_start_date, end=actual_end_date, freq=CustomBusinessDay(calendar=USFederalHolidayCalendar()))
-        actual_prices = actual_data['Close'].reindex(actual_business_dates)
+        future_dates = pd.bdate_range(start=C.index[-1], periods=30, freq=CustomBusinessDay(calendar=USFederalHolidayCalendar()))
+        predictions = model.predict(start=len(C), end=len(C) + 29, dynamic=True)
+        predictions.index = future_dates
         
         plt.figure(figsize=(10, 6))
-        plt.plot(actual_business_dates, actual_prices, label='Actual Last 30 Days', color='blue')
-        plt.title(f'Actual Past 30 Business Days Stock Prices for {Ticker}')
+        plt.plot(C.index, C, label='Actual Close')
+        plt.plot(future_dates, predictions, label='Forecast', linestyle='--')
+        plt.title(f'{Ticker} Stock Price Forecast')
         plt.xlabel('Date')
         plt.ylabel('Price')
         plt.legend()
         plt.tight_layout()
         st.pyplot(plt)
         
+        future_df = pd.DataFrame({'Forecasted Price': predictions}, index=future_dates)
+        st.write(future_df)
+        
         progress_bar.progress(100)
         st.success("Model run successfully!")
-
