@@ -74,7 +74,31 @@ if st.button('Run SARIMAX Model'):
         st.pyplot(plt)
         
         future_df = pd.DataFrame({'Forecasted Price': predictions}, index=future_dates)
-        st.write(future_df)
+        st.write(future_df) 
+
+
+import streamlit as st
+import yfinance as yf
+from datetime import datetime, timedelta
+
+# Title of the app
+st.title('Stock Closing Price Viewer')
+
+# Input for the stock ticker
+ticker = st.text_input('Ticker', value="SPY")
+
+# Function to get stock data
+def get_stock_data(ticker):
+    end_date = datetime.today()
+    start_date = end_date - timedelta(days=30)
+    data = yf.download(ticker, start=start_date, end=end_date)
+    return data['Close']
+
+# Display the stock data
+if st.button('Show Data'):
+    closing_prices = get_stock_data(ticker)
+    st.line_chart(closing_prices)
+
         
         progress_bar.progress(100)
         st.success("Model run successfully!")
