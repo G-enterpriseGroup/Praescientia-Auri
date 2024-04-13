@@ -2,33 +2,27 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
+from pandas.tseries.offsets import BDay
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from pandas.tseries.offsets import CustomBusinessDay
-from pandas.tseries.holiday import USFederalHolidayCalendar
 
 # Streamlit page configuration
 st.set_page_config(layout="wide")
 st.title("Stock Forecasting Application - Designed & Implemented by Raj Ghotra")
 
-# Function to calculate business days ago
+# Function to calculate business days ago using pandas BDay
 def calculate_business_days_ago(business_days):
-    date = datetime.now()
-    while business_days > 0:
-        date -= timedelta(days=1)
-        if date.weekday() < 5:  # Weekdays are business days
-            business_days -= 1
-    return date
+    return datetime.now() - BDay(business_days)
 
 # Setup default dates for user inputs
 default_start_date = calculate_business_days_ago(395)
 default_end_date = calculate_business_days_ago(30)
-SN = st.slider('Seasonality', 7, 30, 22)
-Ticker = st.text_input('Ticker', value="SPY")
+seasonality = st.slider('Seasonality', 7, 30, 22)
+ticker = st.text_input('Ticker', value="SPY")
 start_date = st.date_input('Start Date', value=default_start_date)
 end_date = st.date_input('End Date', value=default_end_date)
 
-# Hide Streamlit branding
+# Custom CSS to hide Streamlit branding
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -39,52 +33,30 @@ st.markdown("""
 
 # Running SARIMAX model and plotting
 if st.button('Run SARIMAX Model'):
-    with st.spinner('Fetching data and running model, please wait...'):
-        # Fetch historical stock data
-        df = yf.Ticker(Ticker).history(start=start_date, end=end_date)
-        df = df[['Close']]
-        df.columns = ['Closing Prices']
-        
-        # Debug information
-        st.write("Data fetched successfully")
-        
-        # SARIMAX model fitting (simplified model)
-        model = SARIMAX(df['Closing Prices'], order=(1, 1, 1), seasonal_order=(0, 1, 1, SN)).fit(disp=False)
-        
-        # Debug information
-        st.write("Model fitted successfully")
-        
-        # Predict future prices
-        future_dates = pd.date_range(df.index.max() + timedelta(days=1), periods=30, freq=CustomBusinessDay(calendar=USFederalHolidayCalendar()))
-        predictions = model.predict(start=len(df), end=len(df) + 29)
-        future_df = pd.DataFrame({'Forecasted Prices': predictions.values}, index=future_dates)
-        
-        # Combine and calculate differences
-        combined_df = pd.concat([df, future_df], axis=1).ffill().bfill()
-        combined_df['Difference'] = combined_df['Forecasted Prices'] - combined_df['Closing Prices']
-        
-        # Plotting the results
-        plt.figure(figsize=(10, 5))
-        plt.plot(df.index, df['Closing Prices'], label='Closing Prices')
-        plt.plot(future_df.index, future_df['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
-        plt.title(f'{Ticker} Closing Prices and Forecast')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
+    try:
+        with st.spinner('Fetching data and running model, please wait...'):
+            # Fetch historical stock data
+            df = yf.Ticker(ticker).history(start=start_date, end=end_date)
+            df = df[['Close']]
+            df.columns = ['Closing Prices']
 
-        # Display combined DataFrame
-        st.write(combined_df)
+            # SARIMAX model fitting
+            model = SARIMAX(df['Closing Prices'], order=(1, 1, 1), seasonal_order=(0, 1, 1, seasonality)).fit(disp=False)
+            
+            # Predict future prices
+            future_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=30, freq=BDay())
+            predictions = model.predict(start=len(df), end=len(df) + 29, typ='levels')
+            future_df = pd.DataFrame({'Forecasted Prices': predictions.values}, index=future_dates)
 
-        # Plotting the results
-        plt.figure(figsize=(10, 5))
-        plt.plot(df.index, df['Closing Prices'], label='Closing Prices')
-        plt.plot(future_df.index, future_df['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
-        plt.title(f'{Ticker} Closing Prices and Forecast')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
-        
-        # Display combined DataFrame
-        st.write(combined_df)
+            # Plotting the results
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(df.index, df['Closing Prices'], label='Closing Prices')
+            ax.plot(future_df.index, future_df['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
+            ax.set_title(f'{ticker} Closing Prices and Forecast')
+            ax.set_xlabel('Date')
+            ax.set_ylabel('Price')
+            ax.legend()
+            st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
