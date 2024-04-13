@@ -45,14 +45,8 @@ if st.button('Run SARIMAX Model'):
         df = df[['Close']]
         df.columns = ['Closing Prices']
         
-        # Debug information
-        st.write("Data fetched successfully")
-        
-        # SARIMAX model fitting (simplified model)
+        # SARIMAX model fitting
         model = SARIMAX(df['Closing Prices'], order=(1, 1, 1), seasonal_order=(0, 1, 1, SN)).fit(disp=False)
-        
-        # Debug information
-        st.write("Model fitted successfully")
         
         # Predict future prices
         future_dates = pd.date_range(df.index.max() + timedelta(days=1), periods=30, freq=CustomBusinessDay(calendar=USFederalHolidayCalendar()))
@@ -60,22 +54,16 @@ if st.button('Run SARIMAX Model'):
         future_df = pd.DataFrame({'Forecasted Prices': predictions.values}, index=future_dates)
         
         # Combine and calculate differences
-        combined_df = pd.concat([df, future_df], axis=1).ffill().bfill()
+        combined_df = pd.concat([df, future_df], axis=1)
         combined_df['Difference'] = combined_df['Forecasted Prices'] - combined_df['Closing Prices']
-        
-        # Plotting the results
-        plt.figure(figsize=(10, 5))
-        plt.plot(df.index, df['Closing Prices'], label='Closing Prices')
-        plt.plot(future_df.index, future_df['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
-        plt.title(f'{Ticker} Closing Prices and Forecast')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
 
-        # Display combined DataFrame
-        st.write(combined_df)
- # Plotting the results
+        # Filter the last 30 days for display and plotting
+        last_30_days = combined_df.tail(30)
+
+        # Display combined DataFrame filtered for the last 30 days
+        st.write(last_30_days)
+
+        # Plotting the results
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.plot(last_30_days.index, last_30_days['Closing Prices'], label='Closing Prices')
         ax.plot(last_30_days.index, last_30_days['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
