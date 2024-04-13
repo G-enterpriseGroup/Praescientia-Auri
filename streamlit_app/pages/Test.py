@@ -59,22 +59,25 @@ if st.button('Run SARIMAX Model'):
         model = SARIMAX(C, order=arima_order, seasonal_order=seasonal_order).fit()
         progress_bar.progress(80)
         
+        # Get the last 30 actual data points for comparison
+        actual_dates = pd.bdate_range(start=C.index[-1] - timedelta(days=59), periods=30, freq=CustomBusinessDay(calendar=USFederalHolidayCalendar()))
+        actual_data = df['Close'].reindex(actual_dates)
+        
+        # Generate future dates for forecast
         future_dates = pd.bdate_range(start=C.index[-1], periods=30, freq=CustomBusinessDay(calendar=USFederalHolidayCalendar()))
         predictions = model.predict(start=len(C), end=len(C) + 29, dynamic=True)
         predictions.index = future_dates
         
         plt.figure(figsize=(10, 6))
-        plt.plot(C.index, C, label='Actual Close')
-        plt.plot(future_dates, predictions, label='Forecast', linestyle='--')
-        plt.title(f'{Ticker} Stock Price Forecast')
+        plt.plot(actual_dates, actual_data, label='Actual Last 30 Days', color='blue')
+        plt.plot(C.index, C, label='Historical Close', color='gray')
+        plt.plot(future_dates, predictions, label='Forecast', linestyle='--', color='red')
+        plt.title(f'{Ticker} Stock Price Forecast vs Actual')
         plt.xlabel('Date')
         plt.ylabel('Price')
         plt.legend()
         plt.tight_layout()
         st.pyplot(plt)
-        
-        future_df = pd.DataFrame({'Forecasted Price': predictions}, index=future_dates)
-        st.write(future_df)
         
         progress_bar.progress(100)
         st.success("Model run successfully!")
