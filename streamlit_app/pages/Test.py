@@ -4,7 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from pmdarima import auto_arima
 from pandas.tseries.offsets import CustomBusinessDay
 from pandas.tseries.holiday import USFederalHolidayCalendar
 
@@ -40,15 +39,20 @@ st.markdown("""
 
 # Running SARIMAX model and plotting
 if st.button('Run SARIMAX Model'):
-    with st.spinner('Model is running, please wait...'):
+    with st.spinner('Fetching data and running model, please wait...'):
         # Fetch historical stock data
         df = yf.Ticker(Ticker).history(start=start_date, end=end_date)
         df = df[['Close']]
         df.columns = ['Closing Prices']
         
-        # SARIMAX model fitting
-        auto_model = auto_arima(df['Closing Prices'], seasonal=True, m=SN)
-        model = SARIMAX(df['Closing Prices'], order=auto_model.order, seasonal_order=(0,1,1,SN)).fit()
+        # Debug information
+        st.write("Data fetched successfully")
+        
+        # SARIMAX model fitting (simplified model)
+        model = SARIMAX(df['Closing Prices'], order=(1, 1, 1), seasonal_order=(0, 1, 1, SN)).fit(disp=False)
+        
+        # Debug information
+        st.write("Model fitted successfully")
         
         # Predict future prices
         future_dates = pd.date_range(df.index.max() + timedelta(days=1), periods=30, freq=CustomBusinessDay(calendar=USFederalHolidayCalendar()))
