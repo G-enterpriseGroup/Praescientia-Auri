@@ -30,7 +30,7 @@ st.write(f"Annual Dividend Payment per Share for {ticker_input}: ${latest_divide
 average_cost_per_share = st.number_input("Average Cost Per Share", value=13.13)
 quantity = st.number_input("Quantity", value=76)
 
- Calculations
+# Calculations
 if isinstance(latest_price, (int, float)) and isinstance(average_cost_per_share, (int, float)):
     cost_value = average_cost_per_share * quantity
     market_value = latest_price * quantity
