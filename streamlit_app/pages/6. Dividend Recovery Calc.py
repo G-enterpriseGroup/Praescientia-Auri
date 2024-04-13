@@ -1,7 +1,3 @@
-import streamlit as st
-import yfinance as yf
-from datetime import datetime
-
 # Title and date input
 st.title("DivFinancial Dashboard")
 """The dashboard simplifies the process of tracking investment performance by calculating essential financial indicators like cost value, market value, profit or loss, and potential dividend income. It helps investors understand how long it will take to recover their investments through dividends, offering a clear view of both short-term performance and long-term income potential. This tool is particularly useful for those who need to manage multiple stocks and want to assess their portfolio's health quickly and accurately.
@@ -35,20 +31,21 @@ if isinstance(latest_price, (int, float)) and isinstance(average_cost_per_share,
     cost_value = average_cost_per_share * quantity
     market_value = latest_price * quantity
     profit_loss = market_value - cost_value
-    st.write(f"Cost Value: ${cost_value}")
-    st.write(f"Market Value: ${market_value}")
-    st.write(f"Profit (Loss): ${profit_loss}")
 
-    if isinstance(latest_dividend, (int, float)) and latest_dividend > 0:
+    st.write(f"Cost Value: ${cost_value:,.2f}")
+    st.write(f"Market Value: ${market_value:,.2f}")
+    st.write(f"Profit (Loss): ${profit_loss:,.2f}")
+
+    if profit_loss < 0 and isinstance(latest_dividend, (int, float)) and latest_dividend > 0:
         total_annual_dividend = latest_dividend * quantity
         quarterly_dividend = total_annual_dividend / 4  # Assuming dividends are paid quarterly
         monthly_dividend = total_annual_dividend / 12  # Assuming dividends could be divided monthly
-        quarters_to_recovery = profit_loss / quarterly_dividend
-        months_to_recovery = profit_loss / monthly_dividend
-        st.write(f"Total Annual Dividend: ${total_annual_dividend}")
-        st.write(f"Quarters to Recovery: {round(quarters_to_recovery, 2)}")
-        st.write(f"Months to Recovery: {round(months_to_recovery, 2)}")
+        quarters_to_recovery = abs(profit_loss) / quarterly_dividend
+        months_to_recovery = abs(profit_loss) / monthly_dividend
+        st.write(f"Total Annual Dividend: ${total_annual_dividend:,.2f}")
+        st.write(f"Quarters to Recovery: {round(quarters_to_recovery, 2)} quarters")
+        st.write(f"Months to Recovery: {round(months_to_recovery, 2)} months")
+    elif profit_loss >= 0:
+        st.write("Congrats, you are in profit!")
     else:
         st.write("Dividend data not available or dividend is zero, cannot calculate quarters or months to recovery.")
-else:
-    st.write("Missing or invalid data, cannot perform financial calculations.")
