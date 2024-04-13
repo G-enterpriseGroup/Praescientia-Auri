@@ -76,3 +76,15 @@ if st.button('Run SARIMAX Model'):
         # Display combined DataFrame
         st.write(combined_df)
 
+        # Plotting the results
+        plt.figure(figsize=(10, 5))
+        plt.plot(df.index, df['Closing Prices'], label='Closing Prices')
+        plt.plot(future_df.index, future_df['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
+        plt.title(f'{Ticker} Closing Prices and Forecast')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.legend()
+        st.pyplot(plt)
+        
+        # Display combined DataFrame
+        st.write(combined_df)
