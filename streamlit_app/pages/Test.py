@@ -75,3 +75,13 @@ if st.button('Run SARIMAX Model'):
 
         # Display combined DataFrame
         st.write(combined_df)
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(combined_df.index, combined_df['Closing Prices'], label='Closing Prices')
+        ax.plot(combined_df.index, combined_df['Forecasted Prices'], label='Forecasted Prices', linestyle='--')
+        ax.fill_between(combined_df.index, combined_df['Closing Prices'], combined_df['Forecasted Prices'], color='gray', alpha=0.2)
+        ax.set_title(f'{Ticker} Closing Prices, Forecasted Prices, and Difference')
+        ax.set_xlabel('Date')
+        ax.set_ylabel('Price')
+        ax.legend()
+        st.pyplot(fig)
