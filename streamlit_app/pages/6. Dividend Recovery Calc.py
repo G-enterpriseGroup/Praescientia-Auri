@@ -4,6 +4,8 @@ from datetime import datetime
 
 # Title and date input
 st.title("DivFinancial Dashboard")
+"""The dashboard simplifies the process of tracking investment performance by calculating essential financial indicators like cost value, market value, profit or loss, and potential dividend income. It helps investors understand how long it will take to recover their investments through dividends, offering a clear view of both short-term performance and long-term income potential. This tool is particularly useful for those who need to manage multiple stocks and want to assess their portfolio's health quickly and accurately.
+"""
 today_date = st.date_input("Today's Date", datetime.now())
 
 # Ticker input and data fetching
