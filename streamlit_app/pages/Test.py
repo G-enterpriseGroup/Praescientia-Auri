@@ -49,7 +49,7 @@ if isinstance(latest_price, (int, float)) and isinstance(average_cost_per_share,
         st.write(f"Total Annual Dividend: ${total_annual_dividend:,.2f}")
         st.write(f"Quarters to Recovery: {round(quarters_to_recovery, 2)} quarters")
         st.write(f"Months to Recovery: {round(months_to_recovery, 2)} months")
-    elif profit_loss <= 0:
+    elif profit_loss > 0:
         st.write("Congrats, you are in profit!")
     else:
         st.write("Dividend data not available or dividend is zero, cannot calculate quarters or months to recovery.")
