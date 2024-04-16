@@ -1,4 +1,4 @@
-=import streamlit as st
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAX
