@@ -1,68 +1,56 @@
-import streamlit as st
-import yfinance as yf
+import numpy as np
 import pandas as pd
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-import matplotlib.pyplot as plt
-from pmdarima import auto_arima
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dropout, Dense
 
-# Function to download stock data
-def download_data(stock, start_date, end_date):
-    data = yf.download(stock, start=start_date, end=end_date)
-    return data[['Open', 'High', 'Low', 'Close']]
+# Load data
+data = pd.read_csv('stock_data.csv')
+data['Date'] = pd.to_datetime(data['Date'])
+data.set_index('Date', inplace=True)
 
-# Function to find best SARIMA model and forecast
-def forecast_data(series, periods):
-    model = auto_arima(series, seasonal=True, m=5, stepwise=True, suppress_warnings=True, 
-                       error_action='ignore', max_order=None, trace=False)
-    fitted_model = SARIMAX(series, order=model.order, seasonal_order=model.seasonal_order).fit(disp=False)
-    forecast_results = fitted_model.get_forecast(steps=periods)
-    forecast = forecast_results.predicted_mean
-    conf_int = forecast_results.conf_int()
-    return forecast, conf_int
+# Prepare input features
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1,1))
 
-# Function to plot forecasts
-def plot_forecast(series, forecast, conf_int, title):
-    plt.figure(figsize=(10, 5))
-    plt.plot(series, label='Historical')
-    plt.plot(forecast.index, forecast, color='red', label='Forecast')
-    plt.fill_between(forecast.index, conf_int.iloc[:, 0], conf_int.iloc[:, 1], color='pink', alpha=0.3)
-    plt.title(title)
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    return plt
+# Create the training data
+def create_dataset(dataset, time_step=60):
+    X, Y = [], []
+    for i in range(len(dataset)-time_step-1):
+        a = dataset[i:(i+time_step), 0]
+        X.append(a)
+        Y.append(dataset[i + time_step, 0])
+    return np.array(X), np.array(Y)
 
-# Main function to run the app
-def main():
-    st.title('Stock Forecast App')
+X, y = create_dataset(scaled_data)
 
-    stock = st.text_input('Enter Stock Symbol', 'AAPL')
-    start_date = st.date_input('Start Date', pd.to_datetime('2020-01-01'))
-    end_date = st.date_input('End Date', pd.to_datetime('2023-01-01'))
+# Reshape input to be [samples, time steps, features]
+X = np.reshape(X, (X.shape[0], X.shape[1], 1))
 
-    if st.button('Forecast Stock'):
-        data = download_data(stock, start_date, end_date)
-        if not data.empty:
-            future_dates = pd.date_range(start=data.index[-1], periods=31, freq='B')[1:]
-            forecasts = {}
-            conf_intervals = {}
+# Build the LSTM model
+model = Sequential([
+    LSTM(50, return_sequences=True, input_shape=(X.shape[1], 1)),
+    Dropout(0.2),
+    LSTM(50, return_sequences=False),
+    Dense(1)
+])
 
-            for column in ['Open', 'High', 'Low', 'Close']:
-                st.subheader(f'{column} Price Forecast')
-                forecast, conf_int = forecast_data(data[column], 30)
-                forecasts[column] = forecast
-                conf_intervals[column] = conf_int
-                forecast.index = future_dates
-                conf_int.index = future_dates
-                fig = plot_forecast(data[column], forecast, conf_int, f'{stock} - {column}')
-                st.pyplot(fig)
+model.compile(optimizer='adam', loss='mean_squared_error')
 
-                forecast_df = pd.DataFrame({
-                    f'{column} Forecast': forecast,
-                    'Lower CI': conf_int.iloc[:, 0],
-                    'Upper CI': conf_int.iloc[:, 1]
-                })
-                st.dataframe(forecast_df)
+# Train the model
+model.fit(X, y, epochs=100, batch_size=32)
 
-if __name__ == '__main__':
-    main()
+# Forecast
+def forecast(model, data, time_step=60, next_days=30):
+    forecasted = []
+    input_data = data[-time_step:]
+    for _ in range(next_days):
+        prediction = model.predict(input_data.reshape(1, time_step, 1))
+        forecasted.append(prediction[0][0])
+        input_data = np.append(input_data, prediction)[1:]
+    return forecasted
+
+predictions = forecast(model, scaled_data)
+
+# Inverse transform and plot
+predicted_prices = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
