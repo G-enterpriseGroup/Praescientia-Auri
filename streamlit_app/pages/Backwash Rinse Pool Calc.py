@@ -17,4 +17,4 @@ efficiency = st.slider('Efficiency (as a decimal)', min_value=0.1, max_value=1.0
 result = calculate_flow_rate(power_hp, head, efficiency)
 
 # Display result
-st.write(f"The estimated flow rate is {result:.2f} gallons per minute.")
+st.write(f"The estimated flow rate {result:.2f} gallons per minute.")
