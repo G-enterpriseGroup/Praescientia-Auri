@@ -1,11 +1,12 @@
 import streamlit as st
 import openai
 
-def get_response(message):
+
+def get_response(message, api_key):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": message}],
-        api_key="your_openai_api_key"
+        api_key=api_key
     )
     return response['choices'][0]['message']['content']
 
