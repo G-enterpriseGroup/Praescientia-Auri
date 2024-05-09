@@ -24,7 +24,7 @@ def main():
     density_water = 1000  # kg/m^3 for water
     gravity = 9.81  # m/s^2
     efficiency = 0.75  # assumed efficiency
-    head = 20  # meters
+    head = 40.20  # meters
 
     # Calculate flow rate Q in cubic meters per second
     flow_rate_m3_s = power_watts / (head * density_water * gravity * efficiency)
