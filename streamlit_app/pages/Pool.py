@@ -6,6 +6,14 @@ def calculate_total_gallons(flow_rate, rinse_time, backwash_time):
     # Total gallons are the product of the flow rate and total time
     return flow_rate * total_minutes
 
+def fill_time(total_gallons):
+    # Each gallon takes 10 seconds to fill
+    total_seconds = total_gallons * 10
+    # Convert seconds to hours and minutes
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    return hours, minutes
+
 def main():
     st.title('Water Flow Calculation App')
 
@@ -28,13 +36,4 @@ def main():
 
     # Sliders for Rinse and Backwash time in minutes
     rinse_time = st.slider('Rinse Time (minutes)', min_value=1, max_value=60, value=3)
-    backwash_time = st.slider('Backwash Time (minutes)', min_value=1, max_value=60, value=3)
-
-    # Calculate total gallons used
-    total_gallons = calculate_total_gallons(flow_rate_gallons_per_minute, rinse_time, backwash_time)
-
-    # Display the total gallons used
-    st.write(f'Total Gallons Used: {total_gallons:.2f}')
-
-if __name__ == "__main__":
-    main()
+    backwash_time = st.slider('Backwash Time (
