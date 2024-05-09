@@ -16,3 +16,4 @@ pyperclip
 openai
 langchain
 python-decouple
+streamlit-chat
