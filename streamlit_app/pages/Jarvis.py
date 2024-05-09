@@ -2,7 +2,7 @@ import openai
 import streamlit as st
 import streamlit_chat
 
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+openai.api_key = st.secrets["sk-balraj-KLoW4HxnPDr6efjrLIFlT3BlbkFJFey4fhZcJMWgg1zIqmyB"]
 
 # be sure to end each prompt string with a comma.
 example_user_prompts = [
