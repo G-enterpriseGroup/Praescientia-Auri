@@ -14,8 +14,8 @@ except Exception as e:
 # Setup session state for model selection and message tracking
 if "openai_model" not in st.session_state:
     # Update with an available model for free tier users, e.g., 'gpt-3.5-turbo-0301'
-    st.session_state["openai_model"] = "gpt-3.5-turbo-0301"
-
+    st.session_state["openai_model"] = "gpt-3.5-turbo"
+    
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
