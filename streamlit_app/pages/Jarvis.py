@@ -6,7 +6,7 @@ st.title("ChatGPT-like clone")
 
 # Initialize the OpenAI client with error handling for API key issues
 try:
-    client = OpenAI(api_key="your_api_key_here")  # Replace with your actual API key
+    client = OpenAI(api_key="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")  # Replace with your actual API key
 except Exception as e:
     st.error(f"Failed to authenticate with OpenAI: {e}")
     st.stop()
