@@ -13,4 +13,5 @@ datetime
 kaleido
 seaborn
 pyperclip
+openai
 
