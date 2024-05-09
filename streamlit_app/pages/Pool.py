@@ -46,4 +46,7 @@ def main():
 
     # Display the total gallons used and the time required to fill them
     st.write(f'Total Gallons Used: {total_gallons:.2f}')
-    st.write(f'Time to Fill Back
+    st.write(f'Time to Fill Back: {hours} hours and {minutes} minutes')
+
+if __name__ == "__main__":
+    main()
