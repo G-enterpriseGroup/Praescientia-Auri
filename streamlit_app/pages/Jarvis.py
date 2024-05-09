@@ -17,7 +17,7 @@ prompt = PromptTemplate(
 )
 
 
-llm = ChatOpenAI(openai_api_key=config("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"))
+llm = ChatOpenAI(openai_api_key=config("sk-balraj-KLoW4HxnPDr6efjrLIFlT3BlbkFJFey4fhZcJMWgg1zIqmyB"))
 memory = ConversationBufferWindowMemory(memory_key="chat_history", k=4)
 llm_chain = LLMChain(
     llm=llm,
