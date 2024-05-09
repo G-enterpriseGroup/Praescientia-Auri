@@ -36,4 +36,14 @@ def main():
 
     # Sliders for Rinse and Backwash time in minutes
     rinse_time = st.slider('Rinse Time (minutes)', min_value=1, max_value=60, value=3)
-    backwash_time = st.slider('Backwash Time (
+    backwash_time = st.slider('Backwash Time (minutes)', min_value=1, max_value=60, value=3)
+
+    # Calculate total gallons used
+    total_gallons = calculate_total_gallons(flow_rate_gallons_per_minute, rinse_time, backwash_time)
+
+    # Calculate the time required to fill back the gallons
+    hours, minutes = fill_time(total_gallons)
+
+    # Display the total gallons used and the time required to fill them
+    st.write(f'Total Gallons Used: {total_gallons:.2f}')
+    st.write(f'Time to Fill Back
