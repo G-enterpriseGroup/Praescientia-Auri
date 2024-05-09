@@ -4,7 +4,7 @@ import streamlit as st
 st.title("ChatGPT-like clone")
 
 # Correctly accessing the API key from secrets
-client = OpenAI(api_key="sk-balraj-KLoW4HxnPDr6efjrLIFlT3BlbkFJFey4fhZcJMWgg1zIqmyB"
+client = OpenAI(api_key="sk-balraj-KLoW4HxnPDr6efjrLIFlT3BlbkFJFey4fhZcJMWgg1zIqmyB")
 
 if "openai_model" not in st.session_state:
     st.session_state["openai_model"] = "gpt-3.5-turbo"
@@ -30,5 +30,5 @@ if prompt := st.chat_input("What is up?"):
             ],
             stream=True,
         )
-        response = st.write_stream(stream)
+        response = next(stream)  # Corrected to correctly fetch the next item from the stream
     st.session_state.messages.append({"role": "assistant", "content": response})
