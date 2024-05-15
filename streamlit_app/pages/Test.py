@@ -1,29 +1,26 @@
-import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-def fetch_last_dividend_dates(ticker):
-    stock = yf.Ticker(ticker)
-    dividends = stock.dividends
-    if dividends.empty:
-        return None
-    # Filtering dividends from the last 12 months
-    end_date = pd.Timestamp.today()
-    start_date = end_date - pd.DateOffset(months=12)
-    filtered_dividends = dividends[(dividends.index >= start_date) & (dividends.index <= end_date)]
-    # Group by year and month, get the last date
-    monthly_last_div = filtered_dividends.groupby([filtered_dividends.index.year, filtered_dividends.index.month]).last()
-    return monthly_last_div
+# Define the ticker and the ex-dividend dates of interest
+ticker = "PULS"
+dates = ["2023-04-03", "2023-05-01", "2023-06-01", "2023-07-03", 
+         "2023-08-01", "2023-09-01", "2023-10-02", "2023-11-01", "2023-12-01"]
 
-st.title('Monthly Last Ex-Dividend Dates')
+# Download historical data for the ticker
+data = yf.download(ticker, start="2023-04-01", end="2023-12-31")
 
-ticker = st.text_input('Enter Ticker Symbol', 'PULS')
-if ticker:
-    last_dividends = fetch_last_dividend_dates(ticker)
-    if last_dividends is not None:
-        st.write("Last ex-dividend date for each of the last 12 months:")
-        for date, value in last_dividends.items():
-            st.write(f"{date}: {value}")
-    else:
-        st.write("No dividends found in the last 12 months for this ticker.")
+# Calculate Heikin Ashi bars
+heikin_ashi = pd.DataFrame(index=data.index)
+heikin_ashi['close'] = (data['Open'] + data['High'] + data['Low'] + data['Close']) / 4
+heikin_ashi['open'] = (data['Open'].shift() + data['Close'].shift()) / 2
+heikin_ashi['high'] = data[['High', 'open', 'close']].max(axis=1)
+heikin_ashi['low'] = data[['Low', 'open', 'close']].min(axis=1)
+heikin_ashi.fillna(method='bfill', inplace=True)
 
+# Filter the data for the specific ex-dividend dates and print high and low
+print("High and Low prices on ex-dividend dates using Heikin Ashi:")
+for date in dates:
+    if date in heikin_ashi.index:
+        high = heikin_ashi.loc[date, 'high']
+        low = heikin_ashi.loc[date, 'low']
+        print(f"Date: {date}, High: {high}, Low: {low}")
