@@ -1,31 +1,29 @@
 import streamlit as st
 import yfinance as yf
+import pandas as pd
 
-def get_data(ticker):
+def fetch_last_dividend_dates(ticker):
     stock = yf.Ticker(ticker)
-    hist = stock.history(period="5y")
-    ex_divs = stock.dividends
-    return hist, ex_divs
+    dividends = stock.dividends
+    if dividends.empty:
+        return None
+    # Filtering dividends from the last 12 months
+    end_date = pd.Timestamp.today()
+    start_date = end_date - pd.DateOffset(months=12)
+    filtered_dividends = dividends[(dividends.index >= start_date) & (dividends.index <= end_date)]
+    # Group by year and month, get the last date
+    monthly_last_div = filtered_dividends.groupby([filtered_dividends.index.year, filtered_dividends.index.month]).last()
+    return monthly_last_div
 
-def calculate_difference(hist, ex_date):
-    if ex_date in hist.index:
-        day_data = hist.loc[ex_date]
-        return day_data['High'] - day_data['Low']
-    return None
+st.title('Monthly Last Ex-Dividend Dates')
 
-st.title('Ex-Dividend Price Difference Calculator')
-
-ticker = st.text_input('Enter the ticker symbol:', 'PULS')
-
+ticker = st.text_input('Enter Ticker Symbol', 'PULS')
 if ticker:
-    hist, ex_divs = get_data(ticker)
-    if not ex_divs.empty:
-        ex_date = ex_divs.idxmax()  # Assumes the latest ex-dividend date is most relevant
-        price_diff = calculate_difference(hist, ex_date)
-        if price_diff is not None:
-            st.write(f"Ex-dividend date: {ex_date.date()}")
-            st.write(f"Price difference between high and low on {ex_date.date()}: ${price_diff:.2f}")
-        else:
-            st.write("No trading data available for the ex-dividend date.")
+    last_dividends = fetch_last_dividend_dates(ticker)
+    if last_dividends is not None:
+        st.write("Last ex-dividend date for each of the last 12 months:")
+        for date, value in last_dividends.items():
+            st.write(f"{date}: {value}")
     else:
-        st.write("No ex-dividend dates found for this ticker.")
+        st.write("No dividends found in the last 12 months for this ticker.")
+
