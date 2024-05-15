@@ -1,32 +1,31 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 
-def get_dividend_dates_prices(ticker):
-    # Fetch stock data including dividends
+def get_data(ticker):
     stock = yf.Ticker(ticker)
-    history = stock.history(period="5y")
-    dividends = stock.dividends
+    hist = stock.history(period="5y")
+    ex_divs = stock.dividends
+    return hist, ex_divs
 
-    # Filter the history to only include the ex-dividend dates
-    ex_dividend_prices = history[history.index.isin(dividends.index)]
+def calculate_difference(hist, ex_date):
+    if ex_date in hist.index:
+        day_data = hist.loc[ex_date]
+        return day_data['High'] - day_data['Low']
+    return None
 
-    # Calculate the difference between high and low prices on ex-dividend dates
-    ex_dividend_prices['Difference'] = ex_dividend_prices['High'] - ex_dividend_prices['Low']
+st.title('Ex-Dividend Price Difference Calculator')
 
-    # Select only the necessary columns
-    result = ex_dividend_prices[['Open', 'High', 'Low', 'Difference']]
-    return result
-
-st.title('Stock Price Analysis on Ex-Dividend Dates')
-
-# Input ticker
-ticker = st.text_input('Enter ticker symbol:', 'PULS')
+ticker = st.text_input('Enter the ticker symbol:', 'PULS')
 
 if ticker:
-    # Display data
-    try:
-        dividend_data = get_dividend_dates_prices(ticker)
-        st.write(dividend_data)
-    except Exception as e:
-        st.error(f"Failed to fetch data: {e}")
+    hist, ex_divs = get_data(ticker)
+    if not ex_divs.empty:
+        ex_date = ex_divs.idxmax()  # Assumes the latest ex-dividend date is most relevant
+        price_diff = calculate_difference(hist, ex_date)
+        if price_diff is not None:
+            st.write(f"Ex-dividend date: {ex_date.date()}")
+            st.write(f"Price difference between high and low on {ex_date.date()}: ${price_diff:.2f}")
+        else:
+            st.write("No trading data available for the ex-dividend date.")
+    else:
+        st.write("No ex-dividend dates found for this ticker.")
