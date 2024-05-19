@@ -3,7 +3,7 @@ import streamlit as st
 # Inputs
 total_investment = st.number_input('Total Investment', value=5000.0, format="%.2f")
 ask_price_premium = st.number_input('Ask Price Premium', value=1.3, format="%.2f")
-expected_stock_price = st.number_input('Expected Stock Price on June 3rd', value=49.51, format="%.2f")
+expected_stock_price = st.number_input('Expected Stock Price Selling Point', value=49.51, format="%.2f")
 strike_price = st.number_input('Strike Price', value=54.0, format="%.2f")
 
 # Constants
