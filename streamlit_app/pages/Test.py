@@ -1,12 +1,12 @@
 import streamlit as st
 
-# Input fields
+# Inputs
 total_investment = st.number_input('Total Investment', value=5000)
 ask_price_premium = st.number_input('Ask Price Premium', value=1.3)
 expected_stock_price = st.number_input('Expected Stock Price on June 3rd', value=49.51)
 strike_price = st.number_input('Strike Price', value=54)
 
-# Fixed values
+# Constants
 shares_per_contract = 100
 
 # Calculations
