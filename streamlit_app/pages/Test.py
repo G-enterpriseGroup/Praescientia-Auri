@@ -1,10 +1,10 @@
 import streamlit as st
 
 # Inputs
-total_investment = st.number_input('Total Investment', value=5000)
+total_investment = st.number_input('Total Investment', value=5000.0)
 ask_price_premium = st.number_input('Ask Price Premium', value=1.3)
 expected_stock_price = st.number_input('Expected Stock Price on June 3rd', value=49.51)
-strike_price = st.number_input('Strike Price', value=54)
+strike_price = st.number_input('Strike Price', value=54.0)
 
 # Constants
 shares_per_contract = 100
@@ -13,7 +13,7 @@ shares_per_contract = 100
 cost_per_contract = ask_price_premium * shares_per_contract
 number_of_contracts = round(total_investment / cost_per_contract)
 total_cost = number_of_contracts * cost_per_contract
-intrinsic_value_per_share = expected_stock_price - strike_price
+intrinsic_value_per_share = strike_price - expected_stock_price
 intrinsic_value_per_contract = intrinsic_value_per_share * shares_per_contract
 total_intrinsic_value = intrinsic_value_per_contract * number_of_contracts
 total_profit = total_intrinsic_value - total_cost
