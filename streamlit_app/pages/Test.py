@@ -1,26 +1,30 @@
-import yfinance as yf
 import streamlit as st
-import pandas as pd
 
-# Title for the Streamlit app
-st.title('Historical Stock Price Viewer')
+# Input fields
+total_investment = st.number_input('Total Investment', value=5000)
+ask_price_premium = st.number_input('Ask Price Premium', value=1.3)
+expected_stock_price = st.number_input('Expected Stock Price on June 3rd', value=49.51)
+strike_price = st.number_input('Strike Price', value=54)
 
-# Inputs for ticker symbol and date range
-ticker = st.text_input('Enter ticker symbol:', 'PULS')
-start_date = st.date_input('Start date', pd.to_datetime('2023-04-01'))
-end_date = st.date_input('End date', pd.to_datetime('today'))
+# Fixed values
+shares_per_contract = 100
 
-# Function to fetch historical stock data
-def get_data(ticker, start_date, end_date):
-    data = yf.download(ticker, start=start_date, end=end_date)
-    return data[['High', 'Low']]
+# Calculations
+cost_per_contract = ask_price_premium * shares_per_contract
+number_of_contracts = round(total_investment / cost_per_contract)
+total_cost = number_of_contracts * cost_per_contract
+intrinsic_value_per_share = expected_stock_price - strike_price
+intrinsic_value_per_contract = intrinsic_value_per_share * shares_per_contract
+total_intrinsic_value = intrinsic_value_per_contract * number_of_contracts
+total_profit = total_intrinsic_value - total_cost
+profit_per_contract = intrinsic_value_per_contract - cost_per_contract
 
-# Button to trigger data load
-if st.button('Show Historical Prices'):
-    data = get_data(ticker, start_date, end_date)
-    if not data.empty:
-        st.write(f"Displaying high and low prices for {ticker}")
-        st.dataframe(data)
-    else:
-        st.write("No data found for the given ticker and date range.")
-
+# Display results
+st.write(f"Cost per Contract: {cost_per_contract}")
+st.write(f"Number of Contracts: {number_of_contracts}")
+st.write(f"Total Cost: {total_cost}")
+st.write(f"Intrinsic Value per Share: {intrinsic_value_per_share}")
+st.write(f"Intrinsic Value per Contract: {intrinsic_value_per_contract}")
+st.write(f"Total Intrinsic Value: {total_intrinsic_value}")
+st.write(f"Total Profit: {total_profit}")
+st.write(f"Profit per Contract: {profit_per_contract}")
