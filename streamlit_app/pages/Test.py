@@ -9,8 +9,7 @@ def get_expiration_dates(ticker):
 def get_options_chain(ticker, expiration_date):
     stock = yf.Ticker(ticker)
     options = stock.option_chain(expiration_date)
-    options_df = pd.concat([options.calls, options.puts], keys=['Calls', 'Puts'], names=['Type'])
-    options_df = options_df.reset_index(level='Type').reset_index(drop=True)
+    options_df = options.calls[['strike', 'lastPrice', 'bid', 'ask']]
     return options_df
 
 def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
@@ -31,6 +30,8 @@ if ticker:
     
     if selected_expiration_date:
         chain = get_options_chain(ticker, selected_expiration_date)
+        st.write("### Options Chain")
+        st.dataframe(chain)
         
         strike_prices = chain['strike'].unique()
         selected_strike_price = st.selectbox("Select Strike Price", strike_prices)
@@ -79,7 +80,7 @@ if ticker:
                 
                 st.write("4. **Maximum Return:** This is the total profit if the stock price is at or above the strike price at expiry.")
                 st.write("   - Calculation: ((Strike Price - Stock Price) * Quantity * 100) + Initial Premium")
-                st.write(f"   - Example: ((${strike_price} - ${stock_price}) * {quantity} * 100) + ${initial_premium:.2f} = ${max_return:.2f}")
+                st.write(f"   - Example: (({selected_strike_price} - {stock_price}) * {quantity} * 100) + ${initial_premium:.2f} = ${max_return:.2f}")
                 
                 st.write("5. **Return on Risk:** This is the percentage return on the maximum risk taken.")
                 st.write("   - Calculation: (Maximum Return / Maximum Risk) * 100")
