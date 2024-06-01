@@ -17,3 +17,4 @@ openai
 langchain
 python-decouple
 streamlit-chat
+json
