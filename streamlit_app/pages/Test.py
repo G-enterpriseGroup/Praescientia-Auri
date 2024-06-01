@@ -1,30 +1,51 @@
 import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import datetime
 
-# Inputs
-total_investment = st.number_input('Total Investment', value=5000.0, format="%.2f")
-ask_price_premium = st.number_input('Ask Price Premium', value=1.3, format="%.2f")
-expected_stock_price = st.number_input('Expected Stock Price Selling Point', value=49.51, format="%.2f")
-strike_price = st.number_input('Strike Price', value=54.0, format="%.2f")
+st.title('Covered Call Calculator')
 
-# Constants
-shares_per_contract = 100
+# Input section for underlying stock
+st.header('Underlying stock')
+symbol = st.text_input('Symbol', 'PULS')
+price = st.number_input('Price', value=49.75, step=0.01)
+quantity = st.number_input('Quantity', value=100, step=1)
+dividend = st.number_input('Dividend', value=0.0, step=0.01)
+ex_date = st.date_input('Ex-date', value=pd.to_datetime('2024-06-01'))
+called_away = st.date_input('Called away date', value=pd.to_datetime('2024-06-01'))
+
+# Input section for option
+st.header('Option')
+option_type = st.selectbox('Buy/sell', ['Sell', 'Buy'])
+strike_price = st.number_input('Strike Price', value=50.0, step=0.01)
+expiry_date = st.date_input('Expiry Date', value=pd.to_datetime('2024-06-21'))
+premium = st.number_input('Premium (per share)', value=1.35, step=0.01)
+quantity_option = st.number_input('Quantity (contracts)', value=1, step=1)
 
 # Calculations
-cost_per_contract = ask_price_premium * shares_per_contract
-number_of_contracts = round(total_investment / cost_per_contract)
-total_cost = number_of_contracts * cost_per_contract
-intrinsic_value_per_share = strike_price - expected_stock_price
-intrinsic_value_per_contract = intrinsic_value_per_share * shares_per_contract
-total_intrinsic_value = intrinsic_value_per_contract * number_of_contracts
-total_profit = total_intrinsic_value - total_cost
-profit_per_contract = intrinsic_value_per_contract - cost_per_contract
+leg_cost = premium * quantity_option * 100
+initial_premium = leg_cost if option_type == 'Sell' else -leg_cost
+max_return = (strike_price - price + premium) * quantity * 100 if option_type == 'Sell' else (price - strike_price + premium) * quantity * 100
+max_risk = (price * quantity * 100) - initial_premium
+breakeven = price - premium if option_type == 'Sell' else price + premium
+days_until_expiry = (expiry_date - datetime.now().date()).days
+annualized_return = (initial_premium / (price * quantity * 100)) * (365 / days_until_expiry) * 100 if price * quantity * 100 != 0 else 0
 
-# Display results with financial formatting
-st.write(f"Cost per Contract: ${cost_per_contract:,.2f}")
-st.write(f"Number of Contracts: {number_of_contracts}")
-st.write(f"Total Cost: ${total_cost:,.2f}")
-st.write(f"Intrinsic Value per Share: ${intrinsic_value_per_share:,.2f}")
-st.write(f"Intrinsic Value per Contract: ${intrinsic_value_per_contract:,.2f}")
-st.write(f"Total Intrinsic Value: ${total_intrinsic_value:,.2f}")
-st.write(f"Total Profit: ${total_profit:,.2f}")
-st.write(f"Profit per Contract: ${profit_per_contract:,.2f}")
+# Display results
+st.header('Estimates')
+st.write(f"Initial premium: ${initial_premium:.2f}")
+st.write(f"Max return: ${max_return:.2f}")
+st.write(f"Max risk: ${max_risk:.2f}")
+st.write(f"B/E at expiry: ${breakeven:.2f}")
+st.write(f"Days Until Expiry: {days_until_expiry} days")
+st.write(f"Annualized Return: {annualized_return:.2f}%")
+
+# Create the matrix (simplified for this example)
+matrix_data = {
+    'Stock Price Range': np.arange(price - 5, price + 5, 0.25),
+    'P/L': [max_return if x >= strike_price else (x - price) * quantity * 100 for x in np.arange(price - 5, price + 5, 0.25)]
+}
+matrix_df = pd.DataFrame(matrix_data)
+
+st.header('Matrix Values')
+st.dataframe(matrix_df)
