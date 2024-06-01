@@ -25,11 +25,11 @@ quantity_option = st.number_input('Quantity (contracts)', value=1, step=1)
 # Calculations
 leg_cost = premium * quantity_option * 100
 initial_premium = leg_cost if option_type == 'Sell' else -leg_cost
-max_return = (strike_price - price) * quantity * 100 if option_type == 'Sell' else (price - strike_price) * quantity * 100
+max_return = (strike_price - price + premium) * quantity * 100 if option_type == 'Sell' else (price - strike_price + premium) * quantity * 100
 max_risk = (price * quantity * 100) - initial_premium
-breakeven = price - (premium if option_type == 'Sell' else -premium)
+breakeven = price - premium if option_type == 'Sell' else price + premium
 days_until_expiry = (expiry_date - datetime.now().date()).days
-annualized_return = (max_return / initial_premium) * (365 / days_until_expiry) if initial_premium != 0 else 0
+annualized_return = (initial_premium / (price * quantity * 100)) * (365 / days_until_expiry) * 100 if price * quantity * 100 != 0 else 0
 
 # Display results
 st.header('Estimates')
