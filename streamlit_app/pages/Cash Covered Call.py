@@ -25,4 +25,27 @@ quantity_option = st.number_input('Quantity (contracts)', value=1, step=1)
 # Calculations
 leg_cost = premium * quantity_option * 100
 initial_premium = leg_cost if option_type == 'Sell' else -leg_cost
-max_return = (
+max_return = (strike_price - price) * quantity * 100 if option_type == 'Sell' else (price - strike_price) * quantity * 100
+max_risk = (price * quantity * 100) - initial_premium
+breakeven = price - (premium if option_type == 'Sell' else -premium)
+days_until_expiry = (expiry_date - datetime.now().date()).days
+annualized_return = (max_return / initial_premium) * (365 / days_until_expiry) if initial_premium != 0 else 0
+
+# Display results
+st.header('Estimates')
+st.write(f"Initial premium: ${initial_premium:.2f}")
+st.write(f"Max return: ${max_return:.2f}")
+st.write(f"Max risk: ${max_risk:.2f}")
+st.write(f"B/E at expiry: ${breakeven:.2f}")
+st.write(f"Days Until Expiry: {days_until_expiry} days")
+st.write(f"Annualized Return: {annualized_return:.2f}%")
+
+# Create the matrix (simplified for this example)
+matrix_data = {
+    'Stock Price Range': np.arange(price - 5, price + 5, 0.25),
+    'P/L': [max_return if x >= strike_price else (x - price) * quantity * 100 for x in np.arange(price - 5, price + 5, 0.25)]
+}
+matrix_df = pd.DataFrame(matrix_data)
+
+st.header('Matrix Values')
+st.dataframe(matrix_df)
