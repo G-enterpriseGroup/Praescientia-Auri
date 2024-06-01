@@ -1,51 +1,32 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-from datetime import datetime
 
-st.title('Covered Call Calculator')
+# Function to calculate covered call metrics
+def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
+    initial_premium = option_price * quantity * 100
+    max_risk = (price * quantity) - initial_premium
+    breakeven = price - option_price
+    max_return = ((strike_price - price) * quantity * 100) + initial_premium
+    return_on_risk = max_return / max_risk * 100
+    annualized_return = (return_on_risk / days_until_expiry) * 365
+    return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
 
-# Input section for underlying stock
-st.header('Underlying stock')
-symbol = st.text_input('Symbol', 'PULS')
-price = st.number_input('Price', value=49.75, step=0.01)
-quantity = st.number_input('Quantity', value=100, step=1)
-dividend = st.number_input('Dividend', value=0.0, step=0.01)
-ex_date = st.date_input('Ex-date', value=pd.to_datetime('2024-06-01'))
-called_away = st.date_input('Called away date', value=pd.to_datetime('2024-06-01'))
+# Streamlit app
+st.title("Covered Call Calculator")
 
-# Input section for option
-st.header('Option')
-option_type = st.selectbox('Buy/sell', ['Sell', 'Buy'])
-strike_price = st.number_input('Strike Price', value=50.0, step=0.01)
-expiry_date = st.date_input('Expiry Date', value=pd.to_datetime('2024-06-21'))
-premium = st.number_input('Premium (per share)', value=1.35, step=0.01)
-quantity_option = st.number_input('Quantity (contracts)', value=1, step=1)
+price = st.number_input("Stock Price", value=49.75, step=0.01)
+quantity = st.number_input("Quantity", value=100, step=1)
+option_price = st.number_input("Option Price", value=1.35, step=0.01)
+strike_price = st.number_input("Strike Price", value=50.00, step=0.01)
+days_until_expiry = st.number_input("Days Until Expiry", value=20, step=1)
 
-# Calculations
-leg_cost = premium * quantity_option * 100
-initial_premium = leg_cost if option_type == 'Sell' else -leg_cost
-max_return = (strike_price - price + premium) * quantity * 100 if option_type == 'Sell' else (price - strike_price + premium) * quantity * 100
-max_risk = (price * quantity * 100) - initial_premium
-breakeven = price - premium if option_type == 'Sell' else price + premium
-days_until_expiry = (expiry_date - datetime.now().date()).days
-annualized_return = (initial_premium / (price * quantity * 100)) * (365 / days_until_expiry) * 100 if price * quantity * 100 != 0 else 0
+if st.button("Calculate"):
+    initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry)
+    
+    st.write(f"Initial Premium: ${initial_premium:.2f}")
+    st.write(f"Max Risk: ${max_risk:.2f}")
+    st.write(f"Break-even at Expiry: ${breakeven:.2f}")
+    st.write(f"Max Return: ${max_return:.2f}")
+    st.write(f"Return on Risk: {return_on_risk:.2f}%")
+    st.write(f"Annualized Return: {annualized_return:.2f}%")
 
-# Display results
-st.header('Estimates')
-st.write(f"Initial premium: ${initial_premium:.2f}")
-st.write(f"Max return: ${max_return:.2f}")
-st.write(f"Max risk: ${max_risk:.2f}")
-st.write(f"B/E at expiry: ${breakeven:.2f}")
-st.write(f"Days Until Expiry: {days_until_expiry} days")
-st.write(f"Annualized Return: {annualized_return:.2f}%")
-
-# Create the matrix (simplified for this example)
-matrix_data = {
-    'Stock Price Range': np.arange(price - 5, price + 5, 0.25),
-    'P/L': [max_return if x >= strike_price else (x - price) * quantity * 100 for x in np.arange(price - 5, price + 5, 0.25)]
-}
-matrix_df = pd.DataFrame(matrix_data)
-
-st.header('Matrix Values')
-st.dataframe(matrix_df)
+# Run the Streamlit app with `streamlit run covered_call_calculator.py`
