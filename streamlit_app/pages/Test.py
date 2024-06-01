@@ -32,21 +32,12 @@ if ticker:
     if selected_expiration_date:
         chain = get_options_chain(ticker, selected_expiration_date)
         
-        strike_prices = sorted(chain['strike'].unique())
+        strike_prices = chain['strike'].unique()
         
         stock_price = yf.Ticker(ticker).history(period='1d')['Close'][0]
         closest_strike_price = min(strike_prices, key=lambda x: abs(x - stock_price))
         
-        # Find the index of the closest strike price to the stock price
-        closest_index = strike_prices.index(closest_strike_price)
-        
-        # Calculate the middle index
-        middle_index = len(strike_prices) // 2
-        
-        # If the closest index is not the middle, set the middle index
-        default_index = closest_index if closest_index == middle_index else middle_index
-        
-        selected_strike_price = st.selectbox("Select Strike Price", strike_prices, index=default_index)
+        selected_strike_price = st.selectbox("Select Strike Price", strike_prices, index=list(strike_prices).index(closest_strike_price))
         
         if selected_strike_price:
             selected_option = chain[chain['strike'] == selected_strike_price]
