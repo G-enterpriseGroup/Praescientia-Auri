@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-
+from yahoo_fin import options
 def get_expiration_dates(ticker):
     stock = yf.Ticker(ticker)
     return stock.options
