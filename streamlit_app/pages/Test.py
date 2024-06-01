@@ -9,7 +9,8 @@ def get_expiration_dates(ticker):
 def get_options_chain(ticker, expiration_date):
     stock = yf.Ticker(ticker)
     options = stock.option_chain(expiration_date)
-    options_df = options.calls[['strike', 'lastPrice', 'bid', 'ask']]
+    options_df = pd.concat([options.calls, options.puts], keys=['Calls', 'Puts'], names=['Type'])
+    options_df = options_df.reset_index(level='Type').reset_index(drop=True)
     return options_df
 
 def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
@@ -30,8 +31,6 @@ if ticker:
     
     if selected_expiration_date:
         chain = get_options_chain(ticker, selected_expiration_date)
-        st.write("### Options Chain")
-        st.dataframe(chain)
         
         strike_prices = chain['strike'].unique()
         selected_strike_price = st.selectbox("Select Strike Price", strike_prices)
@@ -41,10 +40,7 @@ if ticker:
             bid_price = selected_option['bid'].values[0]
             ask_price = selected_option['ask'].values[0]
 
-            st.write(f"Default Bid Price: ${bid_price:.2f}, Default Ask Price: ${ask_price:.2f}")
-            
-            bid_price = st.number_input("Edit Bid Price", value=float(bid_price))
-            ask_price = st.number_input("Edit Ask Price", value=float(ask_price))
+            st.write(f"Bid Price: ${bid_price:.2f}, Ask Price: ${ask_price:.2f}")
 
             option_type = st.radio("Select Option Type", ["Bid", "Ask"])
             if option_type == "Bid":
@@ -67,3 +63,28 @@ if ticker:
                 st.write(f"**Maximum Return:** ${max_return:.2f}")
                 st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
+
+                st.write("### Detailed Explanation:")
+                st.write("1. **Initial Premium Received:** This is the total premium received from selling the call options.")
+                st.write("   - Calculation: Option Price * Quantity * 100")
+                st.write(f"   - Example: ${option_price} * {quantity} * 100 = ${initial_premium:.2f}")
+                
+                st.write("2. **Maximum Risk:** This is the maximum potential loss if the stock price drops to zero.")
+                st.write("   - Calculation: (Stock Price * Quantity * 100) - Initial Premium")
+                st.write(f"   - Example: (${stock_price} * {quantity} * 100) - ${initial_premium:.2f} = ${max_risk:.2f}")
+                
+                st.write("3. **Break-even Price at Expiry:** This is the stock price at which the total loss is zero, taking the premium into account.")
+                st.write("   - Calculation: Stock Price - Option Price")
+                st.write(f"   - Example: ${stock_price} - ${option_price} = ${breakeven:.2f}")
+                
+                st.write("4. **Maximum Return:** This is the total profit if the stock price is at or above the strike price at expiry.")
+                st.write("   - Calculation: ((Strike Price - Stock Price) * Quantity * 100) + Initial Premium")
+                st.write(f"   - Example: (({selected_strike_price} - {stock_price}) * {quantity} * 100) + ${initial_premium:.2f} = ${max_return:.2f}")
+                
+                st.write("5. **Return on Risk:** This is the percentage return on the maximum risk taken.")
+                st.write("   - Calculation: (Maximum Return / Maximum Risk) * 100")
+                st.write(f"   - Example: (${max_return:.2f} / ${max_risk:.2f}) * 100 = {return_on_risk:.2f}%")
+                
+                st.write("6. **Annualized Return:** This is the annualized percentage return based on the days until expiry.")
+                st.write("   - Calculation: (Return on Risk / Days Until Expiry) * 365")
+                st.write(f"   - Example: ({return_on_risk:.2f}% / {days_until_expiry}) * 365 = {annualized_return:.2f}%")
