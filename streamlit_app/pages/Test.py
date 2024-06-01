@@ -33,7 +33,11 @@ if ticker:
         chain = get_options_chain(ticker, selected_expiration_date)
         
         strike_prices = chain['strike'].unique()
-        selected_strike_price = st.selectbox("Select Strike Price", strike_prices)
+        
+        stock_price = yf.Ticker(ticker).history(period='1d')['Close'][0]
+        closest_strike_price = min(strike_prices, key=lambda x: abs(x - stock_price))
+        
+        selected_strike_price = st.selectbox("Select Strike Price", strike_prices, index=list(strike_prices).index(closest_strike_price))
         
         if selected_strike_price:
             selected_option = chain[chain['strike'] == selected_strike_price]
@@ -53,7 +57,6 @@ if ticker:
             days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime('today')).days
 
             if st.button("Calculate"):
-                stock_price = yf.Ticker(ticker).history(period='1d')['Close'][0]
                 initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
 
