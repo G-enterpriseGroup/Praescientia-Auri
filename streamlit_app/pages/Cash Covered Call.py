@@ -22,7 +22,6 @@ strike_price = st.number_input("Strike Price ($)", value=50.00, step=0.01, forma
 days_until_expiry = st.number_input("Days Until Expiry", value=20, step=1)
 
 if st.button("Calculate"):
-    initial_premium, max_risk, breakeven, max_return, return_on_risk
     initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry)
 
     st.write("### Results:")
@@ -60,3 +59,4 @@ if st.button("Calculate"):
     st.write(f"   - Example: ({return_on_risk:.2f}% / {days_until_expiry}) * 365 = {annualized_return:.2f}%")
 
 # Run the Streamlit app with `streamlit run covered_call_calculator.py`
+
