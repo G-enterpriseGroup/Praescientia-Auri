@@ -1,40 +1,30 @@
-import streamlit as st
 import requests
-from bs4 import BeautifulSoup
-import pandas as pd
+import json
+import streamlit as st
 
-# Function to scrape the data
-def scrape_options(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.content, 'html.parser')
+def get_options_chain(symbol):
+    api_key = "QEfbgq5dDyXiF9uqrJh3"
+    url = f"https://data.nasdaq.com/api/v3/datasets/OPTIONCHAIN/{symbol}.json?api_key={api_key}"
     
-    tables = soup.find_all('table')
-    calls_table = tables[0]
-    puts_table = tables[1]
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        return data
+    else:
+        return None
+
+def main():
+    st.title("Options Chain Data")
     
-    def parse_table(table):
-        headers = [header.text.strip() for header in table.find_all('th')]
-        rows = []
-        for row in table.find_all('tr')[1:]:
-            data = [cell.text.strip() for cell in row.find_all('td')]
-            rows.append(data)
-        return pd.DataFrame(rows, columns=headers)
+    symbol = st.text_input("Enter the stock or ETF symbol:")
     
-    calls_df = parse_table(calls_table)
-    puts_df = parse_table(puts_table)
-    
-    return calls_df, puts_df
+    if st.button("Get Options Chain"):
+        options_chain = get_options_chain(symbol)
+        
+        if options_chain:
+            st.json(options_chain)
+        else:
+            st.error(f"Failed to retrieve data for {symbol}")
 
-# Streamlit app
-st.title("Option Chain Scraper")
-st.write("Scrapes the calls and puts for the given ETF.")
-
-url = "https://www.nasdaq.com/market-activity/etf/puls/option-chain"
-calls_df, puts_df = scrape_options(url)
-
-st.subheader("Calls")
-st.dataframe(calls_df)
-
-st.subheader("Puts")
-st.dataframe(puts_df)
+if __name__ == "__main__":
+    main()
