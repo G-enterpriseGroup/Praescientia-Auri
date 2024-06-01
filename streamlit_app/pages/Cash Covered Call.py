@@ -1,5 +1,6 @@
 import streamlit as st
-
+import yfinance as yf
+import pandas as pd
 # Function to calculate covered call metrics
 def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
     initial_premium = option_price * quantity * 100
@@ -9,6 +10,14 @@ def calculate_covered_call(price, quantity, option_price, strike_price, days_unt
     return_on_risk = (max_return / max_risk) * 100
     annualized_return = ((return_on_risk / days_until_expiry) * 365)
     return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
+
+# Function to fetch stock price and options data
+def fetch_stock_data(ticker):
+    stock = yf.Ticker(ticker)
+    stock_price = stock.history(period='1d')['Close'][0]
+    options = stock.option_chain(stock.options[0])
+    calls = options.calls[['strike', 'lastPrice', 'bid', 'ask', 'volume']]
+    return stock_price, calls
 
 # Streamlit app
 st.title("Covered Call Calculator")
