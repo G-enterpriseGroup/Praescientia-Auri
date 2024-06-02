@@ -24,7 +24,7 @@ def calculate_covered_call(price, quantity, option_price, strike_price, days_unt
     annualized_return = ((return_on_risk / days_until_expiry) * 365)
     return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
 
-def create_matrix(stock_prices, dates, price, quantity, option_price, strike_price, days_until_expiry):
+def create_matrix(stock_prices, dates, price, quantity, option_price, strike_price):
     matrix = np.zeros((len(stock_prices), len(dates)))
     for i, sp in enumerate(stock_prices):
         for j, date in enumerate(dates):
@@ -68,6 +68,9 @@ if ticker:
             quantity = st.number_input("Quantity (shares)", value=100, step=1)
             days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime('today')).days
 
+            start_date = st.date_input("Start Date", pd.to_datetime('today'))
+            end_date = st.date_input("End Date", pd.to_datetime('today') + pd.DateOffset(days=20))
+
             if st.button("Calculate"):
                 initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
@@ -81,12 +84,12 @@ if ticker:
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
 
                 stock_prices = np.linspace(stock_price * 0.9, stock_price * 1.1, 30)
-                dates = pd.date_range(start=pd.to_datetime('today'), periods=20)
+                dates = pd.date_range(start=start_date, end=end_date)
 
-                matrix = create_matrix(stock_prices, dates, stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
+                matrix = create_matrix(stock_prices, dates, stock_price, quantity, option_price, selected_strike_price)
 
                 fig, ax = plt.subplots(figsize=(12, 8))
-                cax = ax.matshow(matrix, cmap='RdYlGn')
+                cax = ax.matshow(matrix, cmap='RdYlGn', aspect='auto')
                 plt.colorbar(cax)
 
                 ax.set_xticks(np.arange(len(dates)))
