@@ -104,3 +104,62 @@ if ticker:
 
 
 ################################################################################################################################################################################################
+
+import streamlit as st
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+import matplotlib.pyplot as plt
+
+# Black-Scholes formula for a call option
+def black_scholes_call(S, K, T, r, sigma):
+    if T == 0:
+        return max(0, S - K)
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    call_price = (S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2))
+    return call_price
+
+# Define the inputs
+initial_stock_price = stock_price  # Example value, replace with actual input
+strike_price = selected_strike_price         # Example value, replace with actual input
+days_to_expiration = days_until_expiry    # Example value, replace with actual input
+risk_free_rate = 0.01      # Example value, replace with actual input
+volatility = iv           # Example value, replace with actual input
+initial_premium_received = option_price  # Example value, replace with actual input
+
+# Create price range with increments of 0.75
+price_range = np.round(np.arange(initial_stock_price - 13*0.75, initial_stock_price + 14*0.75, 0.75), 2)
+
+# Create a DataFrame to store results
+columns = ['Price'] + [f'Day_{day}' for day in range(1, days_to_expiration + 1)]
+results = pd.DataFrame(columns=columns)
+
+# Calculate P&L for each stock price and each day
+for price in price_range:
+    row = [price]
+    for day in range(1, days_to_expiration + 1):
+        # Time to expiration in years
+        T = (days_to_expiration - day) / 365
+        # Calculate the option price using Black-Scholes model
+        call_price = black_scholes_call(price, strike_price, T, risk_free_rate, volatility)
+        # Calculate the value of the covered call position
+        covered_call_value = (price - initial_stock_price) * 100 - (call_price * 100) + initial_premium_received * 100
+        row.append(covered_call_value)
+    results.loc[len(results)] = row
+
+# Apply conditional formatting
+def color_negative_red_positive_green(val):
+    if val > 0:
+        color = f'rgb({255 - int((val / results.max().max()) * 255)}, 255, {255 - int((val / results.max().max()) * 255)})'
+    else:
+        color = f'rgb(255, {255 - int((abs(val) / abs(results.min().min())) * 255)}, {255 - int((abs(val) / abs(results.min().min())) * 255)})'
+    return f'background-color: {color}; color: black;'
+
+# Apply the formatting to the DataFrame
+formatted_results = results.style.applymap(color_negative_red_positive_green, subset=columns[1:])
+
+
+st.write("### Profit and Loss Table:")
+st.dataframe(formatted_results)
+
