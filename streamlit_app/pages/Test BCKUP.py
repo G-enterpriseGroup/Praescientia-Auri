@@ -111,14 +111,14 @@ def black_scholes_call(S, K, T, r, sigma):
     d2 = d1 - sigma * np.sqrt(T)
     call_price = (S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2))
     return call_price
-volatility = iv  # Implied Volatility, already assigned earlier from selected_option
+volatility = iv  
 # Define the inputs
 initial_stock_price = stock_price  # Example value, replace with actual input
 strike_price = selected_strike_price         # Example value, replace with actual input
 days_to_expiration = days_until_expiry    # Example value, replace with actual input
 risk_free_rate = 0.01      # Example value, replace with actual input
-iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
 initial_premium_received = option_price  # Example value, replace with actual input
+
 
 # Create price range with increments of 0.75
 price_range = np.round(np.arange(initial_stock_price - 13*0.75, initial_stock_price + 14*0.75, 0.75), 2)
@@ -134,7 +134,7 @@ for price in price_range:
         # Time to expiration in years
         T = (days_to_expiration - day) / 365
         # Calculate the option price using Black-Scholes model
-        call_price = black_scholes_call(price, strike_price, T, risk_free_rate, volatility)
+        call_price = black_scholes_call(price, strike_price, T, risk_free_rate, iv)
         # Calculate the value of the covered call position
         covered_call_value = (price - initial_stock_price) * 100 - (call_price * 100) + initial_premium_received * 100
         row.append(covered_call_value)
