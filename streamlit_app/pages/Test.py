@@ -1,6 +1,8 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
+from scipy.stats import norm
 
 def get_expiration_dates(ticker):
     stock = yf.Ticker(ticker)
@@ -13,16 +15,22 @@ def get_options_chain(ticker, expiration_date):
     options_df = options_df.reset_index(level='Type').reset_index(drop=True)
     return options_df
 
-def get_option_greeks(ticker, expiration_date, strike_price, option_type):
-    stock = yf.Ticker(ticker)
-    option = stock.option_chain(expiration_date)
-    if option_type == 'Call':
-        option_data = option.calls
-    else:
-        option_data = option.puts
+def calculate_greeks(S, K, T, r, sigma, option_type="call"):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
 
-    selected_option = option_data[option_data['strike'] == strike_price].iloc[0]
-    return selected_option['impliedVolatility'], selected_option['delta'], selected_option['gamma'], selected_option['theta'], selected_option['vega'], selected_option['rho']
+    if option_type == "call":
+        delta = norm.cdf(d1)
+        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) - (r * K * np.exp(-r * T) * norm.cdf(d2))
+    else:
+        delta = -norm.cdf(-d1)
+        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) + (r * K * np.exp(-r * T) * norm.cdf(-d2))
+
+    gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
+    vega = S * norm.pdf(d1) * np.sqrt(T)
+    rho = K * T * np.exp(-r * T) * norm.cdf(d2) if option_type == "call" else -K * T * np.exp(-r * T) * norm.cdf(-d2)
+
+    return delta, gamma, theta, vega, rho
 
 def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
     initial_premium = option_price * quantity
@@ -72,7 +80,11 @@ if ticker:
                 initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
 
-                iv, delta, gamma, theta, vega, rho = get_option_greeks(ticker, selected_expiration_date, selected_strike_price, 'Call')
+                r = 0.01  # Risk-free rate
+                iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
+                T = days_until_expiry / 365.0  # Time to expiration in years
+
+                delta, gamma, theta, vega, rho = calculate_greeks(stock_price, selected_strike_price, T, r, iv, 'call')
 
                 st.write("### Results:")
                 st.write(f"**Initial Premium Received:** ${initial_premium:.2f}")
