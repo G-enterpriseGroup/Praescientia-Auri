@@ -94,7 +94,7 @@ if ticker:
                 st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
                 st.write("### Option Greeks:")
-                st.write(f"**Implied Volatility:** {iv:.2f}")
+                st.write(f"**Implied Volatility:** {iv * 100:.2f}")
                 st.write(f"**Delta:** {delta:.2f}")
                 st.write(f"**Gamma:** {gamma:.2f}")
                 st.write(f"**Theta (per day):** {theta:.2f}")
