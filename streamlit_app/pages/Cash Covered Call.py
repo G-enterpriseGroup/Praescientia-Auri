@@ -81,7 +81,7 @@ if ticker:
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
 
                 r = 0.01  # Risk-free rate (you can adjust this as necessary)
-                iv = int(selected_option['impliedVolatility'].values[0] * 100)  # Implied Volatility as a whole number                
+                iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
                 T = days_until_expiry / 365.0  # Time to expiration in years
 
                 delta, gamma, theta, vega, rho = calculate_greeks(stock_price, selected_strike_price, T, r, iv, 'call')
@@ -94,7 +94,7 @@ if ticker:
                 st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
                 st.write("### Option Greeks:")
-                st.write(f"**Implied Volatility:** {iv:.2f}")
+                st.write(f"**Implied Volatility:** {iv * 100:.2f}")
                 st.write(f"**Delta:** {delta:.2f}")
                 st.write(f"**Gamma:** {gamma:.2f}")
                 st.write(f"**Theta (per day):** {theta:.2f}")
