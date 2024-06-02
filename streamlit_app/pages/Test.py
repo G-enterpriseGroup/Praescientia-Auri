@@ -24,16 +24,17 @@ def calculate_covered_call(price, quantity, option_price, strike_price, days_unt
     annualized_return = ((return_on_risk / days_until_expiry) * 365)
     return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
 
-def create_matrix(stock_prices, dates, calculate_fn):
+def create_matrix(stock_prices, dates, price, quantity, option_price, strike_price, days_until_expiry):
     matrix = np.zeros((len(stock_prices), len(dates)))
-    for i, price in enumerate(stock_prices):
+    for i, sp in enumerate(stock_prices):
         for j, date in enumerate(dates):
-            # Here you can use the calculate_covered_call or any other function to calculate P/L values
-            # For the sake of the example, I'm assuming a random function for P/L values
-            matrix[i, j] = np.random.uniform(-10, 10)  # Replace this with the actual calculation logic
+            days_to_date = (pd.to_datetime(date) - pd.to_datetime('today')).days
+            initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
+                sp, quantity, option_price, strike_price, days_to_date)
+            matrix[i, j] = return_on_risk  # You can change this to max_return, breakeven, etc.
     return matrix
 
-st.title("Covered Call Calculator")
+st.title("Advanced Covered Call Calculator")
 
 ticker = st.text_input("Ticker Symbol", value="AAPL")
 if ticker:
@@ -78,13 +79,13 @@ if ticker:
                 st.write(f"**Maximum Return:** ${max_return:.2f}")
                 st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
-                
-                stock_prices = np.linspace(180, 210, 31)  # Example stock prices range
-                dates = pd.date_range(start='2024-06-01', end='2024-06-21')  # Example dates range
-                
-                matrix = create_matrix(stock_prices, dates, calculate_covered_call)
-                
-                fig, ax = plt.subplots(figsize=(10, 8))
+
+                stock_prices = np.linspace(stock_price * 0.9, stock_price * 1.1, 30)
+                dates = pd.date_range(start=pd.to_datetime('today'), periods=20)
+
+                matrix = create_matrix(stock_prices, dates, stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
+
+                fig, ax = plt.subplots(figsize=(12, 8))
                 cax = ax.matshow(matrix, cmap='RdYlGn')
                 plt.colorbar(cax)
 
@@ -96,5 +97,10 @@ if ticker:
 
                 ax.set_xlabel('Dates')
                 ax.set_ylabel('Stock Prices')
+
+                # Adding text annotations
+                for i in range(len(stock_prices)):
+                    for j in range(len(dates)):
+                        ax.text(j, i, f'{matrix[i, j]:.2f}', ha='center', va='center', color='black')
 
                 st.pyplot(fig)
