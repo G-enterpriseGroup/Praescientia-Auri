@@ -117,7 +117,7 @@ initial_stock_price = stock_price  # Example value, replace with actual input
 strike_price = selected_strike_price         # Example value, replace with actual input
 days_to_expiration = days_until_expiry    # Example value, replace with actual input
 risk_free_rate = 0.01      # Example value, replace with actual input
-volatility = iv           # Example value, replace with actual input
+iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
 initial_premium_received = option_price  # Example value, replace with actual input
 
 # Create price range with increments of 0.75
