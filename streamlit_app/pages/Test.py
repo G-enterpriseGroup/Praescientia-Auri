@@ -103,4 +103,4 @@ if ticker:
 
                 # Display matrix
                 st.write("### P/L Matrix")
-                st.dataframe(styled_df, width=1200, height=600)
+                st.dataframe(styled_df)
