@@ -21,13 +21,13 @@ def calculate_greeks(S, K, T, r, sigma, option_type="call"):
 
     if option_type == "call":
         delta = norm.cdf(d1)
-        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) - (r * K * np.exp(-r * T) * norm.cdf(d2))
+        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) - r * K * np.exp(-r * T) * norm.cdf(d2)) / 365
     else:
         delta = -norm.cdf(-d1)
-        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))) + (r * K * np.exp(-r * T) * norm.cdf(-d2))
+        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) + r * K * np.exp(-r * T) * norm.cdf(-d2)) / 365
 
     gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
-    vega = S * norm.pdf(d1) * np.sqrt(T)
+    vega = S * norm.pdf(d1) * np.sqrt(T) / 100
     rho = K * T * np.exp(-r * T) * norm.cdf(d2) if option_type == "call" else -K * T * np.exp(-r * T) * norm.cdf(-d2)
 
     return delta, gamma, theta, vega, rho
@@ -80,7 +80,7 @@ if ticker:
                 initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
 
-                r = 0.01  # Risk-free rate
+                r = 0.01  # Risk-free rate (you can adjust this as necessary)
                 iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
                 T = days_until_expiry / 365.0  # Time to expiration in years
 
@@ -97,6 +97,6 @@ if ticker:
                 st.write(f"**Implied Volatility:** {iv:.2f}")
                 st.write(f"**Delta:** {delta:.2f}")
                 st.write(f"**Gamma:** {gamma:.2f}")
-                st.write(f"**Theta:** {theta:.2f}")
+                st.write(f"**Theta (per day):** {theta:.2f}")
                 st.write(f"**Vega:** {vega:.2f}")
                 st.write(f"**Rho:** {rho:.2f}")
