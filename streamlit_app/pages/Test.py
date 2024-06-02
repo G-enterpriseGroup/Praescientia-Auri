@@ -14,10 +14,10 @@ def get_options_chain(ticker, expiration_date):
     return options_df
 
 def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
-    initial_premium = option_price * quantity * 100
-    max_risk = (price * quantity * 100) - initial_premium
+    initial_premium = option_price * quantity
+    max_risk = (price * quantity) - initial_premium
     breakeven = price - option_price
-    max_return = ((strike_price - price) * quantity * 100) + initial_premium
+    max_return = ((strike_price - price) * quantity) + initial_premium
     return_on_risk = (max_return / max_risk) * 100
     annualized_return = ((return_on_risk / days_until_expiry) * 365)
     return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
