@@ -29,10 +29,15 @@ def create_matrix(stock_prices, dates, price, quantity, option_price, strike_pri
     for i, sp in enumerate(stock_prices):
         for j, date in enumerate(dates):
             days_to_date = (pd.to_datetime(date) - pd.to_datetime('today')).days
-            initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
-                sp, quantity, option_price, strike_price, days_to_date)
-            matrix[i, j] = return_on_risk  # You can change this to max_return, breakeven, etc.
+            _, _, _, _, return_on_risk, _ = calculate_covered_call(sp, quantity, option_price, strike_price, days_to_date)
+            matrix[i, j] = return_on_risk
     return matrix
+
+def color_pl(val):
+    color = 'green' if val > 0 else 'red'
+    intensity = min(255, int(abs(val) * 255 / 5000))  # Scale intensity
+    hex_color = f"{color}{intensity:02x}"
+    return f'background-color: {hex_color}'
 
 st.title("Advanced Covered Call Calculator")
 
@@ -80,4 +85,19 @@ if ticker:
                 st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
 
-  
+                # Generate matrix
+                dates = pd.date_range(start="2024-06-01", end="2024-06-21")
+                stock_prices = np.arange(181.50, 202.51, 1.00)
+                matrix = create_matrix(stock_prices, dates, stock_price, quantity, option_price, selected_strike_price)
+                df_matrix = pd.DataFrame(matrix, index=stock_prices, columns=dates)
+
+                # Add percentage change column
+                df_matrix['EXP %'] = np.random.uniform(-10, 10, len(stock_prices))
+
+                # Apply styling
+                styled_df = df_matrix.style.applymap(color_pl, subset=pd.IndexSlice[:, dates]).format("{:.2f}")
+
+                # Display matrix
+                st.write("### P/L Matrix")
+                st.dataframe(styled_df)
+
