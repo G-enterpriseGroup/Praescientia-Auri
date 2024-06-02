@@ -22,23 +22,25 @@ def calculate_covered_call(price, quantity, option_price, strike_price, days_unt
     max_return = ((strike_price - price) * quantity) + initial_premium
     return_on_risk = (max_return / max_risk) * 100
     annualized_return = ((return_on_risk / days_until_expiry) * 365)
-    return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
+    profit_or_loss = max_return - max_risk
+    return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return, profit_or_loss
 
 def create_matrix(stock_prices, dates, price, quantity, option_price, strike_price):
     matrix = np.zeros((len(stock_prices), len(dates)))
     for i, sp in enumerate(stock_prices):
         for j, date in enumerate(dates):
             days_to_date = (pd.to_datetime(date) - pd.to_datetime(datetime.date.today())).days
-            _, _, _, _, return_on_risk, _ = calculate_covered_call(sp, quantity, option_price, strike_price, days_to_date)
-            matrix[i, j] = return_on_risk
+            _, _, _, _, _, _, profit_or_loss = calculate_covered_call(sp, quantity, option_price, strike_price, days_to_date)
+            matrix[i, j] = profit_or_loss
     return matrix
 
 def color_pl(val):
     color = 'green' if val > 0 else 'red'
-    intensity = min(255, int(abs(val) * 255 / 100))  # Adjust intensity scaling
+    intensity = min(255, int(abs(val) * 255 / 10000))  # Adjust intensity scaling
     hex_color = f"#{'00FF00' if color == 'green' else 'FF0000'}{intensity:02x}"
     return f'background-color: {hex_color}'
 
+st.set_page_config(layout="wide")
 st.title("Advanced Covered Call Calculator")
 
 ticker = st.text_input("Ticker Symbol", value="AAPL")
@@ -73,8 +75,13 @@ if ticker:
             quantity = st.number_input("Quantity (shares)", value=100, step=1)
             days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime(datetime.date.today())).days
 
+            # Input for custom price ranges
+            price_range_min = st.number_input("Min Stock Price", value=181.50)
+            price_range_max = st.number_input("Max Stock Price", value=202.50)
+            price_step = st.number_input("Stock Price Step", value=1.00)
+
             if st.button("Calculate"):
-                initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
+                initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return, _ = calculate_covered_call(
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
 
                 st.write("### Results:")
@@ -87,16 +94,13 @@ if ticker:
 
                 # Generate matrix
                 dates = pd.date_range(start="2024-06-01", end="2024-06-21")
-                stock_prices = np.arange(181.50, 202.51, 1.00)
+                stock_prices = np.arange(price_range_min, price_range_max + price_step, price_step)
                 matrix = create_matrix(stock_prices, dates, stock_price, quantity, option_price, selected_strike_price)
                 df_matrix = pd.DataFrame(matrix, index=stock_prices, columns=dates)
 
-                # Add percentage change column
-                df_matrix['EXP %'] = np.random.uniform(-10, 10, len(stock_prices))
-
                 # Apply styling
-                styled_df = df_matrix.style.applymap(color_pl, subset=pd.IndexSlice[:, dates]).format("{:.2f}")
+                styled_df = df_matrix.style.applymap(color_pl).format("{:.2f}")
 
                 # Display matrix
                 st.write("### P/L Matrix")
-                st.dataframe(styled_df)
+                st.dataframe(styled_df, width=1200, height=600)
