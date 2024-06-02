@@ -111,7 +111,6 @@ def black_scholes_call(S, K, T, r, sigma):
     d2 = d1 - sigma * np.sqrt(T)
     call_price = (S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2))
     return call_price
-volatility = iv  
 # Define the inputs
 initial_stock_price = stock_price  # Example value, replace with actual input
 strike_price = selected_strike_price         # Example value, replace with actual input
