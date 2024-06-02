@@ -1,6 +1,8 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 
 def get_expiration_dates(ticker):
     stock = yf.Ticker(ticker)
@@ -22,6 +24,15 @@ def calculate_covered_call(price, quantity, option_price, strike_price, days_unt
     annualized_return = ((return_on_risk / days_until_expiry) * 365)
     return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
 
+def create_matrix(stock_prices, dates, calculate_fn):
+    matrix = np.zeros((len(stock_prices), len(dates)))
+    for i, price in enumerate(stock_prices):
+        for j, date in enumerate(dates):
+            # Here you can use the calculate_covered_call or any other function to calculate P/L values
+            # For the sake of the example, I'm assuming a random function for P/L values
+            matrix[i, j] = np.random.uniform(-10, 10)  # Replace this with the actual calculation logic
+    return matrix
+
 st.title("Covered Call Calculator")
 
 ticker = st.text_input("Ticker Symbol", value="AAPL")
@@ -35,7 +46,6 @@ if ticker:
         strike_prices = chain['strike'].unique()
         
         stock_price = yf.Ticker(ticker).history(period='1d')['Close'][0]
-        stock_price
         closest_strike_price = min(strike_prices, key=lambda x: abs(x - stock_price))
         
         selected_strike_price = st.selectbox("Select Strike Price", strike_prices, index=list(strike_prices).index(closest_strike_price))
@@ -68,3 +78,23 @@ if ticker:
                 st.write(f"**Maximum Return:** ${max_return:.2f}")
                 st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
+                
+                stock_prices = np.linspace(180, 210, 31)  # Example stock prices range
+                dates = pd.date_range(start='2024-06-01', end='2024-06-21')  # Example dates range
+                
+                matrix = create_matrix(stock_prices, dates, calculate_covered_call)
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                cax = ax.matshow(matrix, cmap='RdYlGn')
+                plt.colorbar(cax)
+
+                ax.set_xticks(np.arange(len(dates)))
+                ax.set_yticks(np.arange(len(stock_prices)))
+
+                ax.set_xticklabels(dates.strftime('%m-%d'), rotation=90)
+                ax.set_yticklabels([f"${price:.2f}" for price in stock_prices])
+
+                ax.set_xlabel('Dates')
+                ax.set_ylabel('Stock Prices')
+
+                st.pyplot(fig)
