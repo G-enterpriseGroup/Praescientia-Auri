@@ -68,9 +68,6 @@ if ticker:
             quantity = st.number_input("Quantity (shares)", value=100, step=1)
             days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime('today')).days
 
-            start_date = st.date_input("Start Date", pd.to_datetime('today'))
-            end_date = st.date_input("End Date", pd.to_datetime('today') + pd.DateOffset(days=20))
-
             if st.button("Calculate"):
                 initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
