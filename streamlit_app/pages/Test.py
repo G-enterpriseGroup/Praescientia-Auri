@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import datetime
 
 def get_expiration_dates(ticker):
     stock = yf.Ticker(ticker)
@@ -28,15 +28,15 @@ def create_matrix(stock_prices, dates, price, quantity, option_price, strike_pri
     matrix = np.zeros((len(stock_prices), len(dates)))
     for i, sp in enumerate(stock_prices):
         for j, date in enumerate(dates):
-            days_to_date = (pd.to_datetime(date) - pd.to_datetime('today')).days
+            days_to_date = (pd.to_datetime(date) - pd.to_datetime(datetime.date.today())).days
             _, _, _, _, return_on_risk, _ = calculate_covered_call(sp, quantity, option_price, strike_price, days_to_date)
             matrix[i, j] = return_on_risk
     return matrix
 
 def color_pl(val):
     color = 'green' if val > 0 else 'red'
-    intensity = min(255, int(abs(val) * 255 / 5000))  # Scale intensity
-    hex_color = f"{color}{intensity:02x}"
+    intensity = min(255, int(abs(val) * 255 / 100))  # Adjust intensity scaling
+    hex_color = f"#{'00FF00' if color == 'green' else 'FF0000'}{intensity:02x}"
     return f'background-color: {hex_color}'
 
 st.title("Advanced Covered Call Calculator")
@@ -71,7 +71,7 @@ if ticker:
                 option_price = float(ask_price)
 
             quantity = st.number_input("Quantity (shares)", value=100, step=1)
-            days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime('today')).days
+            days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime(datetime.date.today())).days
 
             if st.button("Calculate"):
                 initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
@@ -100,4 +100,3 @@ if ticker:
                 # Display matrix
                 st.write("### P/L Matrix")
                 st.dataframe(styled_df)
-
