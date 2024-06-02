@@ -83,27 +83,4 @@ if ticker:
                 st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
                 st.write(f"**Annualized Return:** {annualized_return:.2f}%")
 
-                stock_prices = np.linspace(stock_price * 0.9, stock_price * 1.1, 30)
-                dates = pd.date_range(start=start_date, end=end_date)
-
-                matrix = create_matrix(stock_prices, dates, stock_price, quantity, option_price, selected_strike_price)
-
-                fig, ax = plt.subplots(figsize=(12, 8))
-                cax = ax.matshow(matrix, cmap='RdYlGn', aspect='auto')
-                plt.colorbar(cax)
-
-                ax.set_xticks(np.arange(len(dates)))
-                ax.set_yticks(np.arange(len(stock_prices)))
-
-                ax.set_xticklabels(dates.strftime('%m-%d'), rotation=90)
-                ax.set_yticklabels([f"${price:.2f}" for price in stock_prices])
-
-                ax.set_xlabel('Dates')
-                ax.set_ylabel('Stock Prices')
-
-                # Adding text annotations
-                for i in range(len(stock_prices)):
-                    for j in range(len(dates)):
-                        ax.text(j, i, f'{matrix[i, j]:.2f}', ha='center', va='center', color='black')
-
-                st.pyplot(fig)
+  
