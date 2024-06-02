@@ -81,7 +81,7 @@ if ticker:
                     stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
 
                 r = 0.01  # Risk-free rate (you can adjust this as necessary)
-                iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
+                iv = int(selected_option['impliedVolatility'].values[0] * 100)  # Implied Volatility as a whole number                
                 T = days_until_expiry / 365.0  # Time to expiration in years
 
                 delta, gamma, theta, vega, rho = calculate_greeks(stock_price, selected_strike_price, T, r, iv, 'call')
