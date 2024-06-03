@@ -9,7 +9,7 @@ def get_expiration_dates(ticker):
 def get_options_chain(ticker, expiration_date):
     stock = yf.Ticker(ticker)
     options = stock.option_chain(expiration_date)
-    options_df = pd.concat([options.calls, options.puts], keys=['Calls', 'Puts'], names=['Type'])
+    options_df = pd.concat([options.calls, options.puts], keys=['Calls'], names=['Type'])
     options_df = options_df.reset_index(level='Type').reset_index(drop=True)
     return options_df
 
