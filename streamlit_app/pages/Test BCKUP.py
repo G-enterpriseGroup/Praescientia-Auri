@@ -111,16 +111,14 @@ def black_scholes_call(S, K, T, r, sigma):
     d2 = d1 - sigma * np.sqrt(T)
     call_price = (S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2))
     return call_price
-# Define the inputs
+
+# Create price range with increments of 0.75
 initial_stock_price = stock_price  # Example value, replace with actual input
 strike_price = selected_strike_price         # Example value, replace with actual input
 days_to_expiration = days_until_expiry    # Example value, replace with actual input
 risk_free_rate = 0.01      # Example value, replace with actual input
 initial_premium_received = option_price  # Example value, replace with actual input
-
-
-# Create price range with increments of 0.75
-price_range = np.round(np.arange(initial_stock_price - 13*0.75, initial_stock_price + 14*0.75, 0.75), 2)
+price_range = np.round(np.arange(initial_stock_price - 13 * 0.75, initial_stock_price + 14 * 0.75, 0.75), 2)
 
 # Create a DataFrame to store results
 columns = ['Price'] + [f'Day_{day}' for day in range(1, days_to_expiration + 1)]
