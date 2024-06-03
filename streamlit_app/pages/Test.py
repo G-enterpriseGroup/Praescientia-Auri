@@ -161,4 +161,4 @@ formatted_results = results.style.applymap(color_negative_red_positive_green, su
 
 
 st.write("### Profit and Loss Table:")
-st.dataframe(formatted_results)s
+st.dataframe(formatted_results)
