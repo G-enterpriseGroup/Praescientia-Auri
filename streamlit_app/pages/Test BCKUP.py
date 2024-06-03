@@ -119,6 +119,7 @@ days_to_expiration = days_until_expiry    # Example value, replace with actual i
 risk_free_rate = 0.01      # Example value, replace with actual input
 initial_premium_received = option_price  # Example value, replace with actual input
 price_range = np.round(np.arange(initial_stock_price - 13 * 0.75, initial_stock_price + 14 * 0.75, 0.75), 2)
+iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
 
 # Create a DataFrame to store results
 columns = ['Price'] + [f'Day_{day}' for day in range(1, days_to_expiration + 1)]
