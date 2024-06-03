@@ -35,13 +35,13 @@ if ticker:
         strike_prices = chain['strike'].unique()
         
         stock_price = yf.Ticker(ticker).history(period='1d')['Close'][0]
-        stock_price
         closest_strike_price = min(strike_prices, key=lambda x: abs(x - stock_price))
         
         selected_strike_price = st.selectbox("Select Strike Price", strike_prices, index=list(strike_prices).index(closest_strike_price))
         
         if selected_strike_price:
             selected_option = chain[chain['strike'] == selected_strike_price]
+            st.write(f"Selected Option Data: {selected_option}")  # Debug statement
             bid_price = selected_option['bid'].values[0]
             ask_price = selected_option['ask'].values[0]
 
