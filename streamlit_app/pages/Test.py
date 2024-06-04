@@ -4,7 +4,9 @@ import pandas as pd
 import numpy as np
 from scipy.stats import norm
 import matplotlib.pyplot as plt
+
 st.set_page_config(layout="wide")
+
 # Define functions for the covered call calculator
 def get_expiration_dates(ticker):
     stock = yf.Ticker(ticker)
@@ -149,4 +151,4 @@ def color_negative_red_positive_green(val):
 # Apply the formatting to the DataFrame
 formatted_results = results.style.applymap(color_negative_red_positive_green, subset=columns[1:])
 st.write("### Profit and Loss Table:")
-st.dataframe(formatted_results)
+st.dataframe(formatted_results, height=1000)  # Adjust the height as needed to fit your data
