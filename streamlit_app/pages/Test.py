@@ -37,10 +37,10 @@ def calculate_greeks(S, K, T, r, sigma, option_type="call"):
     return delta, gamma, theta, vega, rho
 
 def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
-    initial_premium = option_price * quantity
-    max_risk = (price * quantity) - initial_premium
-    breakeven = price - option_price
-    max_return = ((strike_price - price) * quantity) + initial_premium
+    initial_premium = option_price * quantity * 100
+    max_risk = (price * quantity * 100) - initial_premium
+    breakeven = price - (initial_premium / (quantity * 100))
+    max_return = ((strike_price - price) * quantity * 100) + initial_premium
     return_on_risk = (max_return / max_risk) * 100
     annualized_return = ((return_on_risk / days_until_expiry) * 365)
     return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
@@ -115,13 +115,13 @@ def black_scholes_call(S, K, T, r, sigma):
     return call_price
 
 # Create price range with increments of 0.75
-initial_stock_price = stock_price  # Example value, replace with actual input
-strike_price = selected_strike_price         # Example value, replace with actual input
-days_to_expiration = days_until_expiry    # Example value, replace with actual input
-risk_free_rate = 0.01      # Example value, replace with actual input
-initial_premium_received = option_price  # Example value, replace with actual input
+initial_stock_price = stock_price
+strike_price = selected_strike_price
+days_to_expiration = days_until_expiry
+risk_free_rate = 0.01
+initial_premium_received = option_price
 price_range = np.round(np.arange(initial_stock_price - 13 * 0.75, initial_stock_price + 14 * 0.75, 0.75), 2)
-iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
+iv = selected_option['impliedVolatility'].values[0]
 
 # Create a DataFrame to store results
 columns = ['Price'] + [f'Day_{day}' for day in range(1, days_to_expiration + 1)]
@@ -131,11 +131,8 @@ results = pd.DataFrame(columns=columns)
 for price in price_range:
     row = [price]
     for day in range(1, days_to_expiration + 1):
-        # Time to expiration in years
         T = (days_to_expiration - day) / 365
-        # Calculate the option price using Black-Scholes model
         call_price = black_scholes_call(price, strike_price, T, risk_free_rate, iv)
-        # Calculate the value of the covered call position
         covered_call_value = (price - initial_stock_price) * 100 - (call_price * 100) + initial_premium_received * 100
         row.append(covered_call_value)
     results.loc[len(results)] = row
@@ -148,7 +145,6 @@ def color_negative_red_positive_green(val):
         color = f'rgb(255, {255 - int((abs(val) / abs(results.min().min())) * 255)}, {255 - int((abs(val) / abs(results.min().min())) * 255)})'
     return f'background-color: {color}; color: black;'
 
-# Apply the formatting to the DataFrame
 formatted_results = results.style.applymap(color_negative_red_positive_green, subset=columns[1:])
 st.write("### Profit and Loss Table:")
-st.dataframe(formatted_results, height=1000)  # Adjust the height as needed to fit your data
+st.dataframe(formatted_results, height=1000)
