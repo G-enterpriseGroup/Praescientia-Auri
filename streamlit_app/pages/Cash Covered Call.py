@@ -120,7 +120,7 @@ strike_price = selected_strike_price
 days_to_expiration = days_until_expiry
 risk_free_rate = 0.01
 initial_premium_received = option_price
-price_range = np.round(np.arange(initial_stock_price - 13 * 0.75, initial_stock_price + 14 * 0.75, 0.75), 2)
+price_range = np.round(np.arange(initial_stock_price - 13 * 0.50, initial_stock_price + 14 * 0.50, 0.50), 2)
 iv = selected_option['impliedVolatility'].values[0]
 
 # Create a DataFrame to store results
