@@ -147,4 +147,4 @@ def color_negative_red_positive_green(val):
 
 formatted_results = results.style.applymap(color_negative_red_positive_green, subset=columns[1:])
 st.write("### Profit and Loss Table:")
-st.dataframe(formatted_results, height=1000)
+st.dataframe(formatted_results, height=10000)
