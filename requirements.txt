@@ -1,10 +1,8 @@
 yfinance
 pandas
-numpy
 matplotlib
 scikit-learn
 statsmodels
-pmdarima
 plotly
 datetime
 reportlab
@@ -20,5 +18,7 @@ streamlit-chat
 requests
 yahoo_fin
 scipy
+numpy==1.21.6
+pmdarima==1.8.2
 
 
