@@ -18,7 +18,7 @@ streamlit-chat
 requests
 yahoo_fin
 scipy
-numpy==1.21.6
-pmdarima==1.8.2
+numpy=1.21.6
+pmdarima=1.8.2
 
 
