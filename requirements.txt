@@ -20,3 +20,5 @@ streamlit-chat
 requests
 yahoo_fin
 scipy
+
+
