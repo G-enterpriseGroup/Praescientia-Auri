@@ -1,150 +1,219 @@
-import streamlit as st
-import yfinance as yf
 import pandas as pd
 import numpy as np
-from scipy.stats import norm
+import streamlit as st
+import yfinance as yf
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from pmdarima import auto_arima
+from pandas.tseries.holiday import USFederalHolidayCalendar
+from pandas.tseries.offsets import CustomBusinessDay
 
 st.set_page_config(layout="wide")
 
-# Define functions for the covered call calculator
-def get_expiration_dates(ticker):
-    stock = yf.Ticker(ticker)
-    return stock.options
+def hide_streamlit_branding():
+    """Hide Streamlit's default branding"""
+    st.markdown("""
+        <style>
+            #MainMenu {visibility: hidden;}
+            header {visibility: hidden;}
+            footer {visibility: hidden;}
+        </style>
+    """, unsafe_allow_html=True)
 
-def get_options_chain(ticker, expiration_date):
-    stock = yf.Ticker(ticker)
-    options = stock.option_chain(expiration_date)
-    options_df = pd.concat([options.calls, options.puts], keys=['Calls', 'Puts'], names=['Type'])
-    options_df = options_df.reset_index(level='Type').reset_index(drop=True)
-    return options_df
+hide_streamlit_branding()
 
-def calculate_greeks(S, K, T, r, sigma, option_type="call"):
-    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    d2 = d1 - sigma * np.sqrt(T)
+st.write("# Forecasting Stock - Designed & Implemented by Raj Ghotra")
 
-    if option_type == "call":
-        delta = norm.cdf(d1)
-        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) - r * K * np.exp(-r * T) * norm.cdf(d2)) / 365
-    else:
-        delta = -norm.cdf(-d1)
-        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) + r * K * np.exp(-r * T) * norm.cdf(-d2)) / 365
+def calculate_date(days, start=True):
+    current_date = datetime.today()
+    delta_days = 0
+    while delta_days < days:
+        current_date -= timedelta(days=1)
+        if current_date.weekday() < 5:
+            delta_days += 1
+    return current_date
 
-    gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
-    vega = S * norm.pdf(d1) * np.sqrt(T) / 100
-    rho = K * T * np.exp(-r * T) * norm.cdf(d2) if option_type == "call" else -K * T * np.exp(-r * T) * norm.cdf(-d2)
+default_start_date = calculate_date(395)
+default_end_date = calculate_date(30, start=False)
 
-    return delta, gamma, theta, vega, rho
+SN = st.slider('Seasonality', 7, 30, 22)
+Ticker = st.text_input('Ticker', value="SPY")
+start_date1 = st.date_input('Start Date', value=default_start_date)
+end_date1 = st.date_input('End Date', value=default_end_date)
 
-def calculate_covered_call(price, quantity, option_price, strike_price, days_until_expiry):
-    initial_premium = option_price * quantity * 100
-    max_risk = (price * quantity * 100) - initial_premium
-    breakeven = price - (initial_premium / (quantity * 100))
-    max_return = ((strike_price - price) * quantity * 100) + initial_premium
-    return_on_risk = (max_return / max_risk) * 100
-    annualized_return = ((return_on_risk / days_until_expiry) * 365)
-    return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
+st.write(f'Days Predicting: 30\nSeasonality: {SN}\nTicker: {Ticker}\nStart Date: {start_date1}\nEnd Date: {end_date1}')
 
-# Streamlit UI for Covered Call Calculator
-st.title("Covered Call Calculator")
+if st.button('Run SARIMAX Model'):
+    with st.spinner('Model is running, please wait...Estimated 4 Minutes'):
+        progress_bar = st.progress(0)
+        df = yf.Ticker(Ticker).history(period="max")
+        df = df.loc[pd.to_datetime(start_date1):pd.to_datetime(end_date1)]
+        df = df[['Close']].copy()
+        progress_bar.progress(10)
+        
+        C = df["Close"].dropna()
+        progress_bar.progress(30)
+        auto_model = auto_arima(C, trace=True, suppress_warnings=True)
+        arima_order = auto_model.order
+        seasonal_order = (arima_order[0], arima_order[1], arima_order[2], SN)
+        model = SARIMAX(C, order=arima_order, seasonal_order=seasonal_order).fit()
+        progress_bar.progress(80)
+        
+        cal = USFederalHolidayCalendar()
+        holidays = cal.holidays(start=df.index.max(), end=df.index.max() + pd.DateOffset(days=90))
+        future_dates = pd.bdate_range(start=df.index.max(), periods=30 + len(holidays), freq='B')
+        future_dates = future_dates[~future_dates.isin(holidays)][:30]
+        predictions = model.predict(start=len(C), end=len(C) + len(future_dates) - 1, dynamic=True)
+        
+        custom_business_day = CustomBusinessDay(calendar=USFederalHolidayCalendar())
+        future_dates_index = pd.date_range(start=future_dates[0], periods=len(predictions), freq=custom_business_day)
+        predictions.index = future_dates_index
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(df.index, df['Close'], label='Actual Close')
+        plt.plot(predictions.index, predictions, label='Forecast', linestyle='--')
+        plt.title(f'{Ticker} Stock Price Forecast')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.legend()
+        plt.tight_layout()
+        st.pyplot(plt)
+        
+        future_df = pd.DataFrame({'Forecasted Price': predictions.values}, index=future_dates_index)
+        st.write(future_df)
+        
+        plt.figure(figsize=(15, 7))
+        plt.plot(future_df.index, future_df['Forecasted Price'], label='Forecasted Price', linestyle='--', color='red')
+        plt.title(f'{Ticker} Historical and Forecasted Stock Price')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.legend()
+        plt.tight_layout()
+        st.pyplot(plt)
+        
+        progress_bar.progress(100)
+        st.success("Model run successfully!")
 
-ticker = st.text_input("Ticker Symbol", value="AAPL")
-if ticker:
-    expiration_dates = get_expiration_dates(ticker)
-    selected_expiration_date = st.selectbox("Select Expiration Date", expiration_dates)
+# Function to fetch data
+def fetch_stock_data(ticker, start_date, end_date):
+    data = yf.download(ticker, start=start_date, end=end_date)
+    return data
+
+# Streamlit app layout
+st.title('30 Days Stock Price Candlestick Chart')
+# User input for stock ticker
+stock_ticker = st.text_input('Enter Stock Ticker:', Ticker).upper()
+
+# Calculate dates for the last 30 business days
+end_date = datetime.today()
+start_date = end_date - timedelta(days=43)  # Extend the days to ensure we cover 30 business days approximately
+
+# Fetching the stock data
+data = fetch_stock_data(stock_ticker, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+
+# Check if data is empty
+if not data.empty:
+    # Create the candlestick chart
+    fig = go.Figure(data=[go.Candlestick(x=data.index,
+                                         open=data['Open'],
+                                         high=data['High'],
+                                         low=data['Low'],
+                                         close=data['Close'])])
+    # Update layout for a better visual
+    fig.update_layout(
+        title=f'{stock_ticker} Stock Price',
+        xaxis_title='Date',
+        yaxis_title='Price (USD)',
+        xaxis_rangeslider_visible=False,  # Hide the range slider
+        xaxis=dict(
+            tickmode='array',  # Use an array of custom tick values
+            tickvals=data.index[::3],  # Show every 3rd label to prevent overlap
+            ticktext=[date.strftime('%Y-%m-%d') for date in data.index][::3]  # Format date
+        )
+    )
+
+    # Update layout to make it wider
+    fig.update_layout(autosize=False, width=800, height=600)
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.write("No data available for the given ticker.")
+
+def calculate_business_days_ago(start_date, business_days):
+    while business_days > 0:
+        start_date -= timedelta(days=1)
+        if start_date.weekday() < 5:  # Monday = 0, Sunday = 6
+            business_days -= 1
+    return start_date
+
+if not data.empty:
+    # Extract dates and closing prices into a new DataFrame
+    closing_prices_df = data[['Close']].copy()
     
-    if selected_expiration_date:
-        chain = get_options_chain(ticker, selected_expiration_date)
-        
-        strike_prices = chain['strike'].unique()
-        
-        stock_price = yf.Ticker(ticker).history(period='1d')['Close'][0]
-        closest_strike_price = min(strike_prices, key=lambda x: abs(x - stock_price))
-        
-        selected_strike_price = st.selectbox("Select Strike Price", strike_prices, index=list(strike_prices).index(closest_strike_price))
-        
-        if selected_strike_price:
-            selected_option = chain[chain['strike'] == selected_strike_price]
-            bid_price = selected_option['bid'].values[0]
-            ask_price = selected_option['ask'].values[0]
+    # Display the DataFrame in Streamlit
+    st.write("Closing Prices DataFrame:", closing_prices_df)
+else:
+    st.write("No data available for the given ticker.")
 
-            bid_price = st.text_input("Bid Price", value=f"{bid_price:.2f}")
-            ask_price = st.text_input("Ask Price", value=f"{ask_price:.2f}")
+from pandas.tseries.offsets import BDay
 
-            option_type = st.radio("Select Option Type", ["Bid", "Ask"])
-            if option_type == "Bid":
-                option_price = float(bid_price)
-            else:
-                option_price = float(ask_price)
+def calculate_business_days_ago(target_date, days_ago):
+    return target_date - BDay(days_ago)
 
-            quantity = st.number_input("Quantity (shares)", value=100, step=1)
-            days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime('today')).days
+def get_date_metrics():
+    today = datetime.now()
+    
+    # Calculate 30 business days ago
+    business_days_ago_date = calculate_business_days_ago(today, 30).strftime('%Y-%m-%d')
+    
+    # QTD (Quarterly To Date)
+    first_day_of_current_quarter = datetime(today.year, 3 * ((today.month - 1) // 3) + 1, 1)
+    qtd_date = first_day_of_current_quarter.strftime('%Y-%m-%d')
+    
+    # YTD (Year To Date)
+    ytd_date = datetime(today.year, 1, 1).strftime('%Y-%m-%d')
+    
+    # MTD (Month To Date)
+    mtd_date = datetime(today.year, today.month, 1).strftime('%Y-%m-%d')
+    
+    # One Year Ago Date
+    one_year_ago_date = (today - BDay(365)).strftime('%Y-%m-%d')
+    
+    # Two Year Ago Date
+    two_year_ago_date = (today - BDay(365 * 2)).strftime('%Y-%m-%d')
+    
+    # Three Year Ago Date
+    three_year_ago_date = (today - BDay(365 * 3)).strftime('%Y-%m-%d')
+    
+    return business_days_ago_date, qtd_date, ytd_date, mtd_date, one_year_ago_date, two_year_ago_date, three_year_ago_date
 
-            if st.button("Calculate"):
-                initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_call(
-                    stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
+def display_dates():
+    st.title("Date Calculations")
+    
+    business_days_ago_date, qtd_date, ytd_date, mtd_date, one_year_ago_date, two_year_ago_date, three_year_ago_date = get_date_metrics()
+    
+    st.subheader("30 Business Days Ago")
+    st.text(business_days_ago_date)
+    
+    st.subheader("QTD (Quarterly To Date)")
+    st.text(qtd_date)
+    
+    st.subheader("YTD (Year To Date)")
+    st.text(ytd_date)
+    
+    st.subheader("MTD (Month To Date)")
+    st.text(mtd_date)
+    
+    st.subheader("One Year Ago Date")
+    st.text(one_year_ago_date)
+    
+    st.subheader("Two Years Ago Date")
+    st.text(two_year_ago_date)
+    
+    st.subheader("Three Years Ago Date")
+    st.text(three_year_ago_date)
 
-                r = 0.01  # Risk-free rate
-                iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
-                T = days_until_expiry / 365.0  # Time to expiration in years
-
-                delta, gamma, theta, vega, rho = calculate_greeks(stock_price, selected_strike_price, T, r, iv, 'call')
-
-                st.write("### Results:")
-                st.write(f"**Initial Premium Received:** ${initial_premium:.2f}")
-                st.write(f"**Maximum Risk:** ${max_risk:.2f}")
-                st.write(f"**Break-even Price at Expiry:** ${breakeven:.2f}")
-                st.write(f"**Maximum Return:** ${max_return:.2f}")
-                st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
-                st.write(f"**Annualized Return:** {annualized_return:.2f}%")
-                st.write("### Option Greeks:")
-                st.write(f"**Implied Volatility:** {iv * 100:.2f}")
-                st.write(f"**Delta:** {delta:.2f}")
-                st.write(f"**Gamma:** {gamma:.2f}")
-                st.write(f"**Theta (per day):** {theta:.2f}")
-                st.write(f"**Vega:** {vega:.2f}")
-                st.write(f"**Rho:** {rho:.2f}")
-
-# Black-Scholes formula for a call option
-def black_scholes_call(S, K, T, r, sigma):
-    if T == 0:
-        return max(0, S - K)
-    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
-    d2 = d1 - sigma * np.sqrt(T)
-    call_price = (S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2))
-    return call_price
-
-# Create price range with increments of 0.75
-initial_stock_price = stock_price
-strike_price = selected_strike_price
-days_to_expiration = days_until_expiry
-risk_free_rate = 0.01
-initial_premium_received = option_price
-price_range = np.round(np.arange(initial_stock_price - 13 * 0.75, initial_stock_price + 14 * 0.75, 0.75), 2)
-iv = selected_option['impliedVolatility'].values[0]
-
-# Create a DataFrame to store results
-columns = ['Price'] + [f'Day_{day}' for day in range(1, days_to_expiration + 1)]
-results = pd.DataFrame(columns=columns)
-
-# Calculate P&L for each stock price and each day
-for price in price_range:
-    row = [price]
-    for day in range(1, days_to_expiration + 1):
-        T = (days_to_expiration - day) / 365
-        call_price = black_scholes_call(price, strike_price, T, risk_free_rate, iv)
-        covered_call_value = (price - initial_stock_price) * 100 - (call_price * 100) + initial_premium_received * 100
-        row.append(covered_call_value)
-    results.loc[len(results)] = row
-
-# Apply conditional formatting
-def color_negative_red_positive_green(val):
-    if val > 0:
-        color = f'rgb({255 - int((val / results.max().max()) * 255)}, 255, {255 - int((val / results.max().max()) * 255)})'
-    else:
-        color = f'rgb(255, {255 - int((abs(val) / abs(results.min().min())) * 255)}, {255 - int((abs(val) / abs(results.min().min())) * 255)})'
-    return f'background-color: {color}; color: black;'
-
-formatted_results = results.style.applymap(color_negative_red_positive_green, subset=columns[1:])
-st.write("### Profit and Loss Table:")
-st.dataframe(formatted_results, height=1000)
+# Run the display function
+if __name__ == "__main__":
+    display_dates()
