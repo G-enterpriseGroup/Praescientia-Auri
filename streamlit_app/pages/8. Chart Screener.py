@@ -16,7 +16,10 @@ def get_stock_data(tickers, past_days):
 def calculate_apy(hist):
     dividends = hist['Dividends'].sum()
     initial_price = hist['Close'].iloc[0]
-    apy = (dividends / initial_price) * 100  # APY as a percentage
+    if initial_price != 0:
+        apy = (dividends / initial_price) * 100  # APY as a percentage
+    else:
+        apy = 0
     return apy
 
 def plot_stock_data(data):
@@ -33,7 +36,7 @@ def plot_stock_data(data):
         ax.set_ylabel('Price')
         ax.set_xlabel('Date')
 
-    for j in range(i+1, 8):
+    for j in range(i + 1, 8):
         fig.delaxes(axes[j])
 
     plt.tight_layout()
