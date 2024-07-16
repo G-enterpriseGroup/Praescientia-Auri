@@ -32,6 +32,13 @@ def plot_stock_data(data):
         ax = axes[i]
         hist['Close'].plot(ax=ax)
         apy = calculate_apy(hist)
+        
+        # Debugging information
+        st.write(f"Ticker: {ticker}")
+        st.write(f"Initial Price: {hist['Close'].iloc[0]}")
+        st.write(f"Total Dividends: {hist['Dividends'].sum()}")
+        st.write(f"Calculated APY: {apy:.2f}%")
+        
         ax.set_title(f"{ticker} - APY: {apy:.2f}%")
         ax.set_ylabel('Price')
         ax.set_xlabel('Date')
