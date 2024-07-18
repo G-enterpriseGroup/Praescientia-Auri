@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
-from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -40,16 +39,10 @@ if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
     df = pd.DataFrame(data)
     
-    # Build grid options
-    gb = GridOptionsBuilder.from_dataframe(df)
-    gb.configure_default_column(resizable=True, filterable=True)
-    gb.configure_grid_options(domLayout='autoHeight', ensureDomOrder=True)
-    gridOptions = gb.build()
-    
-    # Display DataFrame using AgGrid
-    AgGrid(df, gridOptions=gridOptions, height=500, width='100%', theme='light')
+    # Display DataFrame
+    st.write(df)
 
-# Adjust the width of the page
+# Adjust the width of the page and ensure table fits the data
 st.markdown(
     """
     <style>
@@ -59,6 +52,10 @@ st.markdown(
         padding-right: 2rem;
         padding-left: 2rem;
         padding-bottom: 2rem;
+    }
+    table {
+        width: 100% !important;
+        table-layout: auto !important;
     }
     </style>
     """,
