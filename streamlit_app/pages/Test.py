@@ -26,7 +26,12 @@ def fetch_dividend_info(ticker):
             return "No dividend information available"
         
     soup = BeautifulSoup(response.content, 'html.parser')
-    dividend_info = soup.select_one("div[class^='Dividend']").get_text(strip=True)
+    dividend_element = soup.select_one("div[class^='Dividend']")
+    if dividend_element:
+        dividend_info = dividend_element.get_text(strip=True)
+    else:
+        dividend_info = "No dividend information available"
+    
     return dividend_info
 
 def calculate_apy(hist):
