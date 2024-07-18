@@ -33,7 +33,7 @@ def get_dividend_info(ticker):
     return "N/A", "N/A"
 
 def plot_stock_data(data):
-    fig, axes = plt.subplots(4, 2, figsize=(15, 10))
+    fig, axes = plt.subplots(4, 2, figsize=(25, 20))
     axes = axes.flatten()
 
     for i, (ticker, hist) in enumerate(data.items()):
