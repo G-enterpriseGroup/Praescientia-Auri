@@ -15,22 +15,26 @@ def get_stock_data(ticker):
             tree = html.fromstring(response.content)
             price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
             yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
             ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency, "Ex Dividend Date": ex_dividend_date}
+            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
                 price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
                 yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
                 ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency, "Ex Dividend Date": ex_dividend_date}
+                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
             else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A", "Ex Dividend Date": "N/A"}
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
     except:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A", "Ex Dividend Date": "N/A"}
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
