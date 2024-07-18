@@ -21,4 +21,4 @@ scipy
 numpy
 pmdarima
 beautifulsoup4
-
+streamlit-aggrid
