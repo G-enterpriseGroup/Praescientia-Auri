@@ -20,5 +20,5 @@ yahoo_fin
 scipy
 numpy
 pmdarima
-
+beautifulsoup4
 
