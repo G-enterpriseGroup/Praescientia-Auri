@@ -13,17 +13,17 @@ def get_stock_data(ticker):
         response = requests.get(etf_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[1]/div[2]/div/div[1]/text()')[0]
-            yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
-            frequency = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[3]/div[2]/text()')[0]
+            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
             return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
-                price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[1]/div[2]/div/div[1]/text()')[0]
-                yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
-                frequency = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[3]/div[2]/text()')[0]
+                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
                 return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency}
             else:
                 return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A"}
@@ -49,7 +49,7 @@ st.markdown(
     """
     <style>
     .reportview-container .main .block-container{
-        max-width: 80%;
+        max-width: 100%;
         padding-top: 2rem;
         padding-right: 2rem;
         padding-left: 2rem;
@@ -57,8 +57,8 @@ st.markdown(
     }
     table {
         width: 100% !important;
-        height: auto !important;
-        table-layout: auto !important;
+        height: 100% !important;
+        table-layout: 100% !important;
     }
     </style>
     """,
