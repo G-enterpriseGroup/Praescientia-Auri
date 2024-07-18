@@ -40,9 +40,9 @@ if tickers:
     df = pd.DataFrame(data)
     
     # Display DataFrame
-    st.dataframe(df.style.set_properties(**{'width': '100%', 'text-align': 'left'}))
+    st.write(df)
 
-# Adjust the width of the page
+# Adjust the width of the page and ensure table fits the data
 st.markdown(
     """
     <style>
@@ -52,6 +52,10 @@ st.markdown(
         padding-right: 2rem;
         padding-left: 2rem;
         padding-bottom: 2rem;
+    }
+    table {
+        width: 100% !important;
+        table-layout: auto !important;
     }
     </style>
     """,
