@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
+import yfinance as yf
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -14,17 +15,24 @@ def get_stock_data(ticker):
         if response.status_code == 200:
             tree = html.fromstring(response.content)
             price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-            return {"Ticker": ticker, "Price": price}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
                 price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-                return {"Ticker": ticker, "Price": price}
             else:
-                return {"Ticker": ticker, "Price": "N/A"}
+                price = "N/A"
     except:
-        return {"Ticker": ticker, "Price": "N/A"}
+        price = "N/A"
+    
+    # Get yield percentage from yfinance
+    try:
+        stock_info = yf.Ticker(ticker)
+        div_yield = stock_info.info.get('dividendYield', 0) * 100
+    except:
+        div_yield = "N/A"
+    
+    return {"Ticker": ticker, "Price": price, "Yield %": div_yield}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -37,5 +45,5 @@ if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
     df = pd.DataFrame(data)
     
-    # Display DataFrame
-    st.dataframe(df)
+    # Display DataFrame with custom width and height
+    st.dataframe(df, width=1200, height=600)
