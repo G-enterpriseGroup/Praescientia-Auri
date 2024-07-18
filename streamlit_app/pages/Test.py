@@ -15,18 +15,20 @@ def get_stock_data(ticker):
             tree = html.fromstring(response.content)
             price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[1]/div[2]/div/div[1]/text()')[0]
             yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent}
+            frequency = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[3]/div[2]/text()')[0]
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
                 price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[1]/div[2]/div/div[1]/text()')[0]
                 yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent}
+                frequency = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[3]/div[2]/text()')[0]
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency}
             else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A"}
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A"}
     except:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A"}
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
