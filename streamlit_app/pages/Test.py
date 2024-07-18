@@ -2,6 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
+import requests
+from bs4 import BeautifulSoup
 
 def get_stock_data(tickers, past_days):
     data = {}
@@ -12,6 +14,20 @@ def get_stock_data(tickers, past_days):
         hist = stock.history(start=start_date, end=end_date)
         data[ticker] = hist
     return data
+
+def fetch_dividend_info(ticker):
+    etf_url = f"https://stockanalysis.com/etf/{ticker}/dividend/"
+    stock_url = f"https://stockanalysis.com/stocks/{ticker}/dividend/"
+    
+    response = requests.get(etf_url)
+    if response.status_code != 200:
+        response = requests.get(stock_url)
+        if response.status_code != 200:
+            return None
+        
+    soup = BeautifulSoup(response.content, 'html.parser')
+    dividend_info = soup.select_one("div[class^='Dividend']").get_text(strip=True)
+    return dividend_info
 
 def calculate_apy(hist):
     dividends = hist['Dividends'].sum()
@@ -31,23 +47,4 @@ def plot_stock_data(data):
         ax = axes[i]
         hist['Close'].plot(ax=ax)
         apy = calculate_apy(hist)
-        ax.set_title(f"{ticker} - APY: {apy:.2f}%")
-        ax.set_ylabel('Price')
-        ax.set_xlabel('Date')
-
-    for j in range(i+1, len(axes)):
-        fig.delaxes(axes[j])
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-st.title("Multi-Function Charts with Dividend Yield (APY)")
-
-tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
-past_days = st.number_input("Past days from today", min_value=1, value=90)
-
-tickers = [ticker.strip() for ticker in tickers_input.split(",")]
-
-if st.button("Generate Charts"):
-    data = get_stock_data(tickers, past_days)
-    plot_stock_data(data)
+        dividend_info = fetch_dividend_info(ticker
