@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
-import yfinance as yf
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -15,24 +14,19 @@ def get_stock_data(ticker):
         if response.status_code == 200:
             tree = html.fromstring(response.content)
             price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+            yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
                 price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+                yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent}
             else:
-                price = "N/A"
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A"}
     except:
-        price = "N/A"
-    
-    # Get yield percentage from yfinance
-    try:
-        stock_info = yf.Ticker(ticker)
-        div_yield = stock_info.info.get('dividendYield', 0) * 100
-    except:
-        div_yield = "N/A"
-    
-    return {"Ticker": ticker, "Price": price, "Yield %": div_yield}
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -45,5 +39,21 @@ if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
     df = pd.DataFrame(data)
     
-    # Display DataFrame with custom width and height
-    st.dataframe(df, width=1200, height=600)
+    # Display DataFrame
+    st.dataframe(df.style.set_properties(**{'width': '100%', 'text-align': 'left'}))
+
+# Adjust the width of the page
+st.markdown(
+    """
+    <style>
+    .reportview-container .main .block-container{
+        max-width: 80%;
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
