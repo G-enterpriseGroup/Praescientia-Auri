@@ -15,29 +15,20 @@ def get_stock_data(tickers, past_days):
         data[ticker] = hist
     return data
 
-def fetch_apy(ticker):
-    try:
-        url_etf = f"https://stockanalysis.com/etf/{ticker}/dividend/"
-        url_stock = f"https://stockanalysis.com/stocks/{ticker}/dividend/"
-        
-        response_etf = requests.get(url_etf)
-        tree_etf = html.fromstring(response_etf.content)
-        apy_etf = tree_etf.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')
-        
-        if apy_etf:
-            return float(apy_etf[0].strip('%'))
-        
-        response_stock = requests.get(url_stock)
-        tree_stock = html.fromstring(response_stock.content)
-        apy_stock = tree_stock.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')
-        
-        if apy_stock:
-            return float(apy_stock[0].strip('%'))
-        
-        return 0.0
-    except Exception as e:
-        st.error(f"Error fetching APY for {ticker}: {e}")
-        return 0.0
+def get_apy(ticker):
+    urls = [
+        f"https://stockanalysis.com/etf/{ticker}/dividend/",
+        f"https://stockanalysis.com/stocks/{ticker}/dividend/"
+    ]
+    for url in urls:
+        response = requests.get(url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
+            apy = tree.xpath(apy_xpath)
+            if apy:
+                return apy[0].text_content()
+    return "N/A"
 
 def plot_stock_data(data):
     fig, axes = plt.subplots(4, 2, figsize=(15, 10))
@@ -48,8 +39,8 @@ def plot_stock_data(data):
             break
         ax = axes[i]
         hist['Close'].plot(ax=ax)
-        apy = fetch_apy(ticker)
-        ax.set_title(f"{ticker} - APY: {apy:.2f}%")
+        apy = get_apy(ticker)
+        ax.set_title(f"{ticker} - APY: {apy}")
         ax.set_ylabel('Price')
         ax.set_xlabel('Date')
 
