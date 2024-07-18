@@ -16,7 +16,8 @@ def get_stock_data(ticker):
             price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
             yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
             frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency}
+            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency, "Ex Dividend Date": ex_dividend_date}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
@@ -24,11 +25,12 @@ def get_stock_data(ticker):
                 price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
                 yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
                 frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency}
+                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency, "Ex Dividend Date": ex_dividend_date}
             else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A"}
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A", "Ex Dividend Date": "N/A"}
     except:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A"}
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A", "Ex Dividend Date": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -58,7 +60,7 @@ st.markdown(
     table {
         width: 100% !important;
         height: 100% !important;
-        table-layout: 100% !important;
+        table-layout: auto !important;
     }
     </style>
     """,
