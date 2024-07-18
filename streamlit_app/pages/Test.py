@@ -55,6 +55,7 @@ st.markdown(
     }
     table {
         width: 100% !important;
+        height: 100% !important;
         table-layout: auto !important;
     }
     </style>
