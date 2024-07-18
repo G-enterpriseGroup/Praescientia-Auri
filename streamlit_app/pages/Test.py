@@ -23,7 +23,7 @@ def fetch_dividend_info(ticker):
     if response.status_code != 200:
         response = requests.get(stock_url)
         if response.status_code != 200:
-            return None
+            return "No dividend information available"
         
     soup = BeautifulSoup(response.content, 'html.parser')
     dividend_info = soup.select_one("div[class^='Dividend']").get_text(strip=True)
@@ -52,7 +52,7 @@ def plot_stock_data(data):
         ax.set_ylabel('Price')
         ax.set_xlabel('Date')
 
-    for j in range(i+1, len(axes)):
+    for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
     plt.tight_layout()
