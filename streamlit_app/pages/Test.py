@@ -47,4 +47,24 @@ def plot_stock_data(data):
         ax = axes[i]
         hist['Close'].plot(ax=ax)
         apy = calculate_apy(hist)
-        dividend_info = fetch_dividend_info(ticker
+        dividend_info = fetch_dividend_info(ticker)
+        ax.set_title(f"{ticker} - APY: {apy:.2f}%\n{dividend_info}")
+        ax.set_ylabel('Price')
+        ax.set_xlabel('Date')
+
+    for j in range(i+1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    st.pyplot(fig)
+
+st.title("Multi-Function Charts with Dividend Yield (APY)")
+
+tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
+past_days = st.number_input("Past days from today", min_value=1, value=90)
+
+tickers = [ticker.strip() for ticker in tickers_input.split(",")]
+
+if st.button("Generate Charts"):
+    data = get_stock_data(tickers, past_days)
+    plot_stock_data(data)
