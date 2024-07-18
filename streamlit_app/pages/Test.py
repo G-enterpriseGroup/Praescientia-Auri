@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import requests
 from lxml import html
 
+# Set Streamlit to always run in wide mode
+st.set_page_config(layout="wide")
+
 def get_stock_data(tickers, past_days):
     data = {}
     end_date = pd.to_datetime("today")
@@ -33,7 +36,7 @@ def get_dividend_info(ticker):
     return "N/A", "N/A"
 
 def plot_stock_data(data):
-    fig, axes = plt.subplots(4, 2, figsize=(25, 20), dpi=300)
+    fig, axes = plt.subplots(4, 2, figsize=(25, 20), dpi=400)
     axes = axes.flatten()
 
     for i, (ticker, hist) in enumerate(data.items()):
