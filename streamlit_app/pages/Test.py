@@ -13,14 +13,14 @@ def get_stock_data(ticker):
         response = requests.get(etf_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+            price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[1]/div[2]/div/div[1]/text()')[0]
             yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
             return {"Ticker": ticker, "Price": price, "Yield %": yield_percent}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
-                price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+                price = tree.xpath('/html/body/div/div[1]/div[2]/main/div[1]/div[2]/div/div[1]/text()')[0]
                 yield_percent = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div/text()')[0]
                 return {"Ticker": ticker, "Price": price, "Yield %": yield_percent}
             else:
@@ -42,12 +42,12 @@ if tickers:
     # Display DataFrame
     st.write(df)
 
-# Adjust the width of the page and ensure table fits the data
+# Adjust the width and height of the page and ensure table fits the data
 st.markdown(
     """
     <style>
     .reportview-container .main .block-container{
-        max-width: 100%;
+        max-width: 80%;
         padding-top: 2rem;
         padding-right: 2rem;
         padding-left: 2rem;
