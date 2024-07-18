@@ -42,9 +42,9 @@ def plot_stock_data(data):
         ax = axes[i]
         hist['Close'].plot(ax=ax)
         annual_dividend, apy = get_dividend_info(ticker)
-        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}")
-        ax.set_ylabel('Price')
-        ax.set_xlabel('Date')
+        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=14, fontweight='bold')
+        ax.set_ylabel('Price', fontsize=12)
+        ax.set_xlabel('Date', fontsize=12)
 
     for j in range(i+1, 8):
         fig.delaxes(axes[j])
