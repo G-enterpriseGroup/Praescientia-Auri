@@ -15,7 +15,7 @@ def get_stock_data(tickers, past_days):
         data[ticker] = hist
     return data
 
-def get_apy(ticker):
+def get_dividend_info(ticker):
     urls = [
         f"https://stockanalysis.com/etf/{ticker}/dividend/",
         f"https://stockanalysis.com/stocks/{ticker}/dividend/"
@@ -24,11 +24,13 @@ def get_apy(ticker):
         response = requests.get(url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
+            dividend_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
+            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div'
+            dividend = tree.xpath(dividend_xpath)
             apy = tree.xpath(apy_xpath)
-            if apy:
-                return apy[0].text_content()
-    return "N/A"
+            if dividend and apy:
+                return dividend[0].text_content(), apy[0].text_content()
+    return "N/A", "N/A"
 
 def plot_stock_data(data):
     fig, axes = plt.subplots(4, 2, figsize=(15, 10))
@@ -39,8 +41,8 @@ def plot_stock_data(data):
             break
         ax = axes[i]
         hist['Close'].plot(ax=ax)
-        apy = get_apy(ticker)
-        ax.set_title(f"{ticker} - APY: {apy}")
+        annual_dividend, apy = get_dividend_info(ticker)
+        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}")
         ax.set_ylabel('Price')
         ax.set_xlabel('Date')
 
@@ -50,7 +52,7 @@ def plot_stock_data(data):
     plt.tight_layout()
     st.pyplot(fig)
 
-st.title("Multi-Function Charts with Dividend Yield (APY)")
+st.title("Multi-Function Charts with Dividend Yield (Annual Dividend and APY)")
 
 tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
