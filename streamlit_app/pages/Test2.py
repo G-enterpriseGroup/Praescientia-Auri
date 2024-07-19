@@ -30,8 +30,8 @@ def get_dividend_info(ticker):
         response = requests.get(url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            dividend_xpath = '//div[contains(text(), "Annual Dividend")]/following-sibling::div'
-            apy_xpath = '//div[contains(text(), "Dividend Yield")]/following-sibling::div'
+            dividend_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
+            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div'
             dividend = tree.xpath(dividend_xpath)
             apy = tree.xpath(apy_xpath)
             if dividend and apy:
@@ -77,7 +77,7 @@ components.html(
     height=0
 )
 
-tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
+tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "PULS, CLOZ, MFA")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
 
 tickers = [ticker.strip() for ticker in tickers_input.split(",")]
