@@ -8,15 +8,20 @@ import math
 from matplotlib.font_manager import FontProperties
 
 # Set Streamlit to always run in wide mode
+st.set_page_config(layout="wide")
 
 def get_stock_data(tickers, past_days):
     data = {}
     end_date = pd.to_datetime("today")
     start_date = end_date - pd.Timedelta(days=past_days)
     for ticker in tickers:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(start=start_date, end=end_date)
-        data[ticker] = hist
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(start=start_date, end=end_date)
+            if not hist.empty:
+                data[ticker] = hist
+        except Exception as e:
+            st.error(f"Error fetching data for {ticker}: {e}")
     return data
 
 def get_dividend_info(ticker):
@@ -69,4 +74,7 @@ tickers = [ticker.strip() for ticker in tickers_input.split(",")]
 
 if st.button("Generate Charts"):
     data = get_stock_data(tickers, past_days)
-    plot_stock_data(data)
+    if data:
+        plot_stock_data(data)
+    else:
+        st.error("No data available for the given tickers and date range.")
