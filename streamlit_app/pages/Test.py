@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 from lxml import html
+import math
 
 # Set Streamlit to always run in wide mode
 st.set_page_config(layout="wide")
@@ -36,23 +37,23 @@ def get_dividend_info(ticker):
     return "N/A", "N/A"
 
 def plot_stock_data(data):
-    fig, axes = plt.subplots(4, 2, figsize=(22, 20), dpi=1000)
+    num_tickers = len(data)
+    num_rows = math.ceil(num_tickers / 2)  # Always 2 columns
+    fig, axes = plt.subplots(num_rows, 2, figsize=(25, 5 * num_rows), dpi=400)
     axes = axes.flatten()
 
     for i, (ticker, hist) in enumerate(data.items()):
-        if i >= 8:
-            break
         ax = axes[i]
         hist['Close'].plot(ax=ax)
         annual_dividend, apy = get_dividend_info(ticker)
-        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=18, fontweight='bold')
-        ax.set_ylabel('Price', fontsize=14)
-        ax.set_xlabel('Date', fontsize=14)
+        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=14, fontweight='bold')
+        ax.set_ylabel('Price', fontsize=12)
+        ax.set_xlabel('Date', fontsize=12)
 
-    for j in range(i+1, 8):
+    for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
-    plt.subplots_adjust(hspace=4)  # Add height between charts
+    plt.subplots_adjust(hspace=0.5)  # Add height between charts
     plt.tight_layout()
     st.pyplot(fig)
 
