@@ -42,19 +42,24 @@ def get_dividend_info(ticker):
 
 def plot_stock_data(data):
     num_tickers = len(data)
-    num_rows = math.ceil(num_tickers / 2)  # Always 2 columns
+    num_cols = 2
+    num_rows = math.ceil(num_tickers / num_cols)
 
-    for ticker, hist in data.items():
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close Price'))
-        annual_dividend, apy = get_dividend_info(ticker)
-        fig.update_layout(
-            title=f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}",
-            xaxis_title='Date',
-            yaxis_title='Price',
-            template='plotly_white'
-        )
-        st.plotly_chart(fig)
+    for i, (ticker, hist) in enumerate(data.items()):
+        col = i % num_cols
+        row = i // num_cols
+
+        with st.container():
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close Price'))
+            annual_dividend, apy = get_dividend_info(ticker)
+            fig.update_layout(
+                title=f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}",
+                xaxis_title='Date',
+                yaxis_title='Price',
+                template='plotly_white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
 
