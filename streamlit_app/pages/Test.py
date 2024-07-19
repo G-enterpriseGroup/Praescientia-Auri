@@ -53,7 +53,7 @@ def plot_stock_data(data):
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
-    plt.subplots_adjust(hspace=0.5)  # Add height between charts
+    plt.subplots_adjust(hspace=10)  # Add height between charts
     plt.tight_layout()
     st.pyplot(fig)
 
