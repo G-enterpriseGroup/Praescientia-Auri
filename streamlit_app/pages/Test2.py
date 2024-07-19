@@ -64,7 +64,7 @@ def plot_stock_data(data):
 
 st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
 
-tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
+tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "BXMT, MFA, SCM, PUTW, PFRL, CLOZ, TYLG, PULS, MFC, IAUF, SPYI, ZIVBß")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
 
 tickers = [ticker.strip() for ticker in tickers_input.split(",")]
