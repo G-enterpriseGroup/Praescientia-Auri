@@ -8,7 +8,6 @@ import math
 from matplotlib.font_manager import FontProperties
 
 # Set Streamlit to always run in wide mode
-st.set_page_config(layout="wide")
 
 def get_stock_data(tickers, past_days):
     data = {}
