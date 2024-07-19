@@ -1,62 +1,68 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
 import requests
 from lxml import html
 
-def get_stock_data(tickers, past_days):
-    data = {}
-    end_date = pd.to_datetime("today")
-    start_date = end_date - pd.Timedelta(days=past_days)
-    for ticker in tickers:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(start=start_date, end=end_date)
-        data[ticker] = hist
-    return data
-
-def get_apy(ticker):
-    urls = [
-        f"https://stockanalysis.com/etf/{ticker}/dividend/",
-        f"https://stockanalysis.com/stocks/{ticker}/dividend/"
-    ]
-    for url in urls:
-        response = requests.get(url)
+# Function to get stock data
+def get_stock_data(ticker):
+    base_url = "https://stockanalysis.com"
+    etf_url = f"{base_url}/etf/{ticker}/dividend/"
+    stock_url = f"{base_url}/stocks/{ticker}/dividend/"
+    
+    try:
+        response = requests.get(etf_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
-            apy = tree.xpath(apy_xpath)
-            if apy:
-                return apy[0].text_content()
-    return "N/A"
+            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency, "Ex Dividend Date": ex_dividend_date}
+        else:
+            response = requests.get(stock_url)
+            if response.status_code == 200:
+                tree = html.fromstring(response.content)
+                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Frequency": frequency, "Ex Dividend Date": ex_dividend_date}
+            else:
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A", "Ex Dividend Date": "N/A"}
+    except:
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Frequency": "N/A", "Ex Dividend Date": "N/A"}
 
-def plot_stock_data(data):
-    fig, axes = plt.subplots(4, 2, figsize=(15, 10))
-    axes = axes.flatten()
+# Streamlit App
+st.title("Stock and ETF Dashboard")
 
-    for i, (ticker, hist) in enumerate(data.items()):
-        if i >= 8:
-            break
-        ax = axes[i]
-        hist['Close'].plot(ax=ax)
-        apy = get_apy(ticker)
-        ax.set_title(f"{ticker} - APY: {apy}")
-        ax.set_ylabel('Price')
-        ax.set_xlabel('Date')
+# Input tickers
+tickers = st.text_input("Enter tickers separated by commas").split(',')
 
-    for j in range(i+1, 8):
-        fig.delaxes(axes[j])
+# Fetch data for each ticker
+if tickers:
+    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
+    df = pd.DataFrame(data)
+    
+    # Display DataFrame
+    st.write(df)
 
-    plt.tight_layout()
-    st.pyplot(fig)
-
-st.title("Multi-Function Charts with Dividend Yield (APY)")
-
-tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
-past_days = st.number_input("Past days from today", min_value=1, value=90)
-
-tickers = [ticker.strip() for ticker in tickers_input.split(",")]
-
-if st.button("Generate Charts"):
-    data = get_stock_data(tickers, past_days)
-    plot_stock_data(data)
+# Adjust the width and height of the page and ensure table fits the data
+st.markdown(
+    """
+    <style>
+    .reportview-container .main .block-container{
+        max-width: 100%;
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+    }
+    table {
+        width: 100% !important;
+        height: 100% !important;
+        table-layout: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
