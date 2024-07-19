@@ -6,10 +6,8 @@ import requests
 from lxml import html
 import math
 from matplotlib.font_manager import FontProperties
-import streamlit.components.v1 as components
 
 # Set Streamlit to always run in wide mode
-st.set_page_config(layout="wide")
 
 def get_stock_data(tickers, past_days):
     data = {}
@@ -30,8 +28,8 @@ def get_dividend_info(ticker):
         response = requests.get(url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            dividend_xpath = '//div[contains(@class, "dividends__table")]//div[contains(@class, "value")]'
-            apy_xpath = '//div[contains(@class, "dividends__table")]//div[contains(@class, "label")]'
+            dividend_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
+            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div'
             dividend = tree.xpath(dividend_xpath)
             apy = tree.xpath(apy_xpath)
             if dividend and apy:
@@ -54,7 +52,7 @@ def plot_stock_data(data):
         font_properties = FontProperties(weight='bold', size=14)
         ax.tick_params(axis='both', which='major', labelsize=14)
         ax.set_xlim(hist.index.min(), hist.index.max())  # Set x-axis limits
-        ax.set_ylim(hist['Close'].min() * 0.95, hist['Close'].max() * 1.05)  # Set y-axis limits with padding
+        ax.set_ylim(hist['Close'].min(), hist['Close'].max())  # Set y-axis limits
 
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
@@ -64,20 +62,7 @@ def plot_stock_data(data):
 
 st.title("Multi-Function Charts with Dividend Yield (Annual Dividend and APY)")
 
-# JavaScript for automatically converting to uppercase and replacing spaces with commas
-components.html(
-    """
-    <script>
-    const textarea = document.getElementsByTagName('textarea')[0];
-    textarea.addEventListener('input', function() {
-        this.value = this.value.toUpperCase().replace(/ /g, ',');
-    });
-    </script>
-    """,
-    height=0
-)
-
-tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "PULS, CLOZ, MFA")
+tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
 
 tickers = [ticker.strip() for ticker in tickers_input.split(",")]
