@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import requests
 from lxml import html
 import math
+from matplotlib.font_manager import FontProperties
 
 # Set Streamlit to always run in wide mode
 st.set_page_config(layout="wide")
@@ -46,12 +47,11 @@ def plot_stock_data(data):
         ax = axes[i]
         hist['Close'].plot(ax=ax)
         annual_dividend, apy = get_dividend_info(ticker)
-        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=19 fontweight='bold')
+        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=19, fontweight='bold')
         ax.set_ylabel('Price', fontsize=12)
         ax.set_xlabel('Date', fontsize=12)
         font_properties = FontProperties(weight='bold', size=14)
-        ax.tick_params(axis='both', which='major', labelsize=14, labelrotation=0, pad=2, width=2, length=6, fontproperties=font_properties)
-
+        ax.tick_params(axis='both', which='major', labelsize=14)
 
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
