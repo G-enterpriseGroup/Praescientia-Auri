@@ -40,7 +40,7 @@ def get_dividend_info(ticker):
 def plot_stock_data(data):
     num_tickers = len(data)
     num_rows = math.ceil(num_tickers / 2)  # Always 2 columns
-    fig, axes = plt.subplots(num_rows, 2, figsize=(25, 8 * num_rows), dpi=1000)
+    fig, axes = plt.subplots(num_rows, 2, figsize=(25, 5 * num_rows), dpi=1000)
     axes = axes.flatten()
 
     for i, (ticker, hist) in enumerate(data.items()):
@@ -52,6 +52,8 @@ def plot_stock_data(data):
         ax.set_xlabel('Date', fontsize=12)
         font_properties = FontProperties(weight='bold', size=14)
         ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_xlim(hist.index.min(), hist.index.max())  # Set x-axis limits
+        ax.set_ylim(hist['Close'].min(), hist['Close'].max())  # Set y-axis limits
 
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
