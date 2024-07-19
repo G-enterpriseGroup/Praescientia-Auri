@@ -1,11 +1,11 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import requests
 from lxml import html
 import math
-from matplotlib.font_manager import FontProperties
 
 # Set Streamlit to always run in wide mode
 st.set_page_config(layout="wide")
@@ -43,27 +43,26 @@ def get_dividend_info(ticker):
 
 def plot_stock_data(data):
     num_tickers = len(data)
-    num_rows = math.ceil(num_tickers / 2)  # Always 2 columns
-    fig, axes = plt.subplots(num_rows, 2, figsize=(25,6 * num_rows), dpi=300)
-    axes = axes.flatten()
+    num_cols = 2
+    num_rows = math.ceil(num_tickers / num_cols)
+    
+    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
 
-    for i, (ticker, hist) in enumerate(data.items()):
-        ax = axes[i]
-        hist['Close'].plot(ax=ax)
-        annual_dividend, apy = get_dividend_info(ticker)
-        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=19, fontweight='bold')
-        ax.set_ylabel('Price', fontsize=12)
-        ax.set_xlabel('Date', fontsize=12)
-        font_properties = FontProperties(weight='bold', size=14)
-        ax.tick_params(axis='both', which='major', labelsize=14)
+    row = 1
+    col = 1
 
-    for j in range(i + 1, len(axes)):
-        fig.delaxes(axes[j])
+    for ticker, hist in data.items():
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name=ticker), row=row, col=col)
+        if col == num_cols:
+            row += 1
+            col = 1
+        else:
+            col += 1
 
-    plt.tight_layout()
-    st.pyplot(fig)
+    fig.update_layout(height=300*num_rows, width=1200, showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
 
-st.title("Multi-Function Charts with Dividend Yield (Annual Dividend and APY)")
+st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
 
 tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
