@@ -46,10 +46,10 @@ def plot_stock_data(data):
         ax = axes[i]
         hist['Close'].plot(ax=ax)
         annual_dividend, apy = get_dividend_info(ticker)
-        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=14, fontweight='bold')
+        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}", fontsize=19 fontweight='bold')
         ax.set_ylabel('Price', fontsize=12)
         ax.set_xlabel('Date', fontsize=12)
-        ax.tick_params(axis='both', which='major', labelsize=10)  # Adjusting the size of the axis values
+        ax.tick_params(axis='both', which='major', labelsize=14 fontweight='bold')  # Adjusting the size of the axis values
 
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
