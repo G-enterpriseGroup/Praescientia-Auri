@@ -30,8 +30,8 @@ def get_dividend_info(ticker):
         response = requests.get(url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            dividend_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
-            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div'
+            dividend_xpath = '//div[contains(@class, "dividends__table")]//div[contains(@class, "value")]'
+            apy_xpath = '//div[contains(@class, "dividends__table")]//div[contains(@class, "label")]'
             dividend = tree.xpath(dividend_xpath)
             apy = tree.xpath(apy_xpath)
             if dividend and apy:
@@ -41,7 +41,7 @@ def get_dividend_info(ticker):
 def plot_stock_data(data):
     num_tickers = len(data)
     num_rows = math.ceil(num_tickers / 2)  # Always 2 columns
-    fig, axes = plt.subplots(num_rows, 2, figsize=(25, 5 * num_rows), dpi=300)
+    fig, axes = plt.subplots(num_rows, 2, figsize=(25, 6.5 * num_rows), dpi=300)
     axes = axes.flatten()
 
     for i, (ticker, hist) in enumerate(data.items()):
@@ -54,7 +54,7 @@ def plot_stock_data(data):
         font_properties = FontProperties(weight='bold', size=14)
         ax.tick_params(axis='both', which='major', labelsize=14)
         ax.set_xlim(hist.index.min(), hist.index.max())  # Set x-axis limits
-        ax.set_ylim(hist['Close'].min(), hist['Close'].max())  # Set y-axis limits
+        ax.set_ylim(hist['Close'].min() * 0.95, hist['Close'].max() * 1.05)  # Set y-axis limits with padding
 
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
