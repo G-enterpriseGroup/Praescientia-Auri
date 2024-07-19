@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import requests
 from lxml import html
 import math
@@ -44,22 +45,22 @@ def plot_stock_data(data):
     num_tickers = len(data)
     num_cols = 2
     num_rows = math.ceil(num_tickers / num_cols)
+    
+    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
 
-    for i, (ticker, hist) in enumerate(data.items()):
-        col = i % num_cols
-        row = i // num_cols
+    row = 1
+    col = 1
 
-        with st.container():
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close Price'))
-            annual_dividend, apy = get_dividend_info(ticker)
-            fig.update_layout(
-                title=f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}",
-                xaxis_title='Date',
-                yaxis_title='Price',
-                template='plotly_white'
-            )
-            st.plotly_chart(fig, use_container_width=True)
+    for ticker, hist in data.items():
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name=ticker), row=row, col=col)
+        if col == num_cols:
+            row += 1
+            col = 1
+        else:
+            col += 1
+
+    fig.update_layout(height=300*num_rows, width=1200, showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
 
 st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
 
