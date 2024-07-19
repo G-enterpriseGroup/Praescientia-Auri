@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import requests
 from lxml import html
 
@@ -33,26 +33,19 @@ def get_dividend_info(ticker):
     return "N/A", "N/A"
 
 def plot_stock_data(data):
-    fig, axes = plt.subplots(4, 2, figsize=(15, 10))
-    axes = axes.flatten()
-
-    for i, (ticker, hist) in enumerate(data.items()):
-        if i >= 8:
-            break
-        ax = axes[i]
-        hist['Close'].plot(ax=ax)
+    for ticker, hist in data.items():
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close Price'))
         annual_dividend, apy = get_dividend_info(ticker)
-        ax.set_title(f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}")
-        ax.set_ylabel('Price')
-        ax.set_xlabel('Date')
+        fig.update_layout(
+            title=f"{ticker} - Annual Dividend: {annual_dividend}, APY: {apy}",
+            xaxis_title='Date',
+            yaxis_title='Price',
+            template='plotly_white'
+        )
+        st.plotly_chart(fig)
 
-    for j in range(i+1, 8):
-        fig.delaxes(axes[j])
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-st.title("Multi-Function Charts with Dividend Yield (Annual Dividend and APY)")
+st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
 
 tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "AAPL, MSFT, GOOG")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
