@@ -71,7 +71,8 @@ def plot_stock_data(data):
         else:
             col += 1
 
-    fig.update_layout(height=300*num_rows, width=1200, showlegend=False)
+    fig.update_layout(height=400*num_rows, width=1200, showlegend=False)
+    fig.update_xaxes(type='category', categoryorder='category ascending')
     st.plotly_chart(fig, use_container_width=True)
 
 st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
