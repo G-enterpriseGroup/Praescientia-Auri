@@ -53,7 +53,7 @@ def plot_stock_data(data):
     num_cols = 2
     num_rows = math.ceil(num_tickers / num_cols)
     
-    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
+    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
 
     row = 1
     col = 1
@@ -65,17 +65,17 @@ def plot_stock_data(data):
                                      low=hist['Heikin_Ashi_Low'],
                                      close=hist['Heikin_Ashi_Close'],
                                      name=ticker), row=row, col=col)
-        fig.update_xaxes(tickangle=45, nticks=10, row=row, col=col)
+        fig.update_xaxes(row=row, col=col, tickangle=45)
         if col == num_cols:
             row += 1
             col = 1
         else:
             col += 1
 
-    fig.update_layout(height=400*num_rows, width=1200, showlegend=False, title_text="Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
+    fig.update_layout(height=400*num_rows, width=1200, showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
-st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
+st.title("Interactive Stock Charts with Dividend Yield")
 
 tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "BXMT, MFA, SCM, PUTW, PFRL, CLOZ, TYLG, PULS, MFC, IAUF, SPYI, ZIVB")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
