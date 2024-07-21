@@ -19,6 +19,11 @@ def get_stock_data(tickers, past_days):
             stock = yf.Ticker(ticker)
             hist = stock.history(start=start_date, end=end_date)
             if not hist.empty:
+                hist['Heikin_Ashi_Close'] = (hist['Open'] + hist['High'] + hist['Low'] + hist['Close']) / 4
+                hist['Heikin_Ashi_Open'] = (hist['Open'].shift(1) + hist['Close'].shift(1)) / 2
+                hist.iloc[0, hist.columns.get_loc('Heikin_Ashi_Open')] = (hist['Open'].iloc[0] + hist['Close'].iloc[0]) / 2
+                hist['Heikin_Ashi_High'] = hist[['High', 'Heikin_Ashi_Open', 'Heikin_Ashi_Close']].max(axis=1)
+                hist['Heikin_Ashi_Low'] = hist[['Low', 'Heikin_Ashi_Open', 'Heikin_Ashi_Close']].min(axis=1)
                 data[ticker] = hist
             else:
                 st.warning(f"No data found for {ticker}")
@@ -54,7 +59,12 @@ def plot_stock_data(data):
     col = 1
 
     for ticker, hist in data.items():
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name=ticker), row=row, col=col)
+        fig.add_trace(go.Candlestick(x=hist.index,
+                                     open=hist['Heikin_Ashi_Open'],
+                                     high=hist['Heikin_Ashi_High'],
+                                     low=hist['Heikin_Ashi_Low'],
+                                     close=hist['Heikin_Ashi_Close'],
+                                     name=ticker), row=row, col=col)
         if col == num_cols:
             row += 1
             col = 1
