@@ -22,7 +22,7 @@ def get_stock_data(tickers, past_days):
                 hist['HA_Close'] = (hist['Open'] + hist['Close'] + hist['High'] + hist['Low']) / 4
                 hist['HA_Open'] = (hist['Open'] + hist['Close']) / 2
                 for i in range(1, len(hist)):
-                    hist['HA_Open'].iloc[i] = (hist['HA_Open'].iloc[i-1] + hist['HA_Close'].iloc[i-1]) / 2
+                    hist.at[hist.index[i], 'HA_Open'] = (hist.at[hist.index[i-1], 'HA_Open'] + hist.at[hist.index[i-1], 'HA_Close']) / 2
                 hist['HA_High'] = hist[['High', 'HA_Open', 'HA_Close']].max(axis=1)
                 hist['HA_Low'] = hist[['Low', 'HA_Open', 'HA_Close']].min(axis=1)
                 data[ticker] = hist
@@ -39,12 +39,12 @@ def get_dividend_info(ticker):
         response = requests.get(url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            dividend_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div'
-            apy_xpath = '/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div'
+            dividend_xpath = '//div[@data-test="dividends-section"]//div[contains(@class,"value")][1]/text()'
+            apy_xpath = '//div[@data-test="dividends-section"]//div[contains(@class,"value")][2]/text()'
             dividend = tree.xpath(dividend_xpath)
             apy = tree.xpath(apy_xpath)
             if dividend and apy:
-                return dividend[0].text_content(), apy[0].text_content()
+                return dividend[0].strip(), apy[0].strip()
     return "N/A", "N/A"
 
 def plot_stock_data(data):
