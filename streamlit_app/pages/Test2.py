@@ -65,14 +65,14 @@ def plot_stock_data(data):
                                      low=hist['Heikin_Ashi_Low'],
                                      close=hist['Heikin_Ashi_Close'],
                                      name=ticker), row=row, col=col)
+        fig.update_xaxes(tickangle=45, nticks=10, row=row, col=col)
         if col == num_cols:
             row += 1
             col = 1
         else:
             col += 1
 
-    fig.update_layout(height=400*num_rows, width=1200, showlegend=False)
-    fig.update_xaxes(type='category', categoryorder='category ascending')
+    fig.update_layout(height=400*num_rows, width=1200, showlegend=False, title_text="Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
     st.plotly_chart(fig, use_container_width=True)
 
 st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
