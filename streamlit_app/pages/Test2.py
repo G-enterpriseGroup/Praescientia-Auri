@@ -52,7 +52,11 @@ def plot_stock_data(data):
     num_cols = 2
     num_rows = math.ceil(num_tickers / num_cols)
     
-    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
+    fig = make_subplots(
+        rows=num_rows, cols=num_cols,
+        subplot_titles=[f"{ticker} - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()],
+        vertical_spacing=0.3  # Increased vertical spacing between charts
+    )
 
     row = 1
     col = 1
@@ -71,7 +75,7 @@ def plot_stock_data(data):
         else:
             col += 1
 
-    fig.update_layout(height=300*num_rows, width=1200, showlegend=False)
+    fig.update_layout(height=600*num_rows, width=1200, showlegend=False)  # Increased height for each row
     st.plotly_chart(fig, use_container_width=True)
 
 st.title("Interactive Heikin Ashi Stock Charts with Dividend Yield (Annual Dividend and APY)")
