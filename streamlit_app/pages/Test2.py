@@ -17,7 +17,7 @@ def get_stock_data(tickers, past_days):
     for ticker in tickers:
         try:
             stock = yf.Ticker(ticker)
-            hist = stock.history(start=start_date, end=end_date, interval="1d")
+            hist = stock.history(start=start_date, end=end_date)
             if not hist.empty:
                 data[ticker] = hist
             else:
@@ -54,23 +54,20 @@ def plot_stock_data(data):
     col = 1
 
     for ticker, hist in data.items():
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name=ticker, line=dict(color='green')), row=row, col=col)
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name=ticker), row=row, col=col)
         if col == num_cols:
             row += 1
             col = 1
         else:
             col += 1
 
-    fig.update_layout(height=300*num_rows, width=1200, showlegend=False, plot_bgcolor='white')
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgrey')
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgrey')
-    
+    fig.update_layout(height=300*num_rows, width=1200, showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
 st.title("Interactive Stock Charts with Dividend Yield (Annual Dividend and APY)")
 
 tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "BXMT, MFA, SCM, PUTW, PFRL, CLOZ, TYLG, PULS, MFC, IAUF, SPYI, ZIVB")
-past_days = st.number_input("Past days from today", min_value=1, value=180)  # Extend to 180 days for better visualization
+past_days = st.number_input("Past days from today", min_value=1, value=90)
 
 tickers = [ticker.strip() for ticker in tickers_input.split(",")]
 
