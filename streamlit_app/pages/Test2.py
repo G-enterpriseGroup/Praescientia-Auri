@@ -19,14 +19,13 @@ def get_stock_data(tickers, past_days):
             stock = yf.Ticker(ticker)
             hist = stock.history(start=start_date, end=end_date)
             if not hist.empty:
-                hist['Heikin_Ashi_Close'] = (hist['Open'] + hist['High'] + hist['Low'] + hist['Close']) / 4
-                hist['Heikin_Ashi_Open'] = (hist['Open'].shift(1) + hist['Close'].shift(1)) / 2
-                hist.iloc[0, hist.columns.get_loc('Heikin_Ashi_Open')] = (hist['Open'].iloc[0] + hist['Close'].iloc[0]) / 2
-                hist['Heikin_Ashi_High'] = hist[['High', 'Heikin_Ashi_Open', 'Heikin_Ashi_Close']].max(axis=1)
-                hist['Heikin_Ashi_Low'] = hist[['Low', 'Heikin_Ashi_Open', 'Heikin_Ashi_Close']].min(axis=1)
+                hist['HA_Close'] = (hist['Open'] + hist['Close'] + hist['High'] + hist['Low']) / 4
+                hist['HA_Open'] = (hist['Open'] + hist['Close']) / 2
+                for i in range(1, len(hist)):
+                    hist['HA_Open'].iloc[i] = (hist['HA_Open'].iloc[i-1] + hist['HA_Close'].iloc[i-1]) / 2
+                hist['HA_High'] = hist[['High', 'HA_Open', 'HA_Close']].max(axis=1)
+                hist['HA_Low'] = hist[['Low', 'HA_Open', 'HA_Close']].min(axis=1)
                 data[ticker] = hist
-            else:
-                st.warning(f"No data found for {ticker}")
         except Exception as e:
             st.error(f"Error fetching data for {ticker}: {e}")
     return data
@@ -53,30 +52,29 @@ def plot_stock_data(data):
     num_cols = 2
     num_rows = math.ceil(num_tickers / num_cols)
     
-    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
+    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
 
     row = 1
     col = 1
 
     for ticker, hist in data.items():
-        fig.add_trace(go.Candlestick(x=hist.index,
-                                     open=hist['Heikin_Ashi_Open'],
-                                     high=hist['Heikin_Ashi_High'],
-                                     low=hist['Heikin_Ashi_Low'],
-                                     close=hist['Heikin_Ashi_Close'],
-                                     name=ticker), row=row, col=col)
-        fig.update_xaxes(row=row, col=col, tickangle=45)
-        fig.update_yaxes(row=row, col=col)
+        fig.add_trace(go.Candlestick(
+            x=hist.index,
+            open=hist['HA_Open'],
+            high=hist['HA_High'],
+            low=hist['HA_Low'],
+            close=hist['HA_Close'],
+            name=ticker), row=row, col=col)
         if col == num_cols:
             row += 1
             col = 1
         else:
             col += 1
 
-    fig.update_layout(height=400*num_rows, width=1200, showlegend=False, title_text="Interactive Stock Charts with Dividend Yield")
+    fig.update_layout(height=300*num_rows, width=1200, showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
-st.title("Interactive Stock Charts with Dividend Yield")
+st.title("Interactive Heikin Ashi Stock Charts with Dividend Yield (Annual Dividend and APY)")
 
 tickers_input = st.text_area("Tickers Entry Box (separated by commas)", "BXMT, MFA, SCM, PUTW, PFRL, CLOZ, TYLG, PULS, MFC, IAUF, SPYI, ZIVB")
 past_days = st.number_input("Past days from today", min_value=1, value=90)
