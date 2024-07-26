@@ -22,12 +22,17 @@ url = 'https://www.tradingview.com/watchlists/139248623/'  # Replace with the ac
 st.title("Ticker List")
 st.write("Fetching tickers from HTML file...")
 
-tickers = fetch_tickers(url)
-cleaned_tickers = clean_tickers(tickers)
+if st.button('Refresh'):
+    tickers = fetch_tickers(url)
+    st.session_state.cleaned_tickers = clean_tickers(tickers)
 
-if cleaned_tickers:
+if 'cleaned_tickers' not in st.session_state:
+    tickers = fetch_tickers(url)
+    st.session_state.cleaned_tickers = clean_tickers(tickers)
+
+if st.session_state.cleaned_tickers:
     st.write("Tickers found:")
-    tickers_str = ", ".join(cleaned_tickers)
+    tickers_str = ", ".join(st.session_state.cleaned_tickers)
     st.write(tickers_str)
 else:
     st.write("No tickers found.")
