@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
+import streamlit.components.v1 as components
 
 def fetch_tickers(url):
     response = requests.get(url)
@@ -34,5 +35,11 @@ if st.session_state.cleaned_tickers:
     st.write("Tickers found:")
     tickers_str = ", ".join(st.session_state.cleaned_tickers)
     st.write(tickers_str)
+    
+    # Add a button to copy the tickers to the clipboard
+    copy_button = f"""
+    <button onclick="navigator.clipboard.writeText('{tickers_str}')">Copy Tickers</button>
+    """
+    components.html(copy_button)
 else:
     st.write("No tickers found.")
