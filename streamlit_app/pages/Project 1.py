@@ -1,16 +1,29 @@
 import streamlit as st
-import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
 
-# Create a Streamlit app
-st.title("TradingView Watchlist Viewer")
+# Setup the Selenium driver
+options = Options()
+options.add_argument('--headless')
+options.add_argument('--disable-gpu')
+service = ChromeService(executable_path=ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 
-# Get the watchlist link from the user
-watchlist_link = st.text_input("https://www.tradingview.com/watchlists/139248623/")
+# Fetch the webpage
+url = "https://www.tradingview.com/watchlists/139248623/"
+driver.get(url)
 
-if watchlist_link:
-    try:
-        # Read the watchlist from the link
-        watchlist_df = pd.read_html(watchlist_link)[0]
-        st.write(watchlist_df)
-    except Exception as e:
-        st.error("Error parsing watchlist from the provided link. Please check if the link is correct.")
+# Extract content using XPath
+xpath = "/html/body/div[4]/div[4]/div/div/div[2]/div"
+content = driver.find_element(By.XPATH, xpath).text
+
+# Close the driver
+driver.quit()
+
+# Display content in Streamlit
+st.title("TradingView Watchlist Content")
+st.write(content)
