@@ -1,25 +1,29 @@
 import streamlit as st
-import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 
-# URL of the text file
-url = "https://www.tradingview.com/978c08d6-1b5b-4b3f-8b77-2c67ce670c8e"
+def fetch_tickers(url):
+    response = requests.get(url)
+    html = response.text
 
-# Fetch the content from the URL
-response = requests.get(url)
+    start = html.find('"symbols":[') + len('"symbols":[')
+    end = html.find(']', start)
+    symbols_str = html[start:end]
+    symbols = [symbol.strip('"') for symbol in symbols_str.split(',')]
 
-# Ensure the request was successful
-if response.status_code == 200:
-    # Process the content as needed
-    content = response.text
+    return symbols
 
-    # Convert the content to a DataFrame (assuming it's CSV formatted text)
-    from io import StringIO
-    df = pd.read_csv(StringIO(content))
+# URL of the HTML file
+url = 'https://www.tradingview.com/watchlists/139248623/'  # Replace with the actual URL of your HTML file
 
-    # Display the DataFrame
-    st.dataframe(df)
+st.title("Ticker List")
+st.write("Fetching tickers from HTML file...")
+
+tickers = fetch_tickers(url)
+
+if tickers:
+    st.write("Tickers found:")
+    for ticker in tickers:
+        st.write(ticker)
 else:
-    st.error("Failed to fetch the data. Please check the URL.")
-
-# Run the Streamlit app with: streamlit run your_script_name.py
+    st.write("No tickers found.")
