@@ -19,8 +19,8 @@ def clean_tickers(tickers):
 # URL of the HTML file
 url = 'https://www.tradingview.com/watchlists/139248623/'  # Replace with the actual URL of your HTML file
 
-st.title("Ticker List")
-st.write("Fetching tickers from HTML file...")
+st.title("Raj's Trading View Red List")
+st.write("Fetching tickers from file...")
 
 if st.button('Refresh'):
     tickers = fetch_tickers(url)
