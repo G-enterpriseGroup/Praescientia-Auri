@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
+import streamlit.components.v1 as components
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -39,8 +40,11 @@ def get_stock_data(ticker):
 # Streamlit App
 st.title("Stock and ETF Dashboard")
 
+# Create a placeholder for the input text box
+input_placeholder = st.empty()
+
 # Input tickers
-tickers = st.text_input("Enter tickers separated by commas").split(',')
+tickers = input_placeholder.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
@@ -70,3 +74,21 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# Add a paste button using a custom component
+paste_button = """
+<button onclick="navigator.clipboard.readText().then(text => {
+    window.streamlitElement.textContent = text;
+    window.streamlitElement.dispatchEvent(new Event('input', { bubbles: true }));
+})">Paste</button>
+"""
+
+components.html(paste_button)
+
+# JavaScript to set the input element
+components.html("""
+<script>
+const textInput = document.querySelector('input[type="text"]');
+window.streamlitElement = textInput;
+</script>
+""")
