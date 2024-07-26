@@ -1,13 +1,29 @@
+import requests
+from bs4 import BeautifulSoup
 import streamlit as st
-import streamlit.components.v1 as components
 
-# URL to your TradingView watchlist
-tradingview_url = "https://www.tradingview.com/watchlists/139248623/"
+def get_tradingview_watchlist(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    tickers = []
 
-# Embed the TradingView watchlist using an iframe
-iframe_code = f"""
-<iframe src="{tradingview_url}" width="100%" height="600px" frameborder="0" allowfullscreen></iframe>
-"""
+    for ticker in soup.find_all('div', class_='tv-symbol-name'):
+        tickers.append(ticker.text.strip())
 
-# Display the TradingView widget
-components.html(iframe_code, height=600)
+    return tickers
+
+# Replace with your TradingView watchlist URL
+watchlist_url = 'https://www.tradingview.com/watchlists/139248623/'
+
+# Fetch tickers
+tickers = get_tradingview_watchlist(watchlist_url)
+
+# Streamlit app
+st.title('TradingView Watchlist')
+if tickers:
+    st.write(tickers)
+else:
+    st.write("No tickers found or unable to access the watchlist.")
