@@ -9,7 +9,7 @@ def fetch_tickers(url):
     start = html.find('"symbols":[') + len('"symbols":[')
     end = html.find(']', start)
     symbols_str = html[start:end]
-    symbols = [symbol.split(":")[1].strip('"') for symbol in symbols_str.split(',')]
+    symbols = [symbol.strip('"') for symbol in symbols_str.split(',')]
 
     return symbols
 
