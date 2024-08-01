@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
+import yfinance as yf
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -38,17 +39,30 @@ def get_stock_data(ticker):
     except:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to get stock returns
+# Function to get stock returns using yfinance
 def get_returns(ticker):
-    # Placeholder values, you need to replace these with actual data fetching logic
-    return {
-        "1 month": "N/A",
-        "3 months": "N/A",
-        "6 months": "N/A",
-        "1 year": "N/A",
-        "5 years": "N/A",
-        "all": "N/A"
-    }
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="5y")
+        
+        returns = {
+            "1 month": (hist['Close'][-1] - hist['Close'][-22]) / hist['Close'][-22] * 100,
+            "3 months": (hist['Close'][-1] - hist['Close'][-66]) / hist['Close'][-66] * 100,
+            "6 months": (hist['Close'][-1] - hist['Close'][-132]) / hist['Close'][-132] * 100,
+            "1 year": (hist['Close'][-1] - hist['Close'][-252]) / hist['Close'][-252] * 100,
+            "5 years": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100,
+            "all": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100,
+        }
+        return returns
+    except:
+        return {
+            "1 month": "N/A",
+            "3 months": "N/A",
+            "6 months": "N/A",
+            "1 year": "N/A",
+            "5 years": "N/A",
+            "all": "N/A"
+        }
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
