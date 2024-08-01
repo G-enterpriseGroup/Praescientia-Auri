@@ -47,9 +47,9 @@ def get_returns(ticker):
     start_dates = {
         "1d": end_date - timedelta(days=1),
         "5d": end_date - timedelta(days=5),
-        "1mo": end_date.replace(day=1) - relativedelta.relativedelta(months=1),
-        "3mo": end_date.replace(day=1) - relativedelta.relativedelta(months=3),
-        "6mo": end_date.replace(day=1) - relativedelta.relativedelta(months=6),
+        "1mo": end_date.replace(day=1) - relativedelta(months=1),
+        "3mo": end_date.replace(day=1) - relativedelta(months=3),
+        "6mo": end_date.replace(day=1) - relativedelta(months=6),
         "ytd": datetime(end_date.year, 1, 1),
         "1y": end_date - timedelta(days=365),
         "5y": end_date - timedelta(days=365*5),
