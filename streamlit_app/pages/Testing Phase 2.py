@@ -2,15 +2,14 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
-import yfinance as yf
-from datetime import datetime, timedelta
 
 # Function to get stock data
 def get_stock_data(ticker):
     base_url = "https://stockanalysis.com"
     etf_url = f"{base_url}/etf/{ticker}/dividend/"
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
-    
+    tradingview_url = f"https://www.tradingview.com/symbols/NYSE-{ticker}/"
+
     try:
         response = requests.get(etf_url)
         if response.status_code == 200:
@@ -21,7 +20,6 @@ def get_stock_data(ticker):
             ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
             frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
             dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
@@ -32,39 +30,59 @@ def get_stock_data(ticker):
                 ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
                 frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
                 dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
             else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
-    except:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+                price = yield_percent = annual_dividend = ex_dividend_date = frequency = dividend_growth = "N/A"
 
-# Function to get returns for a given ticker and periods
-def get_returns(ticker):
-    stock = yf.Ticker(ticker)
-    end_date = datetime.today()
-    start_dates = {
-        "1d": end_date - timedelta(days=1),
-        "5d": end_date - timedelta(days=5),
-        "1mo": end_date - timedelta(days=30),
-        "3mo": end_date - timedelta(days=90),
-        "6mo": end_date - timedelta(days=180),
-        "ytd": datetime(end_date.year, 1, 1),
-        "1y": end_date - timedelta(days=365),
-        "5y": end_date - timedelta(days=1825),
-        "max": datetime(1900, 1, 1)
-    }
-    
-    returns = {}
-    for period, start_date in start_dates.items():
-        data = stock.history(start=start_date, end=end_date)
-        if not data.empty:
-            start_price = data['Close'].iloc[0]
-            end_price = data['Close'].iloc[-1]
-            returns[period] = f"{(((end_price - start_price) / start_price) * 100):.2f}%"
+        # Get additional data from TradingView
+        response_tv = requests.get(tradingview_url)
+        if response_tv.status_code == 200:
+            tree_tv = html.fromstring(response_tv.content)
+            day_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')[0]
+            days_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')[0]
+            month_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')[0]
+            month_6 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')[0]
+            ytd = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')[0]
+            year_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')[0]
+            year_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0]
+            all_time = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0]
         else:
-            returns[period] = "N/A"
-    
-    return returns
+            day_1 = days_5 = month_1 = month_6 = ytd = year_1 = year_5 = all_time = "N/A"
+
+        return {
+            "Ticker": ticker,
+            "Price": price,
+            "Yield %": yield_percent,
+            "Annual Dividend": annual_dividend,
+            "Ex Dividend Date": ex_dividend_date,
+            "Frequency": frequency,
+            "Dividend Growth %": dividend_growth,
+            "1 Day": day_1,
+            "5 Days": days_5,
+            "1 Month": month_1,
+            "6 Month": month_6,
+            "YTD": ytd,
+            "1 Year": year_1,
+            "5 Year": year_5,
+            "All Time": all_time
+        }
+    except:
+        return {
+            "Ticker": ticker,
+            "Price": "N/A",
+            "Yield %": "N/A",
+            "Annual Dividend": "N/A",
+            "Ex Dividend Date": "N/A",
+            "Frequency": "N/A",
+            "Dividend Growth %": "N/A",
+            "1 Day": "N/A",
+            "5 Days": "N/A",
+            "1 Month": "N/A",
+            "6 Month": "N/A",
+            "YTD": "N/A",
+            "1 Year": "N/A",
+            "5 Year": "N/A",
+            "All Time": "N/A"
+        }
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -74,13 +92,8 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
-    stock_data_list = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    returns_data_list = [get_returns(ticker.strip()) for ticker in tickers if ticker.strip()]
-    
-    for stock_data, returns_data in zip(stock_data_list, returns_data_list):
-        stock_data.update(returns_data)
-    
-    df = pd.DataFrame(stock_data_list)
+    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
+    df = pd.DataFrame(data)
     
     # Display DataFrame
     st.write(df)
@@ -99,7 +112,7 @@ st.markdown(
     table {
         width: 100% !important;
         height: 100% !important;
-        table-layout: auto !important.
+        table-layout: auto !important;
     }
     </style>
     """,
