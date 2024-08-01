@@ -16,6 +16,7 @@ def get_performance_data(ticker):
             return {
                 "Current Price": "N/A",
                 "1 Day": "N/A",
+                "5 Day": "N/A",
                 "1 Month": "N/A",
                 "6 Month": "N/A",
                 "YTD": "N/A",
@@ -27,8 +28,11 @@ def get_performance_data(ticker):
         current_price = hist['Close'][-1]
         one_day_return = ((hist['Close'][-1] / hist['Close'][-2]) - 1) * 100
 
+        # 5 Day Return Calculation
+        five_day_return = ((hist['Close'][-1] / hist['Close'][-5]) - 1) * 100 if len(hist) >= 5 else "N/A"
+
         # Ensure enough data points exist for each period calculation
-        one_month_return = ((hist['Close'][-1] / hist['Close'][-22]) - 1) * 100 if len(hist) >= 22 else "N/A"
+        one_month_return = ((hist['Close'][-1] / hist['Close'][-21]) - 1) * 100 if len(hist) >= 21 else "N/A"
         six_month_return = ((hist['Close'][-1] / hist['Close'][-126]) - 1) * 100 if len(hist) >= 126 else "N/A"
         one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100 if len(hist) >= 252 else "N/A"
 
@@ -43,11 +47,13 @@ def get_performance_data(ticker):
         else:
             ytd_return = "N/A"
 
-        five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100 if len(hist) > 0 else "N/A"
+        # Five Year Return Calculation
+        five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100 if len(hist) >= 252 * 5 else "N/A"
         
         performance_data = {
             "Current Price": f"${current_price:.2f}",
             "1 Day": f"{one_day_return:.2f}%" if isinstance(one_day_return, float) else "N/A",
+            "5 Day": f"{five_day_return:.2f}%" if isinstance(five_day_return, float) else "N/A",
             "1 Month": f"{one_month_return:.2f}%" if isinstance(one_month_return, float) else "N/A",
             "6 Month": f"{six_month_return:.2f}%" if isinstance(six_month_return, float) else "N/A",
             "YTD": f"{ytd_return:.2f}%" if isinstance(ytd_return, float) else "N/A",
@@ -62,6 +68,7 @@ def get_performance_data(ticker):
         return {
             "Current Price": "N/A",
             "1 Day": "N/A",
+            "5 Day": "N/A",
             "1 Month": "N/A",
             "6 Month": "N/A",
             "YTD": "N/A",
