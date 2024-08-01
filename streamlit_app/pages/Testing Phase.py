@@ -4,6 +4,7 @@ import requests
 from lxml import html
 import yfinance as yf
 from datetime import datetime, timedelta
+import pandas.tseries.offsets as offsets
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -43,13 +44,13 @@ def get_returns(ticker):
     stock = yf.Ticker(ticker)
     end_date = datetime.today()
     start_dates = {
-        "1d": end_date - timedelta(days=1),
-        "5d": end_date - timedelta(days=5),
-        "3mo": end_date - timedelta(days=90),
-        "6mo": end_date - timedelta(days=180),
+        "1d": end_date - offsets.BDay(1),
+        "5d": end_date - offsets.BDay(5),
+        "3mo": end_date - offsets.BDay(65),
+        "6mo": end_date - offsets.BDay(130),
         "ytd": datetime(end_date.year, 1, 1),
-        "1y": end_date - timedelta(days=365),
-        "5y": end_date - timedelta(days=1825),
+        "1y": end_date - offsets.BDay(260),
+        "5y": end_date - offsets.BDay(1300),
         "max": datetime(1900, 1, 1)
     }
     
