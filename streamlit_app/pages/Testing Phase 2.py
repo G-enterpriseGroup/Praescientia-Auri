@@ -8,43 +8,53 @@ def get_stock_data(ticker):
     base_url = "https://stockanalysis.com"
     etf_url = f"{base_url}/etf/{ticker}/dividend/"
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
-    tradingview_url = f"https://www.tradingview.com/symbols/{ticker}/"
+    tradingview_url = f"https://www.tradingview.com/symbols/NYSE-{ticker}/"
 
     try:
+        # Attempt to get data from stockanalysis.com
         response = requests.get(etf_url)
+        if response.status_code != 200:
+            response = requests.get(stock_url)
+
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
-            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
+            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')
+            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')
+            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')
+            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')
+            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')
+            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')
+            
+            price = price[0] if price else "N/A"
+            yield_percent = yield_percent[0] if yield_percent else "N/A"
+            annual_dividend = annual_dividend[0] if annual_dividend else "N/A"
+            ex_dividend_date = ex_dividend_date[0] if ex_dividend_date else "N/A"
+            frequency = frequency[0] if frequency else "N/A"
+            dividend_growth = dividend_growth[0] if dividend_growth else "N/A"
         else:
-            response = requests.get(stock_url)
-            if response.status_code == 200:
-                tree = html.fromstring(response.content)
-                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
-                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-            else:
-                price = yield_percent = annual_dividend = ex_dividend_date = frequency = dividend_growth = "N/A"
+            price = yield_percent = annual_dividend = ex_dividend_date = frequency = dividend_growth = "N/A"
 
         # Get additional data from TradingView
         response_tv = requests.get(tradingview_url)
         if response_tv.status_code == 200:
             tree_tv = html.fromstring(response_tv.content)
-            day_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')[0]
-            days_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')[0]
-            month_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')[0]
-            month_6 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')[0]
-            ytd = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')[0]
-            year_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')[0]
-            year_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0]
-            all_time = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0]
+            day_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')
+            days_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')
+            month_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')
+            month_6 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')
+            ytd = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')
+            year_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')
+            year_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')
+            all_time = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')
+            
+            day_1 = day_1[0] if day_1 else "N/A"
+            days_5 = days_5[0] if days_5 else "N/A"
+            month_1 = month_1[0] if month_1 else "N/A"
+            month_6 = month_6[0] if month_6 else "N/A"
+            ytd = ytd[0] if ytd else "N/A"
+            year_1 = year_1[0] if year_1 else "N/A"
+            year_5 = year_5[0] if year_5 else "N/A"
+            all_time = all_time[0] if all_time else "N/A"
         else:
             day_1 = days_5 = month_1 = month_6 = ytd = year_1 = year_5 = all_time = "N/A"
 
@@ -65,7 +75,8 @@ def get_stock_data(ticker):
             "5 Year": year_5,
             "All Time": all_time
         }
-    except:
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
         return {
             "Ticker": ticker,
             "Price": "N/A",
