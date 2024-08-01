@@ -66,7 +66,7 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for each ticker
 if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
 
     # Get additional data for each ticker
     additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
