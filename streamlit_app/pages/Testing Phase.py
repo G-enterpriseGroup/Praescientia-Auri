@@ -36,8 +36,6 @@ def get_stock_data(ticker):
     except Exception as e:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-import requests
-from lxml import html
 
 def get_additional_stock_or_etf_data(ticker):
     base_url = f"https://www.tradingview.com/symbols/{ticker}"
@@ -66,9 +64,8 @@ def get_additional_stock_or_etf_data(ticker):
         else:
             return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Months": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Years": "N/A", "All Time": "N/A"}
     except Exception as e:
+        print(f"Error fetching data for {ticker}: {e}")
         return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Months": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Years": "N/A", "All Time": "N/A"}
-
-
 
 
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
