@@ -24,4 +24,4 @@ beautifulsoup4
 streamlit-aggrid
 selenium
 webdriver-manager
-dateutil
+python-dateutil
