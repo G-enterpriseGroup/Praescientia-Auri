@@ -46,44 +46,38 @@ def get_returns(ticker):
         hist = stock.history(period="max")
 
         if not hist.empty:
-            def calculate_return(start, end):
-                if end < len(hist):
-                    return f"{((hist['Close'][-1] - hist['Close'][-end]) / hist['Close'][-end] * 100):.2f}%"
+            def calculate_return(period):
+                if len(hist) > period:
+                    return f"{((hist['Close'][-1] - hist['Close'][-period]) / hist['Close'][-period] * 100):.2f}%"
                 else:
                     return "N/A"
             
             returns = {
-                "1 day": calculate_return(1, 1),
-                "5 days": calculate_return(5, 5),
-                "1 month": calculate_return(21, 21),
-                "6 months": calculate_return(126, 126),
-                "Year to date": calculate_return(len(hist), len(hist) - hist.index.get_loc(hist[hist.index.year == hist.index[-1].year].index[0])),
-                "1 year": calculate_return(252, 252),
-                "5 years": calculate_return(252 * 5, 252 * 5),
-                "All time": calculate_return(len(hist), len(hist)-1),
+                "5 days": calculate_return(5),
+                "1 month": calculate_return(21),
+                "6 months": calculate_return(126),
+                "Year to date": calculate_return(len(hist) - hist.index.get_loc(hist[hist.index.year == hist.index[-1].year].index[0])),
+                "1 year": calculate_return(252),
+                "5 years": calculate_return(252 * 5),
             }
             return returns
         else:
             return {
-                "1 day": "N/A",
                 "5 days": "N/A",
                 "1 month": "N/A",
                 "6 months": "N/A",
                 "Year to date": "N/A",
                 "1 year": "N/A",
                 "5 years": "N/A",
-                "All time": "N/A"
             }
     except Exception as e:
         return {
-            "1 day": "N/A",
             "5 days": "N/A",
             "1 month": "N/A",
             "6 months": "N/A",
             "Year to date": "N/A",
             "1 year": "N/A",
             "5 years": "N/A",
-            "All time": "N/A"
         }
 
 # Streamlit App
