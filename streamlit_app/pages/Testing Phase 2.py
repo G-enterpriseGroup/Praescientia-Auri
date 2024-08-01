@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+from datetime import datetime
 
 # Function to get stock performance data using yfinance
 def get_performance_data(ticker):
@@ -31,13 +32,16 @@ def get_performance_data(ticker):
         six_month_return = ((hist['Close'][-1] / hist['Close'][-126]) - 1) * 100 if len(hist) >= 126 else "N/A"
         one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100 if len(hist) >= 252 else "N/A"
 
-        # Calculate YTD return using the start of the year
-        current_year = pd.Timestamp.now().year
-        start_of_year = f'{current_year}-01-01'
+        # Calculate YTD return using the closest available trading day at the start of the year
+        current_year = datetime.now().year
+        start_of_year_index = hist.index.searchsorted(f'{current_year}-01-01')
         
         # Use the closest available date to the start of the year
-        ytd_start_price = hist.loc[hist.index[hist.index.get_loc(start_of_year, method='bfill')], 'Close']
-        ytd_return = ((current_price / ytd_start_price) - 1) * 100 if ytd_start_price is not None else "N/A"
+        if start_of_year_index < len(hist):
+            ytd_start_price = hist['Close'][start_of_year_index]
+            ytd_return = ((current_price / ytd_start_price) - 1) * 100
+        else:
+            ytd_return = "N/A"
 
         five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100 if len(hist) > 0 else "N/A"
         
