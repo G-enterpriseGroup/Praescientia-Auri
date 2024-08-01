@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from lxml import html
 import yfinance as yf
+from datetime import datetime
 
 # Function to get dividend data from Stock Analysis
 def get_dividend_data(ticker):
@@ -71,8 +72,14 @@ def get_performance_data(ticker):
         one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100 if len(hist) > 252 else "N/A"
         
         # Calculate YTD return
-        ytd_start_index = hist.index.get_loc(f'{hist.index[-1].year}-01-01', method='bfill')
-        ytd_return = ((hist['Close'][-1] / hist['Close'][ytd_start_index]) - 1) * 100 if ytd_start_index is not None else "N/A"
+        current_year = datetime.now().year
+        start_of_year = f'{current_year}-01-01'
+        if start_of_year in hist.index:
+            start_price = hist.loc[start_of_year]['Close']
+        else:
+            start_price = hist['Close'].loc[hist.index.get_loc(start_of_year, method='bfill')]
+        
+        ytd_return = ((hist['Close'][-1] / start_price) - 1) * 100 if start_price is not None else "N/A"
 
         five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100 if len(hist) > 0 else "N/A"
         
