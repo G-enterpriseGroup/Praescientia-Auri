@@ -35,26 +35,36 @@ def get_stock_data(ticker):
                 returns = get_returns(ticker)
                 return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth, **returns}
             else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
-    except:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker, fallback=True)}
+    except Exception as e:
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker, fallback=True)}
 
 # Function to get stock returns using yfinance
-def get_returns(ticker):
+def get_returns(ticker, fallback=False):
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="5y")
         
-        returns = {
-            "1 month": (hist['Close'][-1] - hist['Close'][-22]) / hist['Close'][-22] * 100,
-            "3 months": (hist['Close'][-1] - hist['Close'][-66]) / hist['Close'][-66] * 100,
-            "6 months": (hist['Close'][-1] - hist['Close'][-132]) / hist['Close'][-132] * 100,
-            "1 year": (hist['Close'][-1] - hist['Close'][-252]) / hist['Close'][-252] * 100,
-            "5 years": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100,
-            "all": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100,
-        }
-        return returns
-    except:
+        if not hist.empty:
+            returns = {
+                "1 month": (hist['Close'][-1] - hist['Close'][-22]) / hist['Close'][-22] * 100 if len(hist) > 22 else "N/A",
+                "3 months": (hist['Close'][-1] - hist['Close'][-66]) / hist['Close'][-66] * 100 if len(hist) > 66 else "N/A",
+                "6 months": (hist['Close'][-1] - hist['Close'][-132]) / hist['Close'][-132] * 100 if len(hist) > 132 else "N/A",
+                "1 year": (hist['Close'][-1] - hist['Close'][-252]) / hist['Close'][-252] * 100 if len(hist) > 252 else "N/A",
+                "5 years": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100 if len(hist) > 0 else "N/A",
+                "all": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100 if len(hist) > 0 else "N/A",
+            }
+            return returns
+        else:
+            return {
+                "1 month": "N/A",
+                "3 months": "N/A",
+                "6 months": "N/A",
+                "1 year": "N/A",
+                "5 years": "N/A",
+                "all": "N/A"
+            }
+    except Exception as e:
         return {
             "1 month": "N/A",
             "3 months": "N/A",
