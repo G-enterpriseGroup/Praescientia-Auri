@@ -4,7 +4,7 @@ import requests
 from lxml import html
 import yfinance as yf
 
-# Function to get stock data from Stock Analysis
+# Function to get dividend data from Stock Analysis
 def get_dividend_data(ticker):
     base_url = "https://stockanalysis.com"
     etf_url = f"{base_url}/etf/{ticker}/dividend/"
@@ -50,23 +50,40 @@ def get_performance_data(ticker):
         # Fetch historical market data
         hist = stock.history(period="5y")
         
+        # Check if historical data is returned correctly
+        if hist.empty:
+            st.write(f"No historical data found for {ticker}. Please check the ticker symbol.")
+            return {
+                "Current Price": "N/A",
+                "1 Day": "N/A",
+                "1 Month": "N/A",
+                "6 Month": "N/A",
+                "YTD": "N/A",
+                "1 Year": "N/A",
+                "5 Year": "N/A",
+            }
+        
         # Calculate performance metrics
         current_price = hist['Close'][-1]
         one_day_return = ((hist['Close'][-1] / hist['Close'][-2]) - 1) * 100
-        one_month_return = ((hist['Close'][-1] / hist['Close'][-22]) - 1) * 100
-        six_month_return = ((hist['Close'][-1] / hist['Close'][-126]) - 1) * 100
-        one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100
-        ytd_return = ((hist['Close'][-1] / hist['Close'][f'{hist.index[-1].year}-01-01']) - 1) * 100
-        five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100
+        one_month_return = ((hist['Close'][-1] / hist['Close'][-22]) - 1) * 100 if len(hist) > 22 else "N/A"
+        six_month_return = ((hist['Close'][-1] / hist['Close'][-126]) - 1) * 100 if len(hist) > 126 else "N/A"
+        one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100 if len(hist) > 252 else "N/A"
+        
+        # Calculate YTD return
+        ytd_start_index = hist.index.get_loc(f'{hist.index[-1].year}-01-01', method='bfill')
+        ytd_return = ((hist['Close'][-1] / hist['Close'][ytd_start_index]) - 1) * 100 if ytd_start_index is not None else "N/A"
+
+        five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100 if len(hist) > 0 else "N/A"
         
         performance_data = {
             "Current Price": current_price,
-            "1 Day": f"{one_day_return:.2f}%",
-            "1 Month": f"{one_month_return:.2f}%",
-            "6 Month": f"{six_month_return:.2f}%",
-            "YTD": f"{ytd_return:.2f}%",
-            "1 Year": f"{one_year_return:.2f}%",
-            "5 Year": f"{five_year_return:.2f}%",
+            "1 Day": f"{one_day_return:.2f}%" if isinstance(one_day_return, float) else "N/A",
+            "1 Month": f"{one_month_return:.2f}%" if isinstance(one_month_return, float) else "N/A",
+            "6 Month": f"{six_month_return:.2f}%" if isinstance(six_month_return, float) else "N/A",
+            "YTD": f"{ytd_return:.2f}%" if isinstance(ytd_return, float) else "N/A",
+            "1 Year": f"{one_year_return:.2f}%" if isinstance(one_year_return, float) else "N/A",
+            "5 Year": f"{five_year_return:.2f}%" if isinstance(five_year_return, float) else "N/A",
         }
 
         return performance_data
