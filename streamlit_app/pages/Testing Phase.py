@@ -4,6 +4,7 @@ import requests
 from lxml import html
 import yfinance as yf
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 # Function to get stock data
 def get_stock_data(ticker):
