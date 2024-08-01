@@ -43,15 +43,17 @@ def get_additional_stock_data(urlt):
         response = requests.get(urlt)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            data_1d = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]')[0]
-            data_5d = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[2]/span/span[2]')[0]
-            data_1m = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[3]/span/span[2]')[0]
-            data_6m = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[4]/span/span[2]')[0]
-            data_ytd = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[5]/span/span[2]')[0]
-            data_1y = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[6]/span/span[2]')[0]
-            data_5y = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[7]/span/span[2]')[0]
-            data_alltime = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[8]/span/span[2]')[0]
-            return {"1 Day": data_1d, "5 Days": data_5d, "1 Month": data_1m, "6 Months": data_6m, "YTD": data_ytd, "1 Year": data_1y, "5 Year": data_5y, "All Time": data_alltime}
+            data = {}
+
+            # Loop through different timeframes
+            timeframes = ["1 Day", "5 Days", "1 Month", "6 Months", "YTD", "1 Year", "5 Year", "All Time"]
+            for timeframe in timeframes:
+                xpath_string = f'//span[contains(text(), "{timeframe}")]/parent::button/span/span[2]'
+                data_value = tree.xpath(xpath_string)
+                value = data_value[0].text if data_value else "N/A"
+                data[timeframe] = value
+
+            return data
         else:
             return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Months": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
     except:
