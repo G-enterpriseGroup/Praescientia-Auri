@@ -43,8 +43,8 @@ def get_returns(ticker):
     stock = yf.Ticker(ticker)
     end_date = datetime.today()
     start_dates = {
+        "1d": end_date - timedelta(days=1),
         "5d": end_date - timedelta(days=5),
-        "1mo": end_date - timedelta(days=30),
         "3mo": end_date - timedelta(days=90),
         "6mo": end_date - timedelta(days=180),
         "ytd": datetime(end_date.year, 1, 1),
@@ -58,7 +58,7 @@ def get_returns(ticker):
         data = stock.history(start=start_date, end=end_date)
         if not data.empty:
             start_price = data['Close'].iloc[0]
-            end_price = data['Open'].iloc[-1]
+            end_price = data['Close'].iloc[-1]
             returns[period] = f"{((end_price / start_price - 1) * 100):.2f}%"
         else:
             returns[period] = "N/A"
