@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
-import yfinance as yf
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -20,8 +19,9 @@ def get_stock_data(ticker):
             ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
             frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
             dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-            returns = get_returns(ticker)
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth, **returns}
+            # Adding return data
+            returns = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div[1]/div[1]/div[2]/span/text()')
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth, "1 Month Return": returns[0], "3 Months Return": returns[1], "6 Months Return": returns[2], "1 Year Return": returns[3], "5 Years Return": returns[4], "All Time Return": returns[5]}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
@@ -32,53 +32,13 @@ def get_stock_data(ticker):
                 ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
                 frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
                 dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-                returns = get_returns(ticker)
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth, **returns}
+                # Adding return data
+                returns = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div[1]/div[1]/div[2]/span/text()')
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth, "1 Month Return": returns[0], "3 Months Return": returns[1], "6 Months Return": returns[2], "1 Year Return": returns[3], "5 Years Return": returns[4], "All Time Return": returns[5]}
             else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker)}
-    except Exception as e:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker)}
-
-# Function to get stock returns using yfinance
-def get_returns(ticker):
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="max")
-
-        if not hist.empty:
-            def calculate_return(period):
-                if len(hist) > period:
-                    return f"{((hist['Close'][-1] - hist['Close'][-period]) / hist['Close'][-period] * 100):.2f}%"
-                else:
-                    return "N/A"
-            
-            returns = {
-                "5 days": calculate_return(5),
-                "1 month": calculate_return(21),
-                "6 months": calculate_return(126),
-                "Year to date": calculate_return(len(hist) - hist.index.get_loc(hist[hist.index.year == hist.index[-1].year].index[0])),
-                "1 year": calculate_return(252),
-                "5 years": calculate_return(252 * 5),
-            }
-            return returns
-        else:
-            return {
-                "5 days": "N/A",
-                "1 month": "N/A",
-                "6 months": "N/A",
-                "Year to date": "N/A",
-                "1 year": "N/A",
-                "5 years": "N/A",
-            }
-    except Exception as e:
-        return {
-            "5 days": "N/A",
-            "1 month": "N/A",
-            "6 months": "N/A",
-            "Year to date": "N/A",
-            "1 year": "N/A",
-            "5 years": "N/A",
-        }
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", "1 Month Return": "N/A", "3 Months Return": "N/A", "6 Months Return": "N/A", "1 Year Return": "N/A", "5 Years Return": "N/A", "All Time Return": "N/A"}
+    except:
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", "1 Month Return": "N/A", "3 Months Return": "N/A", "6 Months Return": "N/A", "1 Year Return": "N/A", "5 Years Return": "N/A", "All Time Return": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
