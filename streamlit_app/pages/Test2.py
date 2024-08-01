@@ -1,38 +1,72 @@
 import streamlit as st
+import pandas as pd
 import requests
-from bs4 import BeautifulSoup
+from lxml import html
 
-def fetch_tickers(url):
-    response = requests.get(url)
-    html = response.text
+# Function to get stock data
+def get_stock_data(ticker):
+    base_url = "https://stockanalysis.com"
+    etf_url = f"{base_url}/etf/{ticker}/dividend/"
+    stock_url = f"{base_url}/stocks/{ticker}/dividend/"
+    
+    try:
+        response = requests.get(etf_url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+        else:
+            response = requests.get(stock_url)
+            if response.status_code == 200:
+                tree = html.fromstring(response.content)
+                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+            else:
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+    except:
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-    start = html.find('"symbols":[') + len('"symbols":[')
-    end = html.find(']', start)
-    symbols_str = html[start:end]
-    symbols = [symbol.strip('"') for symbol in symbols_str.split(',')]
+# Streamlit App
+st.title("Stock and ETF Dashboard")
 
-    return symbols
+# Input tickers
+tickers = st.text_input("Enter tickers separated by commas").split(',')
 
-def clean_tickers(tickers):
-    return [ticker.split(':')[1] if ':' in ticker else ticker for ticker in tickers]
+# Fetch data for each ticker
+if tickers:
+    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
+    df = pd.DataFrame(data)
+    
+    # Display DataFrame
+    st.write(df)
 
-# URL of the HTML file
-url = 'https://www.tradingview.com/watchlists/139248623/'  # Replace with the actual URL of your HTML file
-
-st.title("Ticker List")
-st.write("Fetching tickers from HTML file...")
-
-if st.button('Refresh'):
-    tickers = fetch_tickers(url)
-    st.session_state.cleaned_tickers = clean_tickers(tickers)
-
-if 'cleaned_tickers' not in st.session_state:
-    tickers = fetch_tickers(url)
-    st.session_state.cleaned_tickers = clean_tickers(tickers)
-
-if st.session_state.cleaned_tickers:
-    st.write("Tickers found:")
-    tickers_str = ", ".join(st.session_state.cleaned_tickers)
-    st.write(tickers_str)
-else:
-    st.write("No tickers found.")
+# Adjust the width and height of the page and ensure table fits the data
+st.markdown(
+    """
+    <style>
+    .reportview-container .main .block-container{
+        max-width: 100%;
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+    }
+    table {
+        width: 100% !important;
+        height: 100% !important;
+        table-layout: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
