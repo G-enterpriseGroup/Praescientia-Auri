@@ -20,6 +20,7 @@ def display_stock_data(ticker):
         "5 Days": "5d",
         "1 Month": "1mo",
         "3 Months": "3mo",
+        "6 Months": "6mo",
         "YTD": "ytd",
         "1 Year": "1y",
         "5 Years": "5y",
