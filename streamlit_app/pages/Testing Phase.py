@@ -11,7 +11,9 @@ def get_historical_data(ticker, period):
 # Function to calculate percentage change
 def calculate_percentage_change(data):
     if not data.empty:
-        return (data['Close'][-1] / data['Close'][0] - 1) * 100
+        start_price = data['Close'].iloc[0]
+        end_price = data['Close'].iloc[-1]
+        return (end_price / start_price - 1) * 100
     return None
 
 # Function to display stock data for multiple periods
