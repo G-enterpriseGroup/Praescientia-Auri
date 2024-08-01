@@ -1,47 +1,6 @@
 import streamlit as st
 import pandas as pd
-import requests
-from lxml import html
 import yfinance as yf
-from datetime import datetime
-
-# Function to get dividend data from Stock Analysis
-def get_dividend_data(ticker):
-    base_url = "https://stockanalysis.com"
-    etf_url = f"{base_url}/etf/{ticker}/dividend/"
-    stock_url = f"{base_url}/stocks/{ticker}/dividend/"
-    
-    try:
-        response = requests.get(etf_url)
-        if response.status_code == 200:
-            tree = html.fromstring(response.content)
-            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
-            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-            return {"Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, 
-                    "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
-        else:
-            response = requests.get(stock_url)
-            if response.status_code == 200:
-                tree = html.fromstring(response.content)
-                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
-                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-                return {"Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, 
-                        "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
-            else:
-                return {"Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", 
-                        "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
-    except Exception as e:
-        st.write(f"Error fetching dividend data for {ticker}: {e}")
-        return {"Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", 
-                "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
 # Function to get stock performance data using yfinance
 def get_performance_data(ticker):
@@ -53,7 +12,6 @@ def get_performance_data(ticker):
         
         # Check if historical data is returned correctly
         if hist.empty:
-            st.write(f"No historical data found for {ticker}. Please check the ticker symbol.")
             return {
                 "Current Price": "N/A",
                 "1 Day": "N/A",
@@ -67,24 +25,24 @@ def get_performance_data(ticker):
         # Calculate performance metrics
         current_price = hist['Close'][-1]
         one_day_return = ((hist['Close'][-1] / hist['Close'][-2]) - 1) * 100
-        one_month_return = ((hist['Close'][-1] / hist['Close'][-22]) - 1) * 100 if len(hist) > 22 else "N/A"
-        six_month_return = ((hist['Close'][-1] / hist['Close'][-126]) - 1) * 100 if len(hist) > 126 else "N/A"
-        one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100 if len(hist) > 252 else "N/A"
-        
-        # Calculate YTD return
-        current_year = datetime.now().year
+
+        # Ensure enough data points exist for each period calculation
+        one_month_return = ((hist['Close'][-1] / hist['Close'][-22]) - 1) * 100 if len(hist) >= 22 else "N/A"
+        six_month_return = ((hist['Close'][-1] / hist['Close'][-126]) - 1) * 100 if len(hist) >= 126 else "N/A"
+        one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100 if len(hist) >= 252 else "N/A"
+
+        # Calculate YTD return using the start of the year
+        current_year = pd.Timestamp.now().year
         start_of_year = f'{current_year}-01-01'
-        if start_of_year in hist.index:
-            start_price = hist.loc[start_of_year]['Close']
-        else:
-            start_price = hist['Close'].loc[hist.index.get_loc(start_of_year, method='bfill')]
         
-        ytd_return = ((hist['Close'][-1] / start_price) - 1) * 100 if start_price is not None else "N/A"
+        # Use the closest available date to the start of the year
+        ytd_start_price = hist.loc[hist.index[hist.index.get_loc(start_of_year, method='bfill')], 'Close']
+        ytd_return = ((current_price / ytd_start_price) - 1) * 100 if ytd_start_price is not None else "N/A"
 
         five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100 if len(hist) > 0 else "N/A"
         
         performance_data = {
-            "Current Price": current_price,
+            "Current Price": f"${current_price:.2f}",
             "1 Day": f"{one_day_return:.2f}%" if isinstance(one_day_return, float) else "N/A",
             "1 Month": f"{one_month_return:.2f}%" if isinstance(one_month_return, float) else "N/A",
             "6 Month": f"{six_month_return:.2f}%" if isinstance(six_month_return, float) else "N/A",
@@ -108,7 +66,7 @@ def get_performance_data(ticker):
         }
 
 # Streamlit App
-st.title("Stock and ETF Dashboard")
+st.title("Stock Performance Dashboard")
 
 # Input tickers
 tickers = st.text_input("Enter tickers separated by commas").split(',')
@@ -117,11 +75,10 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 if tickers:
     data = []
     for ticker in tickers:
-        ticker = ticker.strip()
+        ticker = ticker.strip().upper()  # Ensure tickers are uppercase
         if ticker:
-            dividend_data = get_dividend_data(ticker)
             performance_data = get_performance_data(ticker)
-            combined_data = {"Ticker": ticker, **dividend_data, **performance_data}
+            combined_data = {"Ticker": ticker, **performance_data}
             data.append(combined_data)
     df = pd.DataFrame(data)
     
