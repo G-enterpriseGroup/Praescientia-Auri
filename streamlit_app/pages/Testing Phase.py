@@ -38,38 +38,39 @@ def get_stock_data(ticker):
     except:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to get historical data for a given ticker and date range
-def get_historical_data(ticker, start_date, end_date):
+# Function to get exact historical data for a given ticker and date
+def get_exact_historical_data(ticker, date):
     stock = yf.Ticker(ticker)
-    data = stock.history(start=start_date, end=end_date)
-    return data
-
-# Function to calculate percentage change
-def calculate_percentage_change(data):
+    data = stock.history(start=date, end=(date + timedelta(days=1)))
     if not data.empty:
-        start_price = data['Close'].iloc[0]
-        end_price = data['Close'].iloc[-1]
+        return data['Close'].iloc[0]
+    return None
+
+# Function to calculate percentage change between two dates
+def calculate_exact_percentage_change(ticker, start_date, end_date):
+    start_price = get_exact_historical_data(ticker, start_date)
+    end_price = get_exact_historical_data(ticker, end_date)
+    if start_price is not None and end_price is not None:
         return (end_price / start_price - 1) * 100
     return None
 
-# Function to display stock performance data
+# Function to get stock performance data
 def get_stock_performance_data(ticker):
     today = datetime.today()
     periods = {
-        "5 Days": (today - timedelta(days=5)).strftime('%Y-%m-%d'),
-        "1 Month": (today - timedelta(days=30)).strftime('%Y-%m-%d'),
-        "3 Months": (today - timedelta(days=90)).strftime('%Y-%m-%d'),
-        "6 Months": (today - timedelta(days=180)).strftime('%Y-%m-%d'),
-        "YTD": datetime(today.year, 1, 1).strftime('%Y-%m-%d'),
-        "1 Year": (today - timedelta(days=365)).strftime('%Y-%m-%d'),
-        "5 Years": (today - timedelta(days=1825)).strftime('%Y-%m-%d'),
-        "Max": '1900-01-01'
+        "5 Days": today - timedelta(days=5),
+        "1 Month": today - timedelta(days=30),
+        "3 Months": today - timedelta(days=90),
+        "6 Months": today - timedelta(days=180),
+        "YTD": datetime(today.year, 1, 1),
+        "1 Year": today - timedelta(days=365),
+        "5 Years": today - timedelta(days=1825),
+        "Max": datetime(1900, 1, 1)
     }
     
     data = {}
     for period_name, start_date in periods.items():
-        historical_data = get_historical_data(ticker, start_date, today.strftime('%Y-%m-%d'))
-        percentage_change = calculate_percentage_change(historical_data)
+        percentage_change = calculate_exact_percentage_change(ticker, start_date, today)
         data[period_name] = f"{percentage_change:.2f}%" if percentage_change is not None else "N/A"
 
     return data
