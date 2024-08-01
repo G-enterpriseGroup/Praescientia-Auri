@@ -8,7 +8,7 @@ def get_stock_data(ticker):
     base_url = "https://stockanalysis.com"
     etf_url = f"{base_url}/etf/{ticker}/dividend/"
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
-    urlt = f"https://www.tradingview.com/symbols/{ticker}"
+    urlt = f"https://www.tradingview.com/symbols/NYSE-{ticker}"
 
     try:
         response = requests.get(etf_url)
