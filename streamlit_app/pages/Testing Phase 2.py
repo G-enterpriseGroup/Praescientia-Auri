@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
+from lxml import html
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -12,24 +12,24 @@ def get_stock_data(ticker):
     try:
         response = requests.get(etf_url)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            price = soup.find('div', class_='price').text.strip()
-            yield_percent = soup.find('div', class_='yield').text.strip()
-            annual_dividend = soup.find('div', class_='annual-dividend').text.strip()
-            ex_dividend_date = soup.find('div', class_='ex-dividend-date').text.strip()
-            frequency = soup.find('div', class_='frequency').text.strip()
-            dividend_growth = soup.find('div', class_='dividend-growth').text.strip()
+            tree = html.fromstring(response.content)
+            price = tree.xpath('//*[contains(text(), "Price")]/following-sibling::text()')[0].strip()
+            yield_percent = tree.xpath('//*[contains(text(), "Yield")]/following-sibling::text()')[0].strip()
+            annual_dividend = tree.xpath('//*[contains(text(), "Annual Dividend")]/following-sibling::text()')[0].strip()
+            ex_dividend_date = tree.xpath('//*[contains(text(), "Ex Dividend Date")]/following-sibling::text()')[0].strip()
+            frequency = tree.xpath('//*[contains(text(), "Frequency")]/following-sibling::text()')[0].strip()
+            dividend_growth = tree.xpath('//*[contains(text(), "Dividend Growth")]/following-sibling::text()')[0].strip()
             return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
-                soup = BeautifulSoup(response.content, 'html.parser')
-                price = soup.find('div', class_='price').text.strip()
-                yield_percent = soup.find('div', class_='yield').text.strip()
-                annual_dividend = soup.find('div', class_='annual-dividend').text.strip()
-                ex_dividend_date = soup.find('div', class_='ex-dividend-date').text.strip()
-                frequency = soup.find('div', class_='frequency').text.strip()
-                dividend_growth = soup.find('div', class_='dividend-growth').text.strip()
+                tree = html.fromstring(response.content)
+                price = tree.xpath('//*[contains(text(), "Price")]/following-sibling::text()')[0].strip()
+                yield_percent = tree.xpath('//*[contains(text(), "Yield")]/following-sibling::text()')[0].strip()
+                annual_dividend = tree.xpath('//*[contains(text(), "Annual Dividend")]/following-sibling::text()')[0].strip()
+                ex_dividend_date = tree.xpath('//*[contains(text(), "Ex Dividend Date")]/following-sibling::text()')[0].strip()
+                frequency = tree.xpath('//*[contains(text(), "Frequency")]/following-sibling::text()')[0].strip()
+                dividend_growth = tree.xpath('//*[contains(text(), "Dividend Growth")]/following-sibling::text()')[0].strip()
                 return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
             else:
                 return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
@@ -42,9 +42,13 @@ def get_additional_stock_data(ticker):
     try:
         response = requests.get(base_url)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            buttons = soup.find_all('button', class_='rangeButton')
-            performance = {btn.find('span', class_='label').text: btn.find('span', class_='change').text for btn in buttons}
+            tree = html.fromstring(response.content)
+            # General method for finding text next to labels
+            performance = {}
+            labels = tree.xpath('//span[contains(text(), "day") or contains(text(), "month") or contains(text(), "year") or contains(text(), "time") or contains(text(), "5 days")]/text()')
+            values = tree.xpath('//span[contains(@class, "change")]/text()')
+            for label, value in zip(labels, values):
+                performance[label] = value.strip()
             return performance
         else:
             return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
