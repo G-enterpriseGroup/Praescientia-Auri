@@ -40,33 +40,7 @@ def get_stock_data(ticker):
     except:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to get returns for a given ticker and periods
-def get_returns(ticker):
-    stock = yf.Ticker(ticker)
-    end_date = datetime.today()
-    start_dates = {
-        "1d": end_date - timedelta(days=1),
-        "5d": end_date - timedelta(days=5),
-        "1mo": end_date.replace(day=1) - relativedelta(months=1),
-        "3mo": end_date.replace(day=1) - relativedelta(months=3),
-        "6mo": end_date.replace(day=1) - relativedelta(months=6),
-        "ytd": datetime(end_date.year, 1, 1),
-        "1y": end_date - timedelta(days=365),
-        "5y": end_date - timedelta(days=365*5),
-        "max": datetime(1900, 1, 1)
-    }
-    
-    returns = {}
-    for period, start_date in start_dates.items():
-        data = stock.history(start=start_date, end=end_date)
-        if not data.empty:
-            start_price = data['Close'].iloc[0]
-            end_price = data['Close'].iloc[-1]
-            returns[period] = f"{(((end_price - start_price) / start_price) * 100):.2f}%"
-        else:
-            returns[period] = "N/A"
-    
-    return returns
+
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
