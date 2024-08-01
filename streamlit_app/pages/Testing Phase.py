@@ -42,7 +42,7 @@ def get_additional_stock_data(url):
         response = requests.get(url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            data_1d = tree.xpath('/html/body/div[4]/div[4]/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[1]/span/span[2]')[0]
+            data_1d = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]')[0]
             data_5d = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[2]/span/span[2]')[0]
             data_1m = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[3]/span/span[2]')[0]
             data_6m = tree.xpath('/html/body/div[4]/div[4]/div/div/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[4]/span/span[2]')[0]
