@@ -4,7 +4,7 @@ import requests
 from lxml import html
 
 # Function to get stock data
-def get_stock_data(ticker):
+def get_stock_data(ticker, html_file_path=None):
     base_url = "https://stockanalysis.com"
     etf_url = f"{base_url}/etf/{ticker}/dividend/"
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
@@ -24,7 +24,7 @@ def get_stock_data(ticker):
             ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')
             frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')
             dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')
-            
+
             price = price[0] if price else "N/A"
             yield_percent = yield_percent[0] if yield_percent else "N/A"
             annual_dividend = annual_dividend[0] if annual_dividend else "N/A"
@@ -34,29 +34,51 @@ def get_stock_data(ticker):
         else:
             price = yield_percent = annual_dividend = ex_dividend_date = frequency = dividend_growth = "N/A"
 
-        # Get additional data from TradingView
-        response_tv = requests.get(tradingview_url)
-        if response_tv.status_code == 200:
-            tree_tv = html.fromstring(response_tv.content)
-            day_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')
-            days_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')
-            month_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')
-            month_6 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')
-            ytd = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')
-            year_1 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')
-            year_5 = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')
-            all_time = tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')
-            
-            day_1 = day_1[0] if day_1 else "N/A"
-            days_5 = days_5[0] if days_5 else "N/A"
-            month_1 = month_1[0] if month_1 else "N/A"
-            month_6 = month_6[0] if month_6 else "N/A"
-            ytd = ytd[0] if ytd else "N/A"
-            year_1 = year_1[0] if year_1 else "N/A"
-            year_5 = year_5[0] if year_5 else "N/A"
-            all_time = all_time[0] if all_time else "N/A"
+        # Get additional data from TradingView if HTML file is provided
+        if html_file_path:
+            try:
+                # Load and parse the HTML content
+                with open(html_file_path, "r", encoding="utf-8") as file:
+                    content = file.read()
+                tree = html.fromstring(content)
+
+                # Define XPaths for each return period
+                return_xpaths = {
+                    "1 Day": '//*[@class="contentBox-1gjuTnJ7"]/div[2]/div/div[1]/span[2]/text()',
+                    "5 Days": '//*[@class="contentBox-1gjuTnJ7"]/div[3]/div/div[1]/span[2]/text()',
+                    "1 Month": '//*[@class="contentBox-1gjuTnJ7"]/div[4]/div/div[1]/span[2]/text()',
+                    "6 Months": '//*[@class="contentBox-1gjuTnJ7"]/div[5]/div/div[1]/span[2]/text()',
+                    "YTD": '//*[@class="contentBox-1gjuTnJ7"]/div[6]/div/div[1]/span[2]/text()',
+                    "1 Year": '//*[@class="contentBox-1gjuTnJ7"]/div[7]/div/div[1]/span[2]/text()',
+                    "5 Years": '//*[@class="contentBox-1gjuTnJ7"]/div[8]/div/div[1]/span[2]/text()',
+                    "All Time": '//*[@class="contentBox-1gjuTnJ7"]/div[9]/div/div[1]/span[2]/text()'
+                }
+
+                # Extract return data
+                returns = {period: (tree.xpath(xpath)[0] if tree.xpath(xpath) else "N/A") for period, xpath in return_xpaths.items()}
+
+            except Exception as e:
+                st.error(f"An error occurred while processing the HTML file for {ticker}: {str(e)}")
+                returns = {period: "N/A" for period in return_xpaths.keys()}
+
         else:
-            day_1 = days_5 = month_1 = month_6 = ytd = year_1 = year_5 = all_time = "N/A"
+            # If no HTML file provided, fetch data directly from TradingView URL
+            response_tv = requests.get(tradingview_url)
+            if response_tv.status_code == 200:
+                tree_tv = html.fromstring(response_tv.content)
+                returns = {
+                    "1 Day": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()'),
+                    "5 Days": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()'),
+                    "1 Month": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()'),
+                    "6 Month": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()'),
+                    "YTD": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()'),
+                    "1 Year": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()'),
+                    "5 Year": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()'),
+                    "All Time": tree_tv.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')
+                }
+                returns = {k: (v[0] if v else "N/A") for k, v in returns.items()}
+            else:
+                returns = {period: "N/A" for period in ["1 Day", "5 Days", "1 Month", "6 Month", "YTD", "1 Year", "5 Year", "All Time"]}
 
         return {
             "Ticker": ticker,
@@ -66,14 +88,7 @@ def get_stock_data(ticker):
             "Ex Dividend Date": ex_dividend_date,
             "Frequency": frequency,
             "Dividend Growth %": dividend_growth,
-            "1 Day": day_1,
-            "5 Days": days_5,
-            "1 Month": month_1,
-            "6 Month": month_6,
-            "YTD": ytd,
-            "1 Year": year_1,
-            "5 Year": year_5,
-            "All Time": all_time
+            **returns
         }
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
@@ -103,13 +118,16 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
-    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
+    # Specify the HTML file path (update this path if necessary)
+    html_file_path = "/mnt/data/SCM Stock Price and Chart — NYSE_SCM — TradingView.html"
+    
+    data = [get_stock_data(ticker.strip(), html_file_path) for ticker in tickers if ticker.strip()]
     df = pd.DataFrame(data)
     
     # Display DataFrame
     st.write(df)
 
-# Adjust the width and height of the page and ensure table fits the data
+# Adjust the width and height of the page and ensure the table fits the data
 st.markdown(
     """
     <style>
