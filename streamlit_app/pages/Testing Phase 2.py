@@ -10,70 +10,73 @@ def get_stock_data(ticker):
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
     tradingview_url = f"https://www.tradingview.com/symbols/{ticker}/"
 
+    # Initializing the stock data with default N/A values
+    stock_data = {
+        "Ticker": ticker,
+        "Price": "N/A",
+        "Yield %": "N/A",
+        "Annual Dividend": "N/A",
+        "Ex Dividend Date": "N/A",
+        "Frequency": "N/A",
+        "Dividend Growth %": "N/A",
+        "1 Day": "N/A",
+        "5 Days": "N/A",
+        "1 Month": "N/A",
+        "6 Month": "N/A",
+        "YTD": "N/A",
+        "1 Year": "N/A",
+        "5 Year": "N/A",
+        "All Time": "N/A"
+    }
+
     try:
         response = requests.get(etf_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
-            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+            stock_data.update({
+                "Price": tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0],
+                "Yield %": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0],
+                "Annual Dividend": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0],
+                "Ex Dividend Date": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0],
+                "Frequency": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0],
+                "Dividend Growth %": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0],
+            })
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
-                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
-                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
-                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
-                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
-                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
-                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
-            else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
-    except:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+                stock_data.update({
+                    "Price": tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0],
+                    "Yield %": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0],
+                    "Annual Dividend": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0],
+                    "Ex Dividend Date": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0],
+                    "Frequency": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0],
+                    "Dividend Growth %": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0],
+                })
+    except Exception as e:
+        # Logging or handling exception if needed
+        pass
 
     # Try to get performance data from TradingView
     try:
         response = requests.get(tradingview_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            one_day = tree.xpath('//span[contains(text(), "1D")]/../following-sibling::span/text()')[0]
-            five_days = tree.xpath('//span[contains(text(), "5D")]/../following-sibling::span/text()')[0]
-            one_month = tree.xpath('//span[contains(text(), "1M")]/../following-sibling::span/text()')[0]
-            six_months = tree.xpath('//span[contains(text(), "6M")]/../following-sibling::span/text()')[0]
-            ytd = tree.xpath('//span[contains(text(), "YTD")]/../following-sibling::span/text()')[0]
-            one_year = tree.xpath('//span[contains(text(), "1Y")]/../following-sibling::span/text()')[0]
-            five_years = tree.xpath('//span[contains(text(), "5Y")]/../following-sibling::span/text()')[0]
-            all_time = tree.xpath('//span[contains(text(), "All")]/../following-sibling::span/text()')[0]
-
-            stock_data = {
-                "1 Day": one_day,
-                "5 Days": five_days,
-                "1 Month": one_month,
-                "6 Month": six_months,
-                "YTD": ytd,
-                "1 Year": one_year,
-                "5 Year": five_years,
-                "All Time": all_time
-            }
-        else:
-            stock_data = {
-                "1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A",
-                "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"
-            }
-
-        return {"Ticker": ticker, **stock_data}
-
+            stock_data.update({
+                "1 Day": tree.xpath('//span[contains(text(), "1D")]/../following-sibling::span/text()')[0],
+                "5 Days": tree.xpath('//span[contains(text(), "5D")]/../following-sibling::span/text()')[0],
+                "1 Month": tree.xpath('//span[contains(text(), "1M")]/../following-sibling::span/text()')[0],
+                "6 Month": tree.xpath('//span[contains(text(), "6M")]/../following-sibling::span/text()')[0],
+                "YTD": tree.xpath('//span[contains(text(), "YTD")]/../following-sibling::span/text()')[0],
+                "1 Year": tree.xpath('//span[contains(text(), "1Y")]/../following-sibling::span/text()')[0],
+                "5 Year": tree.xpath('//span[contains(text(), "5Y")]/../following-sibling::span/text()')[0],
+                "All Time": tree.xpath('//span[contains(text(), "All")]/../following-sibling::span/text()')[0],
+            })
     except Exception as e:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A",
-                "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A",
-                "1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A",
-                "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
+        # Logging or handling exception if needed
+        pass
+
+    return stock_data
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
