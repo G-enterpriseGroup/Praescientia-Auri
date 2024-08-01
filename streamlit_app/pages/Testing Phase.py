@@ -39,7 +39,7 @@ def get_stock_data(ticker):
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
 # Function to get returns for a given ticker and periods
-def get_annualized_returns(ticker):
+def get_returns(ticker):
     stock = yf.Ticker(ticker)
     end_date = datetime.today()
     start_dates = {
@@ -59,9 +59,7 @@ def get_annualized_returns(ticker):
         if not data.empty:
             start_price = data['Close'].iloc[0]
             end_price = data['Close'].iloc[-1]
-            n = (end_date - start_date).days / 365.25  # Number of years
-            annualized_return = ((end_price / start_price) ** (1/n) - 1) * 100
-            returns[period] = f"{annualized_return:.2f}%"
+            returns[period] = f"{((end_price / start_price - 1) * 100):.2f}%"
         else:
             returns[period] = "N/A"
     
@@ -76,7 +74,7 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for each ticker
 if tickers:
     stock_data_list = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    returns_data_list = [get_annualized_returns(ticker.strip()) for ticker in tickers if ticker.strip()]
+    returns_data_list = [get_returns(ticker.strip()) for ticker in tickers if ticker.strip()]
     
     for stock_data, returns_data in zip(stock_data_list, returns_data_list):
         stock_data.update(returns_data)
