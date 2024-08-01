@@ -5,7 +5,14 @@ import pandas as pd
 # Function to get historical data for a given ticker and period
 def get_historical_data(ticker, period):
     stock = yf.Ticker(ticker)
-    return stock.history(period=period)
+    data = stock.history(period=period)
+    return data
+
+# Function to calculate percentage change
+def calculate_percentage_change(data):
+    if not data.empty:
+        return (data['Close'][-1] / data['Close'][0] - 1) * 100
+    return None
 
 # Function to display stock data for multiple periods
 def display_stock_data(ticker):
@@ -19,18 +26,10 @@ def display_stock_data(ticker):
         "Max": "max"
     }
     
-    st.header(f"Stock data for {ticker}")
-    
+    st.header(f"Stock Performance for {ticker}")
+
+    data = []
     for period_name, period_code in periods.items():
-        st.subheader(period_name)
-        data = get_historical_data(ticker, period_code)
-        st.line_chart(data['Close'])
-        st.write(data)
-
-# Streamlit app layout
-st.title("Stock Performance Viewer")
-
-ticker = st.text_input("Enter Ticker Symbol:", "AAPL")
-
-if ticker:
-    display_stock_data(ticker)
+        historical_data = get_historical_data(ticker, period_code)
+        percentage_change = calculate_percentage_change(historical_data)
+ 
