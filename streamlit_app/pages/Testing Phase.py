@@ -38,7 +38,7 @@ def get_stock_data(ticker):
 
 # Function to get additional stock data
 def get_additional_stock_data(ticker):
-    base_url = "https://www.tradingview.com/symbols/NYSE-" + ticker
+    base_url = "https://www.tradingview.com/symbols/" + ticker
     try:
         response = requests.get(base_url)
         if response.status_code == 200:
