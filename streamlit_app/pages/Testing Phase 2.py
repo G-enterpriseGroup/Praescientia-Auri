@@ -37,43 +37,43 @@ def get_stock_data(ticker):
     except:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
+    # Try to get performance data from TradingView
+    try:
+        response = requests.get(tradingview_url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+            one_day = tree.xpath('//span[contains(text(), "1D")]/../following-sibling::span/text()')[0]
+            five_days = tree.xpath('//span[contains(text(), "5D")]/../following-sibling::span/text()')[0]
+            one_month = tree.xpath('//span[contains(text(), "1M")]/../following-sibling::span/text()')[0]
+            six_months = tree.xpath('//span[contains(text(), "6M")]/../following-sibling::span/text()')[0]
+            ytd = tree.xpath('//span[contains(text(), "YTD")]/../following-sibling::span/text()')[0]
+            one_year = tree.xpath('//span[contains(text(), "1Y")]/../following-sibling::span/text()')[0]
+            five_years = tree.xpath('//span[contains(text(), "5Y")]/../following-sibling::span/text()')[0]
+            all_time = tree.xpath('//span[contains(text(), "All")]/../following-sibling::span/text()')[0]
 
-    	# Try to get performance data from TradingView
-    	response = requests.get(tradingview_url)
-    	if response.status_code == 200:
-        	tree = html.fromstring(response.content)
-        	one_day = tree.xpath('//span[contains(text(), "1D")]/../following-sibling::span/text()')[0]
-        	five_days = tree.xpath('//span[contains(text(), "5D")]/../following-sibling::span/text()')[0]
-        	one_month = tree.xpath('//span[contains(text(), "1M")]/../following-sibling::span/text()')[0]
-        	six_months = tree.xpath('//span[contains(text(), "6M")]/../following-sibling::span/text()')[0]
-        	ytd = tree.xpath('//span[contains(text(), "YTD")]/../following-sibling::span/text()')[0]
-        	one_year = tree.xpath('//span[contains(text(), "1Y")]/../following-sibling::span/text()')[0]
-        	five_years = tree.xpath('//span[contains(text(), "5Y")]/../following-sibling::span/text()')[0]
-        	all_time = tree.xpath('//span[contains(text(), "All")]/../following-sibling::span/text()')[0]
+            stock_data = {
+                "1 Day": one_day,
+                "5 Days": five_days,
+                "1 Month": one_month,
+                "6 Month": six_months,
+                "YTD": ytd,
+                "1 Year": one_year,
+                "5 Year": five_years,
+                "All Time": all_time
+            }
+        else:
+            stock_data = {
+                "1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A",
+                "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"
+            }
 
-        	stock_data.update({
-            	"1 Day": one_day,
-            	"5 Days": five_days,
-            	"1 Month": one_month,
-            	"6 Month": six_months,
-            	"YTD": ytd,
-            	"1 Year": one_year,
-            	"5 Year": five_years,
-            	"All Time": all_time
-        	})
-    	else:
-        	stock_data.update({
-            	"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A",
-            	"YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"
-        	})
+        return {"Ticker": ticker, **stock_data}
 
-    	return {"Ticker": ticker, **stock_data}
-
-	except Exception as e:
-    	return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A",
-            	"Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A",
-            	"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A",
-            	"YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
+    except Exception as e:
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A",
+                "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A",
+                "1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A",
+                "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
