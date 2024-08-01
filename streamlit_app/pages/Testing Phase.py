@@ -47,12 +47,12 @@ def get_returns(ticker, fallback=False):
         
         if not hist.empty:
             returns = {
-                "1 month": (hist['Close'][-1] - hist['Close'][-22]) / hist['Close'][-22] * 100 if len(hist) > 22 else "N/A",
-                "3 months": (hist['Close'][-1] - hist['Close'][-66]) / hist['Close'][-66] * 100 if len(hist) > 66 else "N/A",
-                "6 months": (hist['Close'][-1] - hist['Close'][-132]) / hist['Close'][-132] * 100 if len(hist) > 132 else "N/A",
-                "1 year": (hist['Close'][-1] - hist['Close'][-252]) / hist['Close'][-252] * 100 if len(hist) > 252 else "N/A",
-                "5 years": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100 if len(hist) > 0 else "N/A",
-                "all": (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100 if len(hist) > 0 else "N/A",
+                "1 month": f"{((hist['Close'][-1] - hist['Close'][-22]) / hist['Close'][-22] * 100):.2f}%" if len(hist) > 22 else "N/A",
+                "3 months": f"{((hist['Close'][-1] - hist['Close'][-66]) / hist['Close'][-66] * 100):.2f}%" if len(hist) > 66 else "N/A",
+                "6 months": f"{((hist['Close'][-1] - hist['Close'][-132]) / hist['Close'][-132] * 100):.2f}%" if len(hist) > 132 else "N/A",
+                "1 year": f"{((hist['Close'][-1] - hist['Close'][-252]) / hist['Close'][-252] * 100):.2f}%" if len(hist) > 252 else "N/A",
+                "5 years": f"{((hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100):.2f}%" if len(hist) > 0 else "N/A",
+                "all": f"{((hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100):.2f}%" if len(hist) > 0 else "N/A",
             }
             return returns
         else:
