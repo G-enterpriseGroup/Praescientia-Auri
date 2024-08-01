@@ -38,42 +38,32 @@ def get_stock_data(ticker):
     except:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to get exact historical data for a given ticker and date
-def get_exact_historical_data(ticker, date):
+# Function to get returns for a given ticker and periods
+def get_returns(ticker):
     stock = yf.Ticker(ticker)
-    data = stock.history(start=date, end=(date + timedelta(days=1)))
-    if not data.empty:
-        return data['Close'].iloc[0]
-    return None
-
-# Function to calculate percentage change between two dates
-def calculate_exact_percentage_change(ticker, start_date, end_date):
-    start_price = get_exact_historical_data(ticker, start_date)
-    end_price = get_exact_historical_data(ticker, end_date)
-    if start_price is not None and end_price is not None:
-        return (end_price / start_price - 1) * 100
-    return None
-
-# Function to get stock performance data
-def get_stock_performance_data(ticker):
-    today = datetime.today()
-    periods = {
-        "5 Days": today - timedelta(days=5),
-        "1 Month": today - timedelta(days=30),
-        "3 Months": today - timedelta(days=90),
-        "6 Months": today - timedelta(days=180),
-        "YTD": datetime(today.year, 1, 1),
-        "1 Year": today - timedelta(days=365),
-        "5 Years": today - timedelta(days=1825),
-        "Max": datetime(1900, 1, 1)
+    end_date = datetime.today()
+    start_dates = {
+        "5d": end_date - timedelta(days=5),
+        "1mo": end_date - timedelta(days=30),
+        "3mo": end_date - timedelta(days=90),
+        "6mo": end_date - timedelta(days=180),
+        "ytd": datetime(end_date.year, 1, 1),
+        "1y": end_date - timedelta(days=365),
+        "5y": end_date - timedelta(days=1825),
+        "max": datetime(1900, 1, 1)
     }
     
-    data = {}
-    for period_name, start_date in periods.items():
-        percentage_change = calculate_exact_percentage_change(ticker, start_date, today)
-        data[period_name] = f"{percentage_change:.2f}%" if percentage_change is not None else "N/A"
-
-    return data
+    returns = {}
+    for period, start_date in start_dates.items():
+        data = stock.history(start=start_date, end=end_date)
+        if not data.empty:
+            start_price = data['Close'].iloc[0]
+            end_price = data['Close'].iloc[-1]
+            returns[period] = f"{((end_price / start_price - 1) * 100):.2f}%"
+        else:
+            returns[period] = "N/A"
+    
+    return returns
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -84,10 +74,10 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for each ticker
 if tickers:
     stock_data_list = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    performance_data_list = [get_stock_performance_data(ticker.strip()) for ticker in tickers if ticker.strip()]
+    returns_data_list = [get_returns(ticker.strip()) for ticker in tickers if ticker.strip()]
     
-    for stock_data, performance_data in zip(stock_data_list, performance_data_list):
-        stock_data.update(performance_data)
+    for stock_data, returns_data in zip(stock_data_list, returns_data_list):
+        stock_data.update(returns_data)
     
     df = pd.DataFrame(stock_data_list)
     
