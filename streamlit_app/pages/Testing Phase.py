@@ -46,13 +46,20 @@ def get_returns(ticker):
         hist = stock.history(period="5y")
 
         if not hist.empty:
+            # Ensure we handle cases where there isn't enough historical data
+            def calculate_return(period):
+                if len(hist) > period:
+                    return f"{((hist['Close'][-1] - hist['Close'][-period]) / hist['Close'][-period] * 100):.2f}%"
+                else:
+                    return "N/A"
+            
             returns = {
-                "1 month": f"{((hist['Close'][-1] - hist['Close'][-21]) / hist['Close'][-21] * 100):.2f}%" if len(hist) > 21 else "N/A",
-                "3 months": f"{((hist['Close'][-1] - hist['Close'][-63]) / hist['Close'][-63] * 100):.2f}%" if len(hist) > 63 else "N/A",
-                "6 months": f"{((hist['Close'][-1] - hist['Close'][-126]) / hist['Close'][-126] * 100):.2f}%" if len(hist) > 126 else "N/A",
-                "1 year": f"{((hist['Close'][-1] - hist['Close'][-252]) / hist['Close'][-252] * 100):.2f}%" if len(hist) > 252 else "N/A",
-                "5 years": f"{((hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100):.2f}%" if len(hist) > 0 else "N/A",
-                "all": f"{((hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100):.2f}%" if len(hist) > 0 else "N/A",
+                "1 month": calculate_return(21),
+                "3 months": calculate_return(63),
+                "6 months": calculate_return(126),
+                "1 year": calculate_return(252),
+                "5 years": calculate_return(len(hist)-1),
+                "all": calculate_return(len(hist)-1),
             }
             return returns
         else:
