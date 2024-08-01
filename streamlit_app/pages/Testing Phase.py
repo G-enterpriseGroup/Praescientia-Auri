@@ -8,8 +8,7 @@ def get_stock_data(ticker):
     base_url = "https://stockanalysis.com"
     etf_url = f"{base_url}/etf/{ticker}/dividend/"
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
-    base_url2 = "https://www.tradingview.com/symbols"
-    url = f"{base_url2}/{ticker}"
+    urlt = f"https://www.tradingview.com/symbols/{ticker}"
 
     try:
         response = requests.get(etf_url)
@@ -39,9 +38,9 @@ def get_stock_data(ticker):
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
 # Function to get additional stock data
-def get_additional_stock_data(url):
+def get_additional_stock_data(urlt):
     try:
-        response = requests.get(url)
+        response = requests.get(urlt)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
             data_1d = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]')[0]
