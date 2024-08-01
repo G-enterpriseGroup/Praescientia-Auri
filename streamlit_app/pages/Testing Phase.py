@@ -67,7 +67,7 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 
     # Display DataFrame
-    st.write(df)
+st.write(df)
 
 # Adjust the width and height of the page and ensure table fits the data
 st.markdown(
