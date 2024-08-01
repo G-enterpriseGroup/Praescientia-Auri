@@ -35,21 +35,21 @@ def get_stock_data(ticker):
                 returns = get_returns(ticker)
                 return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth, **returns}
             else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker, fallback=True)}
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker)}
     except Exception as e:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker, fallback=True)}
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A", **get_returns(ticker)}
 
 # Function to get stock returns using yfinance
-def get_returns(ticker, fallback=False):
+def get_returns(ticker):
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="5y")
-        
+
         if not hist.empty:
             returns = {
-                "1 month": f"{((hist['Close'][-1] - hist['Close'][-22]) / hist['Close'][-22] * 100):.2f}%" if len(hist) > 22 else "N/A",
-                "3 months": f"{((hist['Close'][-1] - hist['Close'][-66]) / hist['Close'][-66] * 100):.2f}%" if len(hist) > 66 else "N/A",
-                "6 months": f"{((hist['Close'][-1] - hist['Close'][-132]) / hist['Close'][-132] * 100):.2f}%" if len(hist) > 132 else "N/A",
+                "1 month": f"{((hist['Close'][-1] - hist['Close'][-21]) / hist['Close'][-21] * 100):.2f}%" if len(hist) > 21 else "N/A",
+                "3 months": f"{((hist['Close'][-1] - hist['Close'][-63]) / hist['Close'][-63] * 100):.2f}%" if len(hist) > 63 else "N/A",
+                "6 months": f"{((hist['Close'][-1] - hist['Close'][-126]) / hist['Close'][-126] * 100):.2f}%" if len(hist) > 126 else "N/A",
                 "1 year": f"{((hist['Close'][-1] - hist['Close'][-252]) / hist['Close'][-252] * 100):.2f}%" if len(hist) > 252 else "N/A",
                 "5 years": f"{((hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100):.2f}%" if len(hist) > 0 else "N/A",
                 "all": f"{((hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100):.2f}%" if len(hist) > 0 else "N/A",
