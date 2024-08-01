@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from lxml import html
 import yfinance as yf
+from datetime import datetime, timedelta
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -37,10 +38,10 @@ def get_stock_data(ticker):
     except:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to get historical data for a given ticker and period
-def get_historical_data(ticker, period):
+# Function to get historical data for a given ticker and date range
+def get_historical_data(ticker, start_date, end_date):
     stock = yf.Ticker(ticker)
-    data = stock.history(period=period)
+    data = stock.history(start=start_date, end=end_date)
     return data
 
 # Function to calculate percentage change
@@ -53,20 +54,21 @@ def calculate_percentage_change(data):
 
 # Function to display stock performance data
 def get_stock_performance_data(ticker):
+    today = datetime.today()
     periods = {
-        "5 Days": "5d",
-        "1 Month": "1mo",
-        "3 Months": "3mo",
-        "6 Months": "6mo",
-        "YTD": "ytd",
-        "1 Year": "1y",
-        "5 Years": "5y",
-        "Max": "max"
+        "5 Days": (today - timedelta(days=5)).strftime('%Y-%m-%d'),
+        "1 Month": (today - timedelta(days=30)).strftime('%Y-%m-%d'),
+        "3 Months": (today - timedelta(days=90)).strftime('%Y-%m-%d'),
+        "6 Months": (today - timedelta(days=180)).strftime('%Y-%m-%d'),
+        "YTD": datetime(today.year, 1, 1).strftime('%Y-%m-%d'),
+        "1 Year": (today - timedelta(days=365)).strftime('%Y-%m-%d'),
+        "5 Years": (today - timedelta(days=1825)).strftime('%Y-%m-%d'),
+        "Max": '1900-01-01'
     }
     
     data = {}
-    for period_name, period_code in periods.items():
-        historical_data = get_historical_data(ticker, period_code)
+    for period_name, start_date in periods.items():
+        historical_data = get_historical_data(ticker, start_date, today.strftime('%Y-%m-%d'))
         percentage_change = calculate_percentage_change(historical_data)
         data[period_name] = f"{percentage_change:.2f}%" if percentage_change is not None else "N/A"
 
