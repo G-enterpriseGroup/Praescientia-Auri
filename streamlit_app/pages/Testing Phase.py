@@ -58,8 +58,8 @@ def get_returns(ticker):
     for period, start_date in start_dates.items():
         data = stock.history(start=start_date, end=end_date)
         if not data.empty:
-            start_price = data['Close'].iloc[-1]
-            end_price = data['Close'].iloc[0]
+            start_price = data['Close'].iloc[0]
+            end_price = data['Close'].iloc[-1]
             returns[period] = f"{(((start_price - end_price) / end_price) * 100):.2f}%"
         else:
             returns[period] = "N/A"
