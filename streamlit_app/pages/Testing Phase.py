@@ -32,4 +32,15 @@ def display_stock_data(ticker):
     for period_name, period_code in periods.items():
         historical_data = get_historical_data(ticker, period_code)
         percentage_change = calculate_percentage_change(historical_data)
- 
+        data.append([period_name, f"{percentage_change:.2f}%" if percentage_change is not None else "N/A"])
+
+    df = pd.DataFrame(data, columns=["Period", "Percentage Change"])
+    st.table(df)
+
+# Streamlit app layout
+st.title("Stock Performance Viewer")
+
+ticker = st.text_input("Enter Ticker Symbol:", "AAPL")
+
+if ticker:
+    display_stock_data(ticker)
