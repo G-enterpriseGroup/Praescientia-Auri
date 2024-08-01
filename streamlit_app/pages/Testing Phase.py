@@ -31,13 +31,13 @@ def display_stock_data(ticker):
     
     st.header(f"Stock Performance for {ticker}")
 
-    data = []
+    data = {}
     for period_name, period_code in periods.items():
         historical_data = get_historical_data(ticker, period_code)
         percentage_change = calculate_percentage_change(historical_data)
-        data.append([period_name, f"{percentage_change:.2f}%" if percentage_change is not None else "N/A"])
+        data[period_name] = [f"{percentage_change:.2f}%" if percentage_change is not None else "N/A"]
 
-    df = pd.DataFrame(data, columns=["Period", "Percentage Change"])
+    df = pd.DataFrame(data)
     st.table(df)
 
 # Streamlit app layout
