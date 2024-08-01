@@ -2,83 +2,86 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
+import yfinance as yf
 
-# Function to get stock data
-def get_stock_data(ticker):
+# Function to get stock data from Stock Analysis
+def get_dividend_data(ticker):
     base_url = "https://stockanalysis.com"
     etf_url = f"{base_url}/etf/{ticker}/dividend/"
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
-    tradingview_url = f"https://www.tradingview.com/symbols/{ticker}/"
-
-    # Initializing the stock data with default N/A values
-    stock_data = {
-        "Ticker": ticker,
-        "Price": "N/A",
-        "Yield %": "N/A",
-        "Annual Dividend": "N/A",
-        "Ex Dividend Date": "N/A",
-        "Frequency": "N/A",
-        "Dividend Growth %": "N/A",
-        "1 Day": "N/A",
-        "5 Days": "N/A",
-        "1 Month": "N/A",
-        "6 Month": "N/A",
-        "YTD": "N/A",
-        "1 Year": "N/A",
-        "5 Year": "N/A",
-        "All Time": "N/A"
-    }
-
+    
     try:
         response = requests.get(etf_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            stock_data.update({
-                "Price": tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0],
-                "Yield %": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0],
-                "Annual Dividend": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0],
-                "Ex Dividend Date": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0],
-                "Frequency": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0],
-                "Dividend Growth %": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0],
-            })
+            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
+            return {"Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, 
+                    "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
         else:
             response = requests.get(stock_url)
             if response.status_code == 200:
                 tree = html.fromstring(response.content)
-                stock_data.update({
-                    "Price": tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0],
-                    "Yield %": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0],
-                    "Annual Dividend": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0],
-                    "Ex Dividend Date": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0],
-                    "Frequency": tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0],
-                    "Dividend Growth %": tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0],
-                })
+                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0]
+                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0]
+                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0]
+                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0]
+                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0]
+                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0]
+                return {"Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, 
+                        "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+            else:
+                return {"Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", 
+                        "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
     except Exception as e:
-        st.write(f"Error fetching stock analysis data for {ticker}: {e}")
+        st.write(f"Error fetching dividend data for {ticker}: {e}")
+        return {"Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", 
+                "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-    # Try to get performance data from TradingView
+# Function to get stock performance data using yfinance
+def get_performance_data(ticker):
     try:
-        response = requests.get(tradingview_url)
-        if response.status_code == 200:
-            tree = html.fromstring(response.content)
+        stock = yf.Ticker(ticker)
+        
+        # Fetch historical market data
+        hist = stock.history(period="5y")
+        
+        # Calculate performance metrics
+        current_price = hist['Close'][-1]
+        one_day_return = ((hist['Close'][-1] / hist['Close'][-2]) - 1) * 100
+        one_month_return = ((hist['Close'][-1] / hist['Close'][-22]) - 1) * 100
+        six_month_return = ((hist['Close'][-1] / hist['Close'][-126]) - 1) * 100
+        one_year_return = ((hist['Close'][-1] / hist['Close'][-252]) - 1) * 100
+        ytd_return = ((hist['Close'][-1] / hist['Close'][f'{hist.index[-1].year}-01-01']) - 1) * 100
+        five_year_return = ((hist['Close'][-1] / hist['Close'][0]) - 1) * 100
+        
+        performance_data = {
+            "Current Price": current_price,
+            "1 Day": f"{one_day_return:.2f}%",
+            "1 Month": f"{one_month_return:.2f}%",
+            "6 Month": f"{six_month_return:.2f}%",
+            "YTD": f"{ytd_return:.2f}%",
+            "1 Year": f"{one_year_return:.2f}%",
+            "5 Year": f"{five_year_return:.2f}%",
+        }
 
-            # Example XPath expressions - adjust based on actual page inspection
-            stock_data.update({
-                "1 Day": tree.xpath('//div[contains(@class, "class-name-for-1D")]//span/text()')[0],
-                "5 Days": tree.xpath('//div[contains(@class, "class-name-for-5D")]//span/text()')[0],
-                "1 Month": tree.xpath('//div[contains(@class, "class-name-for-1M")]//span/text()')[0],
-                "6 Month": tree.xpath('//div[contains(@class, "class-name-for-6M")]//span/text()')[0],
-                "YTD": tree.xpath('//div[contains(@class, "class-name-for-YTD")]//span/text()')[0],
-                "1 Year": tree.xpath('//div[contains(@class, "class-name-for-1Y")]//span/text()')[0],
-                "5 Year": tree.xpath('//div[contains(@class, "class-name-for-5Y")]//span/text()')[0],
-                "All Time": tree.xpath('//div[contains(@class, "class-name-for-All")]//span/text()')[0],
-            })
-        else:
-            st.write(f"TradingView data not found for {ticker}: Status Code {response.status_code}")
+        return performance_data
+    
     except Exception as e:
-        st.write(f"Error fetching TradingView data for {ticker}: {e}")
-
-    return stock_data
+        st.write(f"Error fetching performance data for {ticker}: {e}")
+        return {
+            "Current Price": "N/A",
+            "1 Day": "N/A",
+            "1 Month": "N/A",
+            "6 Month": "N/A",
+            "YTD": "N/A",
+            "1 Year": "N/A",
+            "5 Year": "N/A",
+        }
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -88,7 +91,14 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
-    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
+    data = []
+    for ticker in tickers:
+        ticker = ticker.strip()
+        if ticker:
+            dividend_data = get_dividend_data(ticker)
+            performance_data = get_performance_data(ticker)
+            combined_data = {"Ticker": ticker, **dividend_data, **performance_data}
+            data.append(combined_data)
     df = pd.DataFrame(data)
     
     # Display DataFrame
