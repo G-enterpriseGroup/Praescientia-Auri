@@ -68,7 +68,7 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
     df = pd.DataFrame(data)
-    df['Additional Data'] = [get_additional_stock_data(f"https://www.tradingview.com/symbols/{ticker}") for ticker in tickers]
+
 
     # Display DataFrame
     st.write(df)
