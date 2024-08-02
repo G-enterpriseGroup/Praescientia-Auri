@@ -49,7 +49,7 @@ def calculate_performance(ticker):
         "6 months": today - timedelta(days=183),
         "Year to date": datetime(today.year, 1, 1),
         "1 year": today - timedelta(days=367),
-        "5 years": today - timedelta(days=1828)
+        "5 years": today - timedelta(days=4828)
     }
     
     performance = {}
