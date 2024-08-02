@@ -1,51 +1,53 @@
 import streamlit as st
 import pandas as pd
-import requests
-from lxml import html
+import yfinance as yf
+from datetime import datetime, timedelta
 
-# Function to get stock data
-def get_stock_data(ticker):
-    base_url = "https://stockanalysis.com"
-    etf_url = f"{base_url}/etf/{ticker}/dividend/"
-    stock_url = f"{base_url}/stocks/{ticker}/dividend/"
-
+# Function to get stock performance
+def get_stock_performance(ticker):
     try:
-        response = requests.get(etf_url)
-        if response.status_code == 200:
-            tree = html.fromstring(response.content)
-            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
-            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
-            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
-            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
-            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
-            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
-        else:
-            response = requests.get(stock_url)
-            if response.status_code == 200:
-                tree = html.fromstring(response.content)
-                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
-                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
-                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
-                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
-                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
-                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
-            else:
-                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+        stock = yf.Ticker(ticker)
+        today = datetime.now().date()
+        
+        # Define the date ranges
+        date_ranges = {
+            "1 day": today - timedelta(days=1),
+            "5 days": today - timedelta(days=5),
+            "1 month": today - timedelta(days=30),
+            "6 months": today - timedelta(days=182),
+            "Year to date": datetime(today.year, 1, 1).date(),
+            "1 year": today - timedelta(days=365),
+            "5 years": today - timedelta(days=1825)
+        }
+        
+        # Fetch historical data for the past 5 years
+        data = stock.history(start=date_ranges["5 years"], end=today)
+        
+        # Calculate performance for each period
+        performance = {}
+        for period, start_date in date_ranges.items():
+            try:
+                start_price = data.loc[start_date]["Close"]
+                end_price = data.iloc[-1]["Close"]
+                performance[period] = ((end_price - start_price) / start_price) * 100
+            except:
+                performance[period] = "N/A"
+        
+        return {"Ticker": ticker, **performance}
     except Exception as e:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+        return {"Ticker": ticker, "Error": str(e)}
 
 # Streamlit App
-st.title("Stock and ETF Dashboard")
+st.title("Stock Performance Dashboard")
 
 # Input tickers
 tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
-    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
+    data = [get_stock_performance(ticker.strip()) for ticker in tickers if ticker.strip()]
+    columns = ["Ticker", "1 day", "5 days", "1 month", "6 months", "Year to date", "1 year", "5 years"]
+    df = pd.DataFrame(data, columns=columns)
 
     # Display DataFrame
     st.write(df)
