@@ -53,10 +53,10 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
     # Display DataFrame
 st.write(df)
 
-    # Display performance dates
-    st.header("Performance Dates")
-    dates_table = {period: date.strftime('%m-%d-20%y') for period, date in periods_data.items()}
-    st.table(dates_table)
+# Display performance dates
+st.header("Performance Dates")
+dates_table = {period: date.strftime('%m-%d-20%y') for period, date in periods_data.items()}
+st.table(dates_table)
 
 # Adjust the width and height of the page and ensure table fits the data
 st.markdown(
