@@ -59,7 +59,8 @@ def calculate_performance(ticker):
             if not hist.empty:
                 start_price = hist['Close'].iloc[0]
                 end_price = hist['Close'].iloc[-1]
-                performance[period_name] = round(((end_price - start_price) / start_price) * 100, 3)
+                performance_value = ((end_price - start_price) / start_price) * 100
+                performance[period_name] = f"{performance_value:.3f}%"
             else:
                 performance[period_name] = "N/A"
         except Exception as e:
