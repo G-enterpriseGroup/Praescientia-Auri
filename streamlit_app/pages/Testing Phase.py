@@ -51,7 +51,7 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 
     # Display DataFrame
-    st.write(df)
+st.write(df)
 
     # Display performance dates
     st.header("Performance Dates")
