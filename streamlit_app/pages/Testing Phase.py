@@ -38,34 +38,8 @@ def get_stock_data(ticker):
     except Exception as e:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to calculate stock performance
-def calculate_performance(ticker):
-    stock = yf.Ticker(ticker)
-    today = datetime.now()
-    periods = {
-        "1 day": today - timedelta(days=1),
-        "5 days": today - timedelta(days=5),
-        "1 month": today - timedelta(days=31),
-        "6 months": today - timedelta(days=186),
-        "Year to date": datetime(today.year, 1, 1),
-        "1 year": today - timedelta(days=366),
-        "5 years": today - timedelta(days=1830)
-    }
-    
-    performance = {}
-    for period_name, start_date in periods.items():
-        try:
-            hist = stock.history(start=start_date, end=today)
-            if not hist.empty:
-                start_price = hist['Close'].iloc[0]
-                end_price = hist['Close'].iloc[-1]
-                performance_value = ((end_price - start_price) / start_price) * 100
-                performance[period_name] = f"{performance_value:.3f}%"
-            else:
-                performance[period_name] = "N/A"
-        except Exception as e:
-            performance[period_name] = "N/A"
-    return performance, periods
+
+
 
 # Streamlit App
 st.set_page_config(layout="wide")  # Set the page to wide layout
@@ -74,21 +48,7 @@ st.title("Stock and ETF Dashboard")
 # Input tickers
 tickers = st.text_input("Enter tickers separated by commas").split(',')
 
-# Fetch data for each ticker
-if tickers:
-    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    performance_results = [calculate_performance(ticker.strip()) for ticker in tickers if ticker.strip()]
 
-    performance_data = [result[0] for result in performance_results]
-    periods_data = performance_results[0][1] if performance_results else {}
-
-    for i in range(len(data)):
-        data[i].update(performance_data[i])
-
-    columns = ["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %", 
-               "1 day", "5 days", "1 month", "6 months", "Year to date", "1 year", "5 years"]
-
-    df = pd.DataFrame(data, columns=columns)
 
     # Display DataFrame
     st.write(df)
