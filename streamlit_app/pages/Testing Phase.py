@@ -43,13 +43,13 @@ def calculate_performance(ticker):
     stock = yf.Ticker(ticker)
     today = datetime.now()
     periods = {
-        "1 day": today - timedelta(days=2),
-        "5 days": today - timedelta(days=7),
-        "1 month": today - timedelta(days=32),
-        "6 months": today - timedelta(days=183),
+        "1 day": today - timedelta(days=1),
+        "5 days": today - timedelta(days=5),
+        "1 month": today - timedelta(days=31),
+        "6 months": today - timedelta(days=186),
         "Year to date": datetime(today.year, 1, 1),
-        "1 year": today - timedelta(days=367),
-        "5 years": today - timedelta(days=1828)
+        "1 year": today - timedelta(days=366),
+        "5 years": today - timedelta(days=1830)
     }
     
     performance = {}
