@@ -44,8 +44,8 @@ def calculate_performance(ticker):
     today = datetime.now()
     periods = {
         "1 day": today - timedelta(days=2),
-        "5 days": today - timedelta(days=6),
-        "1 month": today - timedelta(days=31),
+        "5 days": today - timedelta(days=7),
+        "1 month": today - timedelta(days=32),
         "6 months": today - timedelta(days=183),
         "Year to date": datetime(today.year, 1, 1),
         "1 year": today - timedelta(days=366),
