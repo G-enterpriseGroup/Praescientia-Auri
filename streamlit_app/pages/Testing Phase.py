@@ -65,7 +65,7 @@ def calculate_performance(ticker):
                 performance[period_name] = "N/A"
         except Exception as e:
             performance[period_name] = "N/A"
-    return performance
+    return performance, periods
 
 # Streamlit App
 st.set_page_config(layout="wide")  # Set the page to wide layout
@@ -77,7 +77,10 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for each ticker
 if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    performance_data = [calculate_performance(ticker.strip()) for ticker in tickers if ticker.strip()]
+    performance_results = [calculate_performance(ticker.strip()) for ticker in tickers if ticker.strip()]
+
+    performance_data = [result[0] for result in performance_results]
+    periods_data = performance_results[0][1] if performance_results else {}
 
     for i in range(len(data)):
         data[i].update(performance_data[i])
@@ -90,10 +93,10 @@ if tickers:
     # Display DataFrame
     st.write(df)
 
-    # List performance dates
-    st.sidebar.title("Performance Dates")
-    for period, date in calculate_performance(tickers[0]).items():
-        st.sidebar.write(f"{period}: {date}")
+    # Display performance dates
+    st.header("Performance Dates")
+    dates_table = {period: date.strftime('%Y-%m-%d') for period, date in periods_data.items()}
+    st.table(dates_table)
 
 # Adjust the width and height of the page and ensure table fits the data
 st.markdown(
