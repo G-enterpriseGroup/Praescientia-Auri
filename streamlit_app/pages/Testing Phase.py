@@ -68,6 +68,7 @@ def calculate_performance(ticker):
     return performance
 
 # Streamlit App
+st.set_page_config(layout="wide")  # Set the page to wide layout
 st.title("Stock and ETF Dashboard")
 
 # Input tickers
@@ -88,6 +89,11 @@ if tickers:
 
     # Display DataFrame
     st.write(df)
+
+    # List performance dates
+    st.sidebar.title("Performance Dates")
+    for period, date in calculate_performance(tickers[0]).items():
+        st.sidebar.write(f"{period}: {date}")
 
 # Adjust the width and height of the page and ensure table fits the data
 st.markdown(
