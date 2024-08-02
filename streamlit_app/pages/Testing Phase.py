@@ -95,7 +95,7 @@ if tickers:
 
     # Display performance dates
     st.header("Performance Dates")
-    dates_table = {period: date.strftime('%Y-%m-%d') for period, date in periods_data.items()}
+    dates_table = {period: date.strftime('%m-%d-%y') for period, date in periods_data.items()}
     st.table(dates_table)
 
 # Adjust the width and height of the page and ensure table fits the data
