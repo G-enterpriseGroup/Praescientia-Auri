@@ -56,15 +56,14 @@ def get_additional_stock_data(ticker):
                 year_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0].strip()
                 all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
             except IndexError:
-                # Fall back to ETF XPath if stock XPath fails
-                day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
-                day_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[2]/span/span[2]/text()')[0].strip()
-                month_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[3]/span/span[2]/text()')[0].strip()
-                month_6 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[4]/span/span[2]/text()')[0].strip()
-                ytd = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[5]/span/span[2]/text()')[0].strip()
-                year_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[6]/span/span[2]/text()')[0].strip()
-                year_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[7]/span/span[2]/text()')[0].strip()
-                all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
+                day_1 = tree.xpath('//button[span/span[text()="1 day"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                day_5 = tree.xpath('//button[span/span[text()="5 days"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_1 = tree.xpath('//button[span/span[text()="1 month"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_6 = tree.xpath('//button[span/span[text()="6 months"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                ytd = tree.xpath('//button[span/span[text()="Year to date"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_1 = tree.xpath('//button[span/span[text()="1 year"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_5 = tree.xpath('//button[span/span[text()="5 years"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                all_time = tree.xpath('//button[span/span[text()="All time"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
 
             return {"1 Day": day_1, "5 Days": day_5, "1 Month": month_1, "6 Month": month_6, "YTD": ytd, "1 Year": year_1, "5 Year": year_5, "All Time": all_time}
         else:
