@@ -61,7 +61,7 @@ def get_additional_stock_data(ticker):
 
 # Function to get additional ETF data
 def get_additional_etf_data(ticker):
-    base_url = "https://www.tradingview.com/symbols/"+ ticker
+    base_url = "https://www.tradingview.com/symbols/AMEX-" + ticker
     try:
         response = requests.get(base_url)
         if response.status_code == 200:
@@ -80,13 +80,6 @@ def get_additional_etf_data(ticker):
     except Exception as e:
         return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A"}
 
-# Function to check if a ticker is an ETF
-def is_etf(ticker):
-    # Here you can implement a logic to determine if a ticker is an ETF.
-    # For example, you could use a set of known ETF tickers.
-    etf_list = {"SPY", "IVV", "VOO", "QQQ"}  # Add other known ETF tickers as needed
-    return ticker in etf_list
-
 # Streamlit App
 st.title("Stock and ETF Dashboard")
 
@@ -98,13 +91,16 @@ if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
     df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
 
-    # Get additional data for each ticker, differentiating between stocks and ETFs
+    # Get additional data for each ticker, attempting ETF path if stock path fails
     additional_data = []
     for ticker in df["Ticker"]:
-        if is_etf(ticker.strip()):  # Check if the ticker is an ETF
-            additional_data.append(get_additional_etf_data(ticker.strip()))
-        else:
+        # Attempt to fetch ETF data first
+        additional_etf_data = get_additional_etf_data(ticker.strip())
+        if all(value == "N/A" for value in additional_etf_data.values()):
+            # If ETF data is not available, fallback to stock data
             additional_data.append(get_additional_stock_data(ticker.strip()))
+        else:
+            additional_data.append(additional_etf_data)
 
     additional_df = pd.DataFrame(additional_data)
 
