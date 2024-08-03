@@ -28,10 +28,10 @@ def get_stock_data(ticker):
                 tree = html.fromstring(response.content)
                 price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
                 yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
-                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
-                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
+                annual_dividend = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
+                ex_dividend_date = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
                 frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
-                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
+                dividend_growth = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
                 return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
     except Exception as e:
         print(f"Error fetching data for {ticker}: {e}")
