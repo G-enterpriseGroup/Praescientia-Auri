@@ -45,15 +45,15 @@ def get_additional_stock_data(ticker):
         response = requests.get(base_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            # Corrected XPath expressions
-            day_1 = tree.xpath('//div[@data-field="change|1D"]/span/text()')[0].strip()
-            day_5 = tree.xpath('//div[@data-field="change|5D"]/span/text()')[0].strip()
-            month_1 = tree.xpath('//div[@data-field="change|1M"]/span/text()')[0].strip()
-            month_6 = tree.xpath('//div[@data-field="change|6M"]/span/text()')[0].strip()
-            ytd = tree.xpath('//div[@data-field="change|YTD"]/span/text()')[0].strip()
-            year_1 = tree.xpath('//div[@data-field="change|1Y"]/span/text()')[0].strip()
-            year_5 = tree.xpath('//div[@data-field="change|5Y"]/span/text()')[0].strip()
-            all_time = tree.xpath('//div[@data-field="change|ALL"]/span/text()')[0].strip()
+            # Corrected XPath expressions based on the TradingView page structure
+            day_1 = tree.xpath('//div[@class="tv-widget-symbol-header__change-value"]/text()')[0].strip()
+            day_5 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[1].strip()
+            month_1 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[2].strip()
+            month_6 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[3].strip()
+            ytd = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[4].strip()
+            year_1 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[5].strip()
+            year_5 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[6].strip()
+            all_time = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[7].strip()
             return {"1 Day": day_1, "5 Days": day_5, "1 Month": month_1, "6 Month": month_6, "YTD": ytd, "1 Year": year_1, "5 Year": year_5, "All Time": all_time}
     except Exception as e:
         print(f"Error fetching additional data for {ticker}: {e}")
