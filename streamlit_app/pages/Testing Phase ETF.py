@@ -99,6 +99,9 @@ if tickers:
     # Combine main data and additional data
     df = pd.concat([df, additional_df, additional_etf_df], axis=1)
 
+    # Reset index and fill NAs
+    df = df.reset_index(drop=True).fillna("N/A")
+
     # Display DataFrame
     st.write(df)
 
