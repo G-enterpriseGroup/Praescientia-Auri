@@ -59,7 +59,7 @@ def get_additional_stock_data(ticker):
 
 # Function to get additional ETF data
 def get_additional_etf_data(ticker):
-    base_url = "https://www.tradingview.com/symbols/" + ticker + "-ETF/"
+    base_url = "https://www.tradingview.com/symbols/" + ticker
     try:
         response = requests.get(base_url)
         if response.status_code == 200:
@@ -98,9 +98,6 @@ if tickers:
 
     # Combine main data and additional data
     df = pd.concat([df, additional_df, additional_etf_df], axis=1)
-
-    # Reset index and fill NAs
-    df = df.reset_index(drop=True).fillna("N/A")
 
     # Display DataFrame
     st.write(df)
