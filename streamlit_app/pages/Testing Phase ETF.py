@@ -35,20 +35,6 @@ def get_stock_data(ticker):
                 return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
     except Exception as e:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # Function to get additional stock data
@@ -73,20 +59,28 @@ def get_additional_stock_data(ticker):
         return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
 
 
+# Function to get ETF performance data
+def get_etf_performance_data(ticker):
+    base_url = "https://www.tradingview.com/symbols/" + ticker
+    try:
+        response = requests.get(base_url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+            # Modify the XPaths below with the correct ones for ETF performance data
+            etf_day_1 = tree.xpath('CORRECT_XPATH_FOR_ETF_1_DAY')[0].strip()
+            etf_day_5 = tree.xpath('CORRECT_XPATH_FOR_ETF_5_DAY')[0].strip()
+            etf_month_1 = tree.xpath('CORRECT_XPATH_FOR_ETF_1_MONTH')[0].strip()
+            etf_month_6 = tree.xpath('CORRECT_XPATH_FOR_ETF_6_MONTH')[0].strip()
+            etf_ytd = tree.xpath('CORRECT_XPATH_FOR_ETF_YTD')[0].strip()
+            etf_year_1 = tree.xpath('CORRECT_XPATH_FOR_ETF_1_YEAR')[0].strip()
+            etf_year_5 = tree.xpath('CORRECT_XPATH_FOR_ETF_5_YEAR')[0].strip()
+            etf_all_time = tree.xpath('CORRECT_XPATH_FOR_ETF_ALL_TIME')[0].strip()
+            return {"ETF 1 Day": etf_day_1, "ETF 5 Days": etf_day_5, "ETF 1 Month": etf_month_1, "ETF 6 Month": etf_month_6, "ETF YTD": etf_ytd, "ETF 1 Year": etf_year_1, "ETF 5 Year": etf_year_5, "ETF All Time": etf_all_time}
+        else:
+            return {"ETF 1 Day": "N/A", "ETF 5 Days": "N/A", "ETF 1 Month": "N/A", "ETF 6 Month": "N/A", "ETF YTD": "N/A", "ETF 1 Year": "N/A", "ETF 5 Year": "N/A", "ETF All Time": "N/A"}
+    except Exception as e:
+        return {"ETF 1 Day": "N/A", "ETF 5 Days": "N/A", "ETF 1 Month": "N/A", "ETF 6 Month": "N/A", "ETF YTD": "N/A", "ETF 1 Year": "N/A", "ETF 5 Year": "N/A", "ETF All Time": "N/A"}
 
-
-
-
-
-
-
-
-
-
-
-
-
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -105,6 +99,13 @@ if tickers:
 
     # Combine main data and additional data
     df = pd.concat([df, additional_df], axis=1)
+
+    # Get ETF performance data for each ticker
+    etf_performance_data = [get_etf_performance_data(ticker.strip()) for ticker in tickers if ticker.strip()]
+    etf_performance_df = pd.DataFrame(etf_performance_data)
+
+    # Combine all dataframes
+    df = pd.concat([df, etf_performance_df], axis=1)
 
     # Display DataFrame
     st.write(df)
