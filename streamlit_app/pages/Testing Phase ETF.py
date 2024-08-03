@@ -3,43 +3,42 @@ import pandas as pd
 import requests
 from lxml import html
 
-# Function to get stock data
-def get_stock_data(ticker):
+# Function to get stock or ETF data
+def get_data(ticker):
     base_url = "https://stockanalysis.com"
-    etf_url = f"{base_url}/etf/{ticker}/dividend/"
     stock_url = f"{base_url}/stocks/{ticker}/dividend/"
+    etf_url = f"{base_url}/etf/{ticker}/dividend/"
 
     try:
-        # Attempt to fetch stock data first
+        # Try fetching stock data first
         response = requests.get(stock_url)
         if response.status_code == 200:
-            tree = html.fromstring(response.content)
-            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
-            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
-            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
-            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
-            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
-            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
-            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+            data = parse_data(response)
+            return data
         else:
-            # If stock URL fails, attempt to fetch ETF data
+            # If stock data fails, try fetching ETF data
             response = requests.get(etf_url)
             if response.status_code == 200:
-                tree = html.fromstring(response.content)
-                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
-                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
-                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
-                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
-                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
-                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+                data = parse_data(response)
+                return data
     except Exception as e:
         print(f"Error fetching data for {ticker}: {e}")
 
     return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to get additional stock data
-def get_additional_stock_data(ticker):
+# Function to parse data from the response
+def parse_data(response):
+    tree = html.fromstring(response.content)
+    price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
+    yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
+    annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
+    ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
+    frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
+    dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
+    return {"Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+
+# Function to get performance data
+def get_performance_data(ticker):
     base_url = "https://www.tradingview.com/symbols/" + ticker
     try:
         response = requests.get(base_url)
@@ -57,7 +56,7 @@ def get_additional_stock_data(ticker):
         else:
             return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
     except Exception as e:
-        return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A"}
+        return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
@@ -67,20 +66,21 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
-    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
-
-    # Get additional data for each ticker
-    additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
-    additional_df = pd.DataFrame(additional_data)
-
-    # Combine main data and additional data
-    df = pd.concat([df, additional_df], axis=1)
-
+    data = []
+    for ticker in tickers:
+        ticker = ticker.strip()
+        ticker_data = get_data(ticker)
+        ticker_data["Ticker"] = ticker
+        performance_data = get_performance_data(ticker)
+        ticker_data.update(performance_data)
+        data.append(ticker_data)
+    
+    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %", "1 Day", "5 Days", "1 Month", "6 Month", "YTD", "1 Year", "5 Year", "All Time"])
+    
     # Display DataFrame
     st.write(df)
 
-# Adjust the width and height of the page and ensure table fits the data
+# Adjust the width and height of the page and ensure the table fits the data
 st.markdown(
     """
     <style>
