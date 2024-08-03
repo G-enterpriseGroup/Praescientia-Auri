@@ -80,12 +80,6 @@ def get_additional_etf_data(ticker):
     except Exception as e:
         return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A"}
 
-# Function to check if a ticker is an ETF
-def is_etf(ticker):
-    # Here you can implement a logic to determine if a ticker is an ETF.
-    # For example, you could use a set of known ETF tickers.
-    etf_list = {"SPY", "IVV", "VOO", "QQQ"}  # Add other known ETF tickers as needed
-    return ticker in etf_list
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
