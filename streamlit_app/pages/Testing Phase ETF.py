@@ -32,11 +32,54 @@ def get_stock_data(ticker):
                 ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
                 frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
                 dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
-                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+
+                # Placeholders for ETF performance XPaths
+                etf_1_day = tree.xpath('//placeholder_xpath_for_1_day/text()')[0].strip()  # Add actual XPath
+                etf_5_days = tree.xpath('//placeholder_xpath_for_5_days/text()')[0].strip()  # Add actual XPath
+                etf_1_month = tree.xpath('//placeholder_xpath_for_1_month/text()')[0].strip()  # Add actual XPath
+                etf_6_months = tree.xpath('//placeholder_xpath_for_6_months/text()')[0].strip()  # Add actual XPath
+                etf_ytd = tree.xpath('//placeholder_xpath_for_ytd/text()')[0].strip()  # Add actual XPath
+                etf_1_year = tree.xpath('//placeholder_xpath_for_1_year/text()')[0].strip()  # Add actual XPath
+                etf_5_years = tree.xpath('//placeholder_xpath_for_5_years/text()')[0].strip()  # Add actual XPath
+                etf_all_time = tree.xpath('//placeholder_xpath_for_all_time/text()')[0].strip()  # Add actual XPath
+
+                return {
+                    "Ticker": ticker,
+                    "Price": price,
+                    "Yield %": yield_percent,
+                    "Annual Dividend": annual_dividend,
+                    "Ex Dividend Date": ex_dividend_date,
+                    "Frequency": frequency,
+                    "Dividend Growth %": dividend_growth,
+                    "ETF 1 Day": etf_1_day,
+                    "ETF 5 Days": etf_5_days,
+                    "ETF 1 Month": etf_1_month,
+                    "ETF 6 Months": etf_6_months,
+                    "ETF YTD": etf_ytd,
+                    "ETF 1 Year": etf_1_year,
+                    "ETF 5 Years": etf_5_years,
+                    "ETF All Time": etf_all_time
+                }
     except Exception as e:
         print(f"Error fetching data for {ticker}: {e}")
 
-    return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+    return {
+        "Ticker": ticker,
+        "Price": "N/A",
+        "Yield %": "N/A",
+        "Annual Dividend": "N/A",
+        "Ex Dividend Date": "N/A",
+        "Frequency": "N/A",
+        "Dividend Growth %": "N/A",
+        "ETF 1 Day": "N/A",
+        "ETF 5 Days": "N/A",
+        "ETF 1 Month": "N/A",
+        "ETF 6 Months": "N/A",
+        "ETF YTD": "N/A",
+        "ETF 1 Year": "N/A",
+        "ETF 5 Years": "N/A",
+        "ETF All Time": "N/A"
+    }
 
 # Function to get additional stock data
 def get_additional_stock_data(ticker):
@@ -68,7 +111,11 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for each ticker
 if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
+    df = pd.DataFrame(data, columns=[
+        "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", 
+        "Frequency", "Dividend Growth %", "ETF 1 Day", "ETF 5 Days", 
+        "ETF 1 Month", "ETF 6 Months", "ETF YTD", "ETF 1 Year", "ETF 5 Years", "ETF All Time"
+    ])
 
     # Get additional data for each ticker
     additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
