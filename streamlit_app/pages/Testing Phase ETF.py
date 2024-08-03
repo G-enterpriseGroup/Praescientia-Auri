@@ -71,7 +71,7 @@ def parse_data(response, is_etf):
 
 # Function to get performance data
 def get_performance_data(ticker):
-    base_url = "https://www.tradingview.com/symbols/" + ticker
+    base_url = "https://www.tradingview.com/symbols/AMEX-" + ticker
     try:
         response = requests.get(base_url)
         if response.status_code == 200:
