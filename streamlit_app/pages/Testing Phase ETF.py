@@ -40,24 +40,24 @@ def get_stock_data(ticker):
 
 # Function to get additional stock data
 def get_additional_stock_data(ticker):
-    base_url = "https://www.tradingview.com/symbols/AMEX-" + ticker + "/"
+    base_url = "https://www.tradingview.com/symbols/" + ticker
     try:
         response = requests.get(base_url)
         if response.status_code == 200:
             tree = html.fromstring(response.content)
-            # Corrected XPath expressions based on the TradingView page structure
-            day_1 = tree.xpath('//div[@class="tv-widget-symbol-header__change-value"]/text()')[0].strip()
-            day_5 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[1].strip()
-            month_1 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[2].strip()
-            month_6 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[3].strip()
-            ytd = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[4].strip()
-            year_1 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[5].strip()
-            year_5 = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[6].strip()
-            all_time = tree.xpath('//span[@class="tv-widget-stats__change-value"]/text()')[7].strip()
+            day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
+            day_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')[0].strip()
+            month_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')[0].strip()
+            month_6 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')[0].strip()
+            ytd = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')[0].strip()
+            year_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')[0].strip()
+            year_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0].strip()
+            all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
             return {"1 Day": day_1, "5 Days": day_5, "1 Month": month_1, "6 Month": month_6, "YTD": ytd, "1 Year": year_1, "5 Year": year_5, "All Time": all_time}
+        else:
+            return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
     except Exception as e:
-        print(f"Error fetching additional data for {ticker}: {e}")
-    return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
+        return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
