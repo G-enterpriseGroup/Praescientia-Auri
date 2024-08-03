@@ -57,7 +57,7 @@ def get_additional_stock_data(ticker):
                 all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
             except IndexError:
                 # Fall back to ETF XPath if stock XPath fails
-                day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
+                day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[3]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
                 day_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[2]/span/span[2]/text()')[0].strip()
                 month_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[3]/span/span[2]/text()')[0].strip()
                 month_6 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[1]/div/div[2]/button[4]/span/span[2]/text()')[0].strip()
