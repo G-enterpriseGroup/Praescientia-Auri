@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
-import yfinance as yf
-from datetime import datetime, timedelta
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -38,37 +36,42 @@ def get_stock_data(ticker):
     except Exception as e:
         return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to calculate stock performance
-def calculate_performance(ticker):
-    stock = yf.Ticker(ticker)
-    today = datetime.now()
-    periods = {
-        "1 day": today - timedelta(days=2),
-        "5 days": today - timedelta(days=7),
-        "1 month": today - timedelta(days=32),
-        "6 months": today - timedelta(days=183),
-        "Year to date": datetime(today.year, 1, 1),
-        "1 year": today - timedelta(days=367),
-        "5 years": today - timedelta(days=1828)
-    }
-    
-    performance = {}
-    for period_name, start_date in periods.items():
-        try:
-            hist = stock.history(start=start_date, end=today)
-            if not hist.empty:
-                start_price = hist['Close'].iloc[0]
-                end_price = hist['Close'].iloc[-1]
-                performance_value = ((end_price - start_price) / start_price) * 100
-                performance[period_name] = f"{performance_value:.3f}%"
-            else:
-                performance[period_name] = "N/A"
-        except Exception as e:
-            performance[period_name] = "N/A"
-    return performance, periods
+# Function to get additional stock or ETF data
+def get_additional_stock_data(ticker):
+    base_url = f"https://www.tradingview.com/symbols/{ticker}/"
+    try:
+        response = requests.get(base_url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+
+            # Attempt both stock and ETF XPaths
+            try:
+                # First try stock XPath
+                day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
+                day_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')[0].strip()
+                month_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')[0].strip()
+                month_6 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')[0].strip()
+                ytd = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')[0].strip()
+                year_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')[0].strip()
+                year_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0].strip()
+                all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
+            except IndexError:
+                day_1 = tree.xpath('//button[span/span[text()="1 day"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                day_5 = tree.xpath('//button[span/span[text()="5 days"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_1 = tree.xpath('//button[span/span[text()="1 month"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_6 = tree.xpath('//button[span/span[text()="6 months"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                ytd = tree.xpath('//button[span/span[text()="Year to date"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_1 = tree.xpath('//button[span/span[text()="1 year"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_5 = tree.xpath('//button[span/span[text()="5 years"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                all_time = tree.xpath('//button[span/span[text()="All time"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+
+            return {"1 Day": day_1, "5 Days": day_5, "1 Month": month_1, "6 Month": month_6, "YTD": ytd, "1 Year": year_1, "5 Year": year_5, "All Time": all_time}
+        else:
+            return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
+    except Exception as e:
+        return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
 
 # Streamlit App
-st.set_page_config(layout="wide")  # Set the page to wide layout
 st.title("Stock and ETF Dashboard")
 
 # Input tickers
@@ -77,26 +80,17 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for each ticker
 if tickers:
     data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    performance_results = [calculate_performance(ticker.strip()) for ticker in tickers if ticker.strip()]
+    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
 
-    performance_data = [result[0] for result in performance_results]
-    periods_data = performance_results[0][1] if performance_results else {}
+    # Get additional data for each ticker
+    additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
+    additional_df = pd.DataFrame(additional_data)
 
-    for i in range(len(data)):
-        data[i].update(performance_data[i])
-
-    columns = ["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %", 
-               "1 day", "5 days", "1 month", "6 months", "Year to date", "1 year", "5 years"]
-
-    df = pd.DataFrame(data, columns=columns)
+    # Combine main data and additional data
+    df = pd.concat([df, additional_df], axis=1)
 
     # Display DataFrame
     st.write(df)
-
-    # Display performance dates
-    st.header("Performance Dates")
-    dates_table = {period: date.strftime('%m-%d-20%y') for period, date in periods_data.items()}
-    st.table(dates_table)
 
 # Adjust the width and height of the page and ensure table fits the data
 st.markdown(
