@@ -52,7 +52,7 @@ def get_stock_data(ticker):
 
 # Function to get additional ETF data
 def get_additional_etf_data(ticker):
-    base_url = "https://www.tradingview.com/symbols/AMEX-" + ticker + "/"
+    base_url = "https://www.tradingview.com/symbols/" + ticker + "/"
     try:
         response = requests.get(base_url)
         if response.status_code == 200:
