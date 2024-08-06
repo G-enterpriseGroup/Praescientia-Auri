@@ -45,13 +45,9 @@ else:
     st.write("No tickers found.")
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------------
-import streamlit as st
-import requests
-from bs4 import BeautifulSoup
-import streamlit.components.v1 as components
 
-def fetch_tickers(url):
-    response = requests.get(url)
+def fetch_tickers(url2):
+    response = requests.get(url2)
     html = response.text
 
     start = html.find('"symbols":[') + len('"symbols":[')
