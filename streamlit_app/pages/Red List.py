@@ -65,17 +65,17 @@ def clean_tickers(tickers):
     return [ticker.split(':')[1] if ':' in ticker else ticker for ticker in tickers]
 
 # URL of the HTML file
-url = 'https://www.tradingview.com/watchlists/139248623/'  # Replace with the actual URL of your HTML file
+url2 = 'https://www.tradingview.com/watchlists/158248037/'  # Replace with the actual URL of your HTML file
 
 st.title("Raj's Trading View Red List")
 st.write("Fetching tickers from file...")
 
 if st.button('Refresh'):
-    tickers = fetch_tickers(url)
+    tickers = fetch_tickers(url2)
     st.session_state.cleaned_tickers = clean_tickers(tickers)
 
 if 'cleaned_tickers' not in st.session_state:
-    tickers = fetch_tickers(url)
+    tickers = fetch_tickers(url2)
     st.session_state.cleaned_tickers = clean_tickers(tickers)
 
 if st.session_state.cleaned_tickers:
