@@ -42,9 +42,9 @@ def display_tickers(url):
         st.write("No tickers found.")
 
 # Display tickers for URL 1
-with st.beta_expander("Tickers from URL 1"):
+with st.expander("Tickers from URL 1"):
     display_tickers(url1)
 
 # Display tickers for URL 2
-with st.beta_expander("Tickers from URL 2"):
+with st.expander("Tickers from URL 2"):
     display_tickers(url2)
