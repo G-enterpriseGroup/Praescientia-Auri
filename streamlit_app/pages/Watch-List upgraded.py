@@ -21,10 +21,10 @@ def clean_tickers(tickers):
 url1 = 'https://www.tradingview.com/watchlists/139248623/'
 url2 = 'https://www.tradingview.com/watchlists/158248037/'
 
-st.title("Raj's Trading View Red List")
+st.title("G-EnterpriseGroup Trading List")
 
 def display_tickers(url):
-    st.write(f"Fetching tickers from URL: {url}")
+    st.write(f"Fetching tickers from G-EnterpriseGroup Database: {url}")
 
     tickers = fetch_tickers(url)
     cleaned_tickers = clean_tickers(tickers)
@@ -42,9 +42,9 @@ def display_tickers(url):
         st.write("No tickers found.")
 
 # Display tickers for URL 1
-with st.expander("Tickers from URL 1"):
+with st.expander("Tickers from List - Red"):
     display_tickers(url1)
 
 # Display tickers for URL 2
-with st.expander("Tickers from URL 2"):
+with st.expander("Tickers from List - Banks"):
     display_tickers(url2)
