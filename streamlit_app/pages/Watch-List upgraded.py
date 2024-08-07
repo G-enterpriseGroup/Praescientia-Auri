@@ -26,7 +26,7 @@ st.title("G-EnterpriseGroup Trading List")
 # Main page reload button
 if st.button("Reload Page"):
     # Setting query params to force reload
-    st.query_params()
+    st.experimental_set_query_params()
 
 def display_tickers(url):
     st.write("Fetching tickers from G-EnterpriseGroup Database:")
