@@ -26,13 +26,7 @@ st.title("G-EnterpriseGroup Trading List")
 def display_tickers(url, button_key):
     st.write("Fetching tickers from G-EnterpriseGroup Database:")
 
-    if st.session_state.get(button_key, False):
-        # Fetch tickers only if the button was pressed
-        tickers = fetch_tickers(url)
-        st.session_state[button_key] = False  # Reset the button state
-    else:
-        tickers = []
-
+    tickers = fetch_tickers(url)
     cleaned_tickers = clean_tickers(tickers)
 
     if cleaned_tickers:
@@ -46,18 +40,11 @@ def display_tickers(url, button_key):
         """
         components.html(copy_button)
 
+        # Refresh button
+        if st.button("Refresh", key=button_key):
+            st.experimental_rerun()
     else:
         st.write("No tickers found.")
-
-    # Refresh button
-    if st.button("Refresh", key=button_key):
-        st.session_state[button_key] = True  # Set the button state to refresh
-
-# Initialize session state
-if 'refresh_red' not in st.session_state:
-    st.session_state['refresh_red'] = True  # Initialize to fetch on first load
-if 'refresh_banks' not in st.session_state:
-    st.session_state['refresh_banks'] = True  # Initialize to fetch on first load
 
 # Display tickers for URL 1
 with st.expander("Tickers from List - Red"):
