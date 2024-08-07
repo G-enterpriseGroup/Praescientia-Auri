@@ -19,7 +19,7 @@ def clean_tickers(tickers):
 
 # URL of the HTML files
 url1 = 'https://www.tradingview.com/watchlists/139248623/'
-url2 = 'https://www.tradingview.com/watchlists/158248037/'
+url2 = 'https://www.tradingview.com/watchlists/158296099/'
 
 st.title("G-EnterpriseGroup Trading List")
 
