@@ -24,7 +24,7 @@ url2 = 'https://www.tradingview.com/watchlists/158248037/'
 st.title("G-EnterpriseGroup Trading List")
 
 def display_tickers(url):
-    st.write(f"Fetching tickers from G-EnterpriseGroup Database: {url}")
+    st.write(f"Fetching tickers from G-EnterpriseGroup Database:")
 
     tickers = fetch_tickers(url)
     cleaned_tickers = clean_tickers(tickers)
