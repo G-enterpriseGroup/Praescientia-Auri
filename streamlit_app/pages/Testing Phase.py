@@ -88,4 +88,35 @@ if tickers:
             stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
             data.append(stock_info)
 
-    df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date
+    df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
+
+    # Get additional data for each ticker
+    additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
+    additional_df = pd.DataFrame(additional_data)
+
+    # Combine main data and additional data
+    df = pd.concat([df, additional_df], axis=1)
+
+    # Display DataFrame
+    st.write(df)
+
+# Adjust the width and height of the page and ensure table fits the data
+st.markdown(
+    """
+    <style>
+    .reportview-container .main .block-container{
+        max-width: 100%;
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+    }
+    table {
+        width: 100% !important;
+        height: 100% !important;
+        table-layout: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
