@@ -34,26 +34,10 @@ def display_tickers(url):
         tickers_str = ", ".join(cleaned_tickers)
         st.write(tickers_str)
 
-        # Styled copy button
         copy_button = f"""
-        <style>
-        .copy-button {{
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 12px;
-        }}
-        </style>
-        <button class="copy-button" onclick="navigator.clipboard.writeText('{tickers_str}')">Copy Tickers</button>
+        <button onclick="navigator.clipboard.writeText('{tickers_str}')">Copy Tickers</button>
         """
-        components.html(copy_button, height=40)
+        components.html(copy_button)
     else:
         st.write("No tickers found.")
 
