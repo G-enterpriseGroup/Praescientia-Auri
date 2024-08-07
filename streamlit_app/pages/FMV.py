@@ -1,51 +1,41 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+from datetime import datetime, timedelta
 
-def fetch_financial_data(ticker):
+def fetch_historical_data(ticker, days):
     stock = yf.Ticker(ticker)
-    info = stock.info
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    hist = stock.history(start=start_date, end=end_date)
     
-    # Fetching required financial data
-    pe_ratio = info.get('trailingPE', None)
-    pb_ratio = info.get('priceToBook', None)
-    ps_ratio = info.get('priceToSalesTrailing12Months', None)
-    eps = info.get('trailingEps', None)
-    book_value = info.get('bookValue', None)
-    revenue_per_share = info.get('revenuePerShare', None)
+    # Calculate the average closing price
+    average_price = hist['Close'].mean()
     
-    # Placeholder calculations for DDM and EV multiples
-    ddm_value = None  # To be calculated with future dividend estimates
-    ev_ebitda_multiple = None  # To be calculated with EBITDA values
-
     return {
         "Ticker": ticker,
-        "P/E Ratio": pe_ratio,
-        "P/B Ratio": pb_ratio,
-        "P/S Ratio": ps_ratio,
-        "EPS": eps,
-        "Book Value": book_value,
-        "Revenue Per Share": revenue_per_share,
-        "DDM Value": ddm_value,
-        "EV/EBITDA Multiple": ev_ebitda_multiple
+        "Average Price ({} days)".format(days): average_price
     }
 
-def calculate_valuation_metrics(tickers):
-    financial_data = []
+def calculate_average_prices(tickers, days):
+    historical_data = []
     for ticker in tickers:
-        data = fetch_financial_data(ticker)
-        financial_data.append(data)
+        data = fetch_historical_data(ticker, days)
+        historical_data.append(data)
     
-    df = pd.DataFrame(financial_data)
+    df = pd.DataFrame(historical_data)
     return df
 
 # Streamlit app
-st.title("Stock Valuation Metrics")
+st.title("Average Stock Price Over Specified Days")
 
 # Input for tickers
 tickers_input = st.text_input("Enter stock tickers separated by commas:", "AAPL,MSFT,GOOGL")
 tickers = [ticker.strip() for ticker in tickers_input.split(',')]
 
-if st.button("Calculate Valuation Metrics"):
-    valuation_df = calculate_valuation_metrics(tickers)
-    st.dataframe(valuation_df)
+# Input for number of days
+days_input = st.number_input("Enter the number of days to calculate the average price:", min_value=1, value=30)
+
+if st.button("Calculate Average Prices"):
+    average_prices_df = calculate_average_prices(tickers, days_input)
+    st.dataframe(average_prices_df)
