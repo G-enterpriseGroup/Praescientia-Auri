@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
+import yfinance as yf
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -79,8 +80,15 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
-    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
+    data = []
+    for ticker in tickers:
+        ticker = ticker.strip()
+        if ticker:
+            stock_info = get_stock_data(ticker)
+            stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
+            data.append(stock_info)
+
+    df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
 
     # Get additional data for each ticker
     additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
