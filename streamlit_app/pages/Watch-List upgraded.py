@@ -23,7 +23,11 @@ url2 = 'https://www.tradingview.com/watchlists/158296099/'
 
 st.title("G-EnterpriseGroup Trading List")
 
-def display_tickers(url, button_key):
+# Main page reload button
+if st.button("Reload Page"):
+    st.experimental_rerun()
+
+def display_tickers(url):
     st.write("Fetching tickers from G-EnterpriseGroup Database:")
 
     tickers = fetch_tickers(url)
@@ -39,17 +43,13 @@ def display_tickers(url, button_key):
         <button onclick="navigator.clipboard.writeText('{tickers_str}')">Copy Tickers</button>
         """
         components.html(copy_button)
-
-        # Refresh button
-        if st.button("Refresh", key=button_key):
-            st.experimental_rerun()
     else:
         st.write("No tickers found.")
 
 # Display tickers for URL 1
 with st.expander("Tickers from List - Red"):
-    display_tickers(url1, "refresh_red")
+    display_tickers(url1)
 
 # Display tickers for URL 2
 with st.expander("Tickers from List - Banks"):
-    display_tickers(url2, "refresh_banks")
+    display_tickers(url2)
