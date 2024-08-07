@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from lxml import html
+import yfinance as yf
 
 # Function to get stock data
 def get_stock_data(ticker):
@@ -79,36 +80,12 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 # Fetch data for each ticker
 if tickers:
-    data = [get_stock_data(ticker.strip()) for ticker in tickers if ticker.strip()]
-    df = pd.DataFrame(data, columns=["Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
+    data = []
+    for ticker in tickers:
+        ticker = ticker.strip()
+        if ticker:
+            stock_info = get_stock_data(ticker)
+            stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
+            data.append(stock_info)
 
-    # Get additional data for each ticker
-    additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
-    additional_df = pd.DataFrame(additional_data)
-
-    # Combine main data and additional data
-    df = pd.concat([df, additional_df], axis=1)
-
-    # Display DataFrame
-    st.write(df)
-
-# Adjust the width and height of the page and ensure table fits the data
-st.markdown(
-    """
-    <style>
-    .reportview-container .main .block-container{
-        max-width: 100%;
-        padding-top: 2rem;
-        padding-right: 2rem;
-        padding-left: 2rem;
-        padding-bottom: 2rem;
-    }
-    table {
-        width: 100% !important;
-        height: 100% !important;
-        table-layout: auto !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+    df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date
