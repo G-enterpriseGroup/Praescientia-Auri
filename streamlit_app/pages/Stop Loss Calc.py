@@ -15,7 +15,7 @@ def calculate_atr(df, period=14):
 st.title('Stop Loss Calculator Based on ATR')
 
 # Input for ticker symbol
-ticker = st.text_input('Enter the stock ticker:', 'AAPL')
+ticker = st.text_input('Enter the stock ticker:', 'MFC')
 
 # Fetch the stock data
 data = yf.download(ticker, period='1y', interval='1d')
