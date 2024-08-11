@@ -30,8 +30,12 @@ if not data.empty:
     # Calculate the stop loss
     stop_loss = last_14_day_low - latest_atr
 
+    # Calculate the percentage difference
+    percent_difference = ((last_14_day_low - stop_loss) / last_14_day_low) * 100
+
     st.write(f"Latest ATR: {latest_atr:.2f}")
     st.write(f"Lowest Low of Last 14 Days: {last_14_day_low:.2f}")
     st.write(f"Stop Loss: {stop_loss:.2f}")
+    st.write(f"Percentage Difference: {percent_difference:.2f}%")
 else:
     st.write("No data found. Please enter a valid ticker symbol.")
