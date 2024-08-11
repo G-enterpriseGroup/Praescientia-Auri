@@ -15,7 +15,7 @@ def calculate_atr(df, period=14):
 st.title('Stop Loss Calculator Based on ATR')
 
 # Input for ticker symbol
-ticker = st.text_input('Enter the stock ticker:', 'MFC')
+ticker = st.text_input('Enter the stock ticker:', 'AAPL')
 
 # Fetch the stock data
 data = yf.download(ticker, period='1y', interval='1d')
@@ -40,6 +40,15 @@ if not data.empty:
     
     # Note description
     st.write("**Note:** The percentage difference indicates how much below the lowest price in the last 14 days the stop loss is set. A higher percentage means a more conservative stop loss.")
+    
+    # Calculation description
+    st.write("""
+        ### How the Calculation is Done:
+        - **ATR Calculation:** The Average True Range (ATR) is calculated over the last 14 days. It measures market volatility by considering the range of price movements.
+        - **Lowest Price in the Last 14 Days:** The application identifies the lowest price (low point) observed in the last 14 days of trading.
+        - **Stop Loss Calculation:** The stop loss is set by subtracting the ATR from the lowest price in the last 14 days.
+        - **Percentage Difference:** This shows how much below the last 14 days' low the stop loss is set, with a higher percentage indicating a more conservative stop loss.
+    """)
     
 else:
     st.write("No data found. Please enter a valid ticker symbol.")
