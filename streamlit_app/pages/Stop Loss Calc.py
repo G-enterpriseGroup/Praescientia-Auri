@@ -37,5 +37,9 @@ if not data.empty:
     st.write(f"Lowest Low of Last 14 Days: {last_14_day_low:.2f}")
     st.write(f"Stop Loss: {stop_loss:.2f}")
     st.write(f"Percentage Difference: {percent_difference:.2f}%")
+    
+    # Note description
+    st.write("**Note:** The percentage difference indicates how much below the lowest price in the last 14 days the stop loss is set. A higher percentage means a more conservative stop loss.")
+    
 else:
     st.write("No data found. Please enter a valid ticker symbol.")
