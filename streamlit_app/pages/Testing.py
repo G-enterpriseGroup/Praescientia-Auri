@@ -24,14 +24,14 @@ if not data.empty:
     # Calculate the ATR
     latest_atr = calculate_atr(data)
 
-    # Get the low of the latest candle
-    latest_low = data['Low'].iloc[-1]
+    # Get the low of the last 14 days
+    last_14_day_low = data['Low'].tail(14).min()
 
     # Calculate the stop loss
-    stop_loss = latest_low + latest_atr
+    stop_loss = last_14_day_low - latest_atr
 
     st.write(f"Latest ATR: {latest_atr:.2f}")
-    st.write(f"Latest Candle Low: {latest_low:.2f}")
+    st.write(f"Lowest Low of Last 14 Days: {last_14_day_low:.2f}")
     st.write(f"Stop Loss: {stop_loss:.2f}")
 else:
     st.write("No data found. Please enter a valid ticker symbol.")
