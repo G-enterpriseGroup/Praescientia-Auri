@@ -21,6 +21,9 @@ ticker = st.text_input('Enter the stock ticker:', 'AAPL')
 data = yf.download(ticker, period='1y', interval='1d')
 
 if not data.empty:
+    # Get the current stock price
+    current_price = data['Close'].iloc[-1]
+
     # Calculate the ATR
     latest_atr = calculate_atr(data)
 
@@ -33,6 +36,7 @@ if not data.empty:
     # Calculate the percentage difference
     percent_difference = ((last_14_day_low - stop_loss) / last_14_day_low) * 100
 
+    st.write(f"Current Stock Price: {current_price:.2f}")
     st.write(f"Latest ATR: {latest_atr:.2f}")
     st.write(f"Lowest Low of Last 14 Days: {last_14_day_low:.2f}")
     st.write(f"Stop Loss: {stop_loss:.2f}")
@@ -44,6 +48,7 @@ if not data.empty:
     # Calculation description
     st.write("""
         ### How the Calculation is Done:
+        - **Current Stock Price:** The most recent closing price of the stock.
         - **ATR Calculation:** The Average True Range (ATR) is calculated over the last 14 days. It measures market volatility by considering the range of price movements.
         - **Lowest Price in the Last 14 Days:** The application identifies the lowest price (low point) observed in the last 14 days of trading.
         - **Stop Loss Calculation:** The stop loss is set by subtracting the ATR from the lowest price in the last 14 days.
