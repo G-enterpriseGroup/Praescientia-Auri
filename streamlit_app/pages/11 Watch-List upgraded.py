@@ -22,7 +22,7 @@ url1 = 'https://www.tradingview.com/watchlists/139248623/'
 url2 = 'https://www.tradingview.com/watchlists/158484705/'
 url3 = 'https://www.tradingview.com/watchlists/164048696/'
 
-st.title("G-EnterpriseGroup Trade List")
+st.title("G-EnterpriseGroup Trades List")
 
 # Main page reload button
 if st.button("Reload Page"):
