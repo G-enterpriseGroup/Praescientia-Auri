@@ -12,6 +12,7 @@ st.set_page_config(layout="wide")
 
 def get_stock_data(tickers, past_days):
     data = {}
+    company_names = {}
     end_date = pd.to_datetime("today")
     start_date = end_date - pd.Timedelta(days=past_days)
     for ticker in tickers:
@@ -20,9 +21,10 @@ def get_stock_data(tickers, past_days):
             hist = stock.history(start=start_date, end=end_date)
             if not hist.empty:
                 data[ticker] = hist
+                company_names[ticker] = stock.info['longName']  # Get company name
         except Exception as e:
             st.error(f"Error fetching data for {ticker}: {e}")
-    return data
+    return data, company_names
 
 def get_dividend_info(ticker):
     urls = [
@@ -41,12 +43,13 @@ def get_dividend_info(ticker):
                 return dividend[0].text_content(), apy[0].text_content()
     return "N/A", "N/A"
 
-def plot_stock_data(data):
+def plot_stock_data(data, company_names):
     num_tickers = len(data)
     num_cols = 2
     num_rows = math.ceil(num_tickers / num_cols)
     
-    fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=[f"{ticker} - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
+    fig = make_subplots(rows=num_rows, cols=num_cols, 
+                        subplot_titles=[f"{company_names[ticker]} ({ticker}) - Annual Dividend: {get_dividend_info(ticker)[0]}, APY: {get_dividend_info(ticker)[1]}" for ticker in data.keys()])
 
     row = 1
     col = 1
@@ -70,8 +73,5 @@ past_days = st.number_input("Past days from today", min_value=1, value=90)
 tickers = [ticker.strip() for ticker in tickers_input.split(",")]
 
 if st.button("Generate Charts"):
-    data = get_stock_data(tickers, past_days)
-    if data:
-        plot_stock_data(data)
-    else:
-        st.error("No data available for the given tickers and date range.")
+    data, company_names = get_stock_data(tickers, past_days)
+    if data
