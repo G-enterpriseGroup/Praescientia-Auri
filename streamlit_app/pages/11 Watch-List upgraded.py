@@ -21,6 +21,8 @@ def clean_tickers(tickers):
 url1 = 'https://www.tradingview.com/watchlists/139248623/'
 url2 = 'https://www.tradingview.com/watchlists/158484705/'
 url3 = 'https://www.tradingview.com/watchlists/164048696/'
+url4 = 'https://www.tradingview.com/watchlists/164415767/'
+
 
 st.title("G-EnterpriseGroup Trades List")
 
@@ -59,3 +61,7 @@ with st.expander("Tickers from List - Banks"):
 # Display tickers for URL 2
 with st.expander("Tickers from List - Index"):
     display_tickers(url3)
+
+# Display tickers for URL 2
+with st.expander("Tickers from List - Index"):
+    display_tickers(url4)
