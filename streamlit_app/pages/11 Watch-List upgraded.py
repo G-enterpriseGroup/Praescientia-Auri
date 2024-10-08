@@ -63,5 +63,5 @@ with st.expander("Tickers from List - Index"):
     display_tickers(url3)
 
 # Display tickers for URL 2
-with st.expander("Tickers from List - Index"):
+with st.expander("Tickers from List - Government’s Contracts"):
     display_tickers(url4)
