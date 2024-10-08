@@ -74,4 +74,7 @@ tickers = [ticker.strip() for ticker in tickers_input.split(",")]
 
 if st.button("Generate Charts"):
     data, company_names = get_stock_data(tickers, past_days)
-    if data
+    if data:
+        plot_stock_data(data, company_names)
+    else:
+        st.error("No data available for the given tickers and date range.")
