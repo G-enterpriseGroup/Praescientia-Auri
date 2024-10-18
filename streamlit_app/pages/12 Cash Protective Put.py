@@ -110,4 +110,18 @@ for price in price_range:
     for day in range(1, days_to_expiration + 1):
         T = (days_to_expiration - day) / 365
         put_price = black_scholes_put(price, strike_price, T, risk_free_rate, iv)
-        long_put_value = max(0, strike_price - price) * 100 * quantity - (
+        long_put_value = max(0, strike_price - price) * 100 * quantity - (put_price * 100 * quantity) - initial_premium_paid
+        row.append(long_put_value)
+    results.loc[len(results)] = row
+
+# Apply conditional formatting
+def color_negative_red_positive_green(val):
+    if val > 0:
+        color = f'rgb({255 - int((val / results.max().max()) * 255)}, 255, {255 - int((val / results.max().max()) * 255)})'
+    else:
+        color = f'rgb(255, {255 - int((abs(val) / abs(results.min().min())) * 255)}, {255 - int((abs(val) / abs(results.min().min())) * 255)})'
+    return f'background-color: {color}; color: black;'
+
+formatted_results = results.style.applymap(color_negative_red_positive_green, subset=columns[1:])
+st.write("### Profit and Loss Table:")
+st.dataframe(formatted_results, height=1000)
