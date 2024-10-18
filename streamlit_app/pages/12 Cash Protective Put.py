@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(layout="wide")
 
-# Define functions for the covered put calculator
+# Define functions for the put option calculator
 def get_expiration_dates(ticker):
     stock = yf.Ticker(ticker)
     return stock.options
@@ -15,7 +15,7 @@ def get_expiration_dates(ticker):
 def get_options_chain(ticker, expiration_date):
     stock = yf.Ticker(ticker)
     options = stock.option_chain(expiration_date)
-    options_df = pd.concat([options.calls, options.puts], keys=['Calls', 'Puts'], names=['Type'])
+    options_df = pd.concat([options.puts], keys=['Puts'], names=['Type'])
     options_df = options_df.reset_index(level='Type').reset_index(drop=True)
     return options_df
 
@@ -32,21 +32,12 @@ def calculate_greeks(S, K, T, r, sigma, option_type="put"):
 
     gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
     vega = S * norm.pdf(d1) * np.sqrt(T) / 100
-    rho = -K * T * np.exp(-r * T) * norm.cdf(-d2) if option_type == "put" else K * T * np.exp(-r * T) * norm.cdf(d2)
+    rho = -K * T * np.exp(-r * T) * norm.cdf(-d2)
 
     return delta, gamma, theta, vega, rho
 
-def calculate_covered_put(price, quantity, option_price, strike_price, days_until_expiry):
-    initial_premium = option_price * quantity * 100
-    max_risk = (strike_price * quantity * 100) - (price * quantity * 100) + initial_premium
-    breakeven = price + (initial_premium / (quantity * 100))
-    max_return = initial_premium
-    return_on_risk = (max_return / max_risk) * 100
-    annualized_return = ((return_on_risk / days_until_expiry) * 365)
-    return initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return
-
-# Streamlit UI for Covered Put Calculator
-st.title("Covered Put Calculator")
+# Streamlit UI for Put Option Calculator
+st.title("Put Option Calculator")
 
 ticker = st.text_input("Ticker Symbol", value="AAPL")
 if ticker:
@@ -77,28 +68,18 @@ if ticker:
             else:
                 option_price = float(ask_price)
 
-            quantity = st.number_input("Quantity (shares)", value=100, step=1)
+            quantity = st.number_input("Quantity (contracts)", value=1, step=1)
             days_until_expiry = (pd.to_datetime(selected_expiration_date) - pd.to_datetime('today')).days
 
             if st.button("Calculate"):
-                initial_premium, max_risk, breakeven, max_return, return_on_risk, annualized_return = calculate_covered_put(
-                    stock_price, quantity, option_price, selected_strike_price, days_until_expiry)
-
                 r = 0.01  # Risk-free rate
                 iv = selected_option['impliedVolatility'].values[0]  # Implied Volatility
                 T = days_until_expiry / 365.0  # Time to expiration in years
 
                 delta, gamma, theta, vega, rho = calculate_greeks(stock_price, selected_strike_price, T, r, iv, 'put')
 
-                st.write("### Results:")
-                st.write(f"**Initial Premium Received:** ${initial_premium:.2f}")
-                st.write(f"**Maximum Risk:** ${max_risk:.2f}")
-                st.write(f"**Break-even Price at Expiry:** ${breakeven:.2f}")
-                st.write(f"**Maximum Return:** ${max_return:.2f}")
-                st.write(f"**Return on Risk:** {return_on_risk:.2f}%")
-                st.write(f"**Annualized Return:** {annualized_return:.2f}%")
                 st.write("### Option Greeks:")
-                st.write(f"**Implied Volatility:** {iv * 100:.2f}")
+                st.write(f"**Implied Volatility:** {iv * 100:.2f}%")
                 st.write(f"**Delta:** {delta:.2f}")
                 st.write(f"**Gamma:** {gamma:.2f}")
                 st.write(f"**Theta (per day):** {theta:.2f}")
@@ -133,8 +114,8 @@ for price in price_range:
     for day in range(1, days_to_expiration + 1):
         T = (days_to_expiration - day) / 365
         put_price = black_scholes_put(price, strike_price, T, risk_free_rate, iv)
-        covered_put_value = (initial_stock_price - price) * 100 - (put_price * 100) + initial_premium_received * 100
-        row.append(covered_put_value)
+        put_value = (strike_price - price) * 100 if price < strike_price else 0
+        row.append(put_value)
     results.loc[len(results)] = row
 
 # Apply conditional formatting
@@ -148,4 +129,3 @@ def color_negative_red_positive_green(val):
 formatted_results = results.style.applymap(color_negative_red_positive_green, subset=columns[1:])
 st.write("### Profit and Loss Table:")
 st.dataframe(formatted_results, height=1000)
-
