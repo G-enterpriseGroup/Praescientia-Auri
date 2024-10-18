@@ -19,6 +19,25 @@ def get_options_chain(ticker, expiration_date):
     options_df = options_df.reset_index(level='Type').reset_index(drop=True)
     return options_df
 
+# Calculate the Greeks for the put option
+def calculate_greeks(S, K, T, r, sigma, option_type="put"):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+
+    if option_type == "put":
+        delta = -norm.cdf(-d1)
+        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) + r * K * np.exp(-r * T) * norm.cdf(-d2)) / 365
+    else:
+        delta = norm.cdf(d1)
+        theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) - r * K * np.exp(-r * T) * norm.cdf(d2)) / 365
+
+    gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
+    vega = S * norm.pdf(d1) * np.sqrt(T) / 100
+    rho = -K * T * np.exp(-r * T) * norm.cdf(-d2) if option_type == "put" else K * T * np.exp(-r * T) * norm.cdf(d2)
+
+    return delta, gamma, theta, vega, rho
+
+# Black-Scholes formula for a put option
 def black_scholes_put(S, K, T, r, sigma):
     if T == 0:
         return max(0, K - S)
