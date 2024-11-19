@@ -8,6 +8,18 @@ st.title("Historical Stock and ETF Data Downloader")
 # Input for the stock ticker
 ticker = st.text_input("Enter the Ticker Symbol (e.g., AAPL, SPY):")
 
+# Check if ticker is valid when the user presses Enter
+if ticker:
+    try:
+        # Attempt to fetch data to verify ticker
+        test_data = yf.Ticker(ticker).info
+        if test_data:
+            st.success(f"Ticker '{ticker}' has been found.")
+        else:
+            st.error(f"Ticker '{ticker}' could not be found. Please check the symbol.")
+    except Exception:
+        st.error(f"Ticker '{ticker}' could not be found. Please check the symbol.")
+
 # Initialize session state for selected dates
 if "start_date" not in st.session_state:
     st.session_state.start_date = datetime.today() - timedelta(days=365)
@@ -18,23 +30,18 @@ if "end_date" not in st.session_state:
 st.subheader("Select Date Range Preset:")
 
 # Buttons for preset intervals
-preset_selected = False
 if st.button("1 Month"):
     st.session_state.start_date = datetime.today() - timedelta(days=30)
     st.session_state.end_date = datetime.today()
-    preset_selected = True
 if st.button("3 Months"):
     st.session_state.start_date = datetime.today() - timedelta(days=90)
     st.session_state.end_date = datetime.today()
-    preset_selected = True
 if st.button("6 Months"):
     st.session_state.start_date = datetime.today() - timedelta(days=180)
     st.session_state.end_date = datetime.today()
-    preset_selected = True
 if st.button("1 Year"):
     st.session_state.start_date = datetime.today() - timedelta(days=365)
     st.session_state.end_date = datetime.today()
-    preset_selected = True
 
 # Manual date input
 st.subheader("Or Modify the Dates:")
