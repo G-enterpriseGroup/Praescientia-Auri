@@ -1,9 +1,10 @@
 import streamlit as st
 import yfinance as yf
+import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
 # Title of the app
-st.title("Historical Stock and ETF Data Downloader with Trailing Stop Calculator")
+st.title("Historical Stock and ETF Data Downloader with Trailing Stop Visualization")
 
 # Input for the stock ticker
 ticker = st.text_input("Enter the Ticker Symbol (e.g., AAPL, SPY):")
@@ -56,8 +57,8 @@ manual_end_date = st.date_input(
 st.session_state.start_date = manual_start_date
 st.session_state.end_date = manual_end_date
 
-# Button to download data and calculate trailing stop
-if st.button("Download Data and Calculate Trailing Stop"):
+# Button to download data and visualize trailing stop
+if st.button("Download Data and Visualize Trailing Stop"):
     if ticker:
         try:
             # Fetching data from Yahoo Finance
@@ -69,18 +70,6 @@ if st.button("Download Data and Calculate Trailing Stop"):
             
             # Checking if data is retrieved
             if not data.empty:
-                # Creating a CSV for download
-                csv = data.to_csv().encode("utf-8")
-                
-                # Download button
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"{ticker}.csv",
-                    mime="text/csv",
-                )
-                st.success(f"Data for {ticker} downloaded successfully!")
-
                 # Calculate trailing stop percentage
                 data['Daily_Range_Percent'] = (
                     (data['High'] - data['Low']) / data['Low']
@@ -89,12 +78,36 @@ if st.button("Download Data and Calculate Trailing Stop"):
                 std_dev_range_percent = data['Daily_Range_Percent'].std()
                 optimal_trailing_stop = average_range_percent + std_dev_range_percent
 
+                # Calculate trailing stop value as a fixed percentage below the max closing price
+                max_close_price = data['Close'].max()
+                trailing_stop_value = max_close_price * (1 - optimal_trailing_stop / 100)
+
                 # Display trailing stop calculation
                 st.subheader("Trailing Stop Calculation")
                 st.write(f"**Average Daily Range (%):** {average_range_percent:.2f}%")
                 st.write(f"**Standard Deviation (%):** {std_dev_range_percent:.2f}%")
                 st.write(
                     f"**Optimal Trailing Stop (%):** {optimal_trailing_stop:.2f}%"
+                )
+                st.write(f"**Trailing Stop Value:** ${trailing_stop_value:.2f}")
+
+                # Plot stock price and trailing stop
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.plot(data['Close'], label="Close Price", color="blue")
+                ax.axhline(y=trailing_stop_value, color="red", linestyle="--", label=f"Trailing Stop (${trailing_stop_value:.2f})")
+                ax.set_title(f"{ticker} Stock Price with Trailing Stop")
+                ax.set_xlabel("Date")
+                ax.set_ylabel("Price")
+                ax.legend()
+                st.pyplot(fig)
+
+                # Allow data download
+                csv = data.to_csv().encode("utf-8")
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name=f"{ticker}.csv",
+                    mime="text/csv",
                 )
             else:
                 st.error(
