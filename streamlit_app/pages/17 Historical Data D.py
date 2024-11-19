@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
 # Title of the app
-st.title("Historical Stock and ETF Data Downloader with Trailing Stop Visualization")
+st.title("Historical Stock Data Downloader with Trailing Stop Visualization")
 
 # Input for the stock ticker
 ticker = st.text_input("Enter the Ticker Symbol (e.g., AAPL, SPY):")
@@ -48,36 +48,31 @@ if st.button("Download Data and Visualize Trailing Stop"):
                 ticker,
                 start=st.session_state.start_date,
                 end=st.session_state.end_date,
+                progress=False,
             )
-            
+
             # Check if data is retrieved
             if data.empty:
                 st.error("No data found for the selected ticker and date range. Please check your inputs.")
             else:
-                # Ensure required columns exist
-                required_columns = {'High', 'Low', 'Close'}
-                if not required_columns.issubset(data.columns):
-                    st.error(f"The dataset is missing required columns: {required_columns - set(data.columns)}")
+                # Ensure the Close column exists
+                if 'Close' not in data.columns:
+                    st.error("The dataset is missing the 'Close' column.")
                 else:
-                    # Handle missing data
-                    data.dropna(subset=['High', 'Low', 'Close'], inplace=True)
-
                     # Calculate trailing stop percentage
-                    data['Daily_Range_Percent'] = (
-                        (data['High'] - data['Low']) / data['Low']
-                    ) * 100
-                    average_range_percent = data['Daily_Range_Percent'].mean()
-                    std_dev_range_percent = data['Daily_Range_Percent'].std()
+                    max_close_price = data['Close'].max()
+                    min_close_price = data['Close'].min()
+                    average_range_percent = ((max_close_price - min_close_price) / min_close_price) * 100
+                    std_dev_range_percent = data['Close'].pct_change().std() * 100
                     optimal_trailing_stop = average_range_percent + std_dev_range_percent
 
                     # Calculate trailing stop value
-                    max_close_price = data['Close'].max()
                     trailing_stop_value = max_close_price * (1 - optimal_trailing_stop / 100)
 
                     # Display results
                     st.subheader("Trailing Stop Calculation")
-                    st.write(f"**Average Daily Range (%):** {average_range_percent:.2f}%")
-                    st.write(f"**Standard Deviation (%):** {std_dev_range_percent:.2f}%")
+                    st.write(f"**Average Close Range (%):** {average_range_percent:.2f}%")
+                    st.write(f"**Standard Deviation of Close Changes (%):** {std_dev_range_percent:.2f}%")
                     st.write(f"**Optimal Trailing Stop (%):** {optimal_trailing_stop:.2f}%")
                     st.write(f"**Trailing Stop Value:** ${trailing_stop_value:.2f}")
 
@@ -97,11 +92,11 @@ if st.button("Download Data and Visualize Trailing Stop"):
                     st.pyplot(fig)
 
                     # Allow data download
-                    csv = data.to_csv().encode("utf-8")
+                    csv = data[['Close']].to_csv().encode("utf-8")
                     st.download_button(
                         label="Download CSV",
                         data=csv,
-                        file_name=f"{ticker}.csv",
+                        file_name=f"{ticker}_Close.csv",
                         mime="text/csv",
                     )
         except Exception as e:
