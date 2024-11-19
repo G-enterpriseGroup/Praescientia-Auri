@@ -1,7 +1,6 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Title of the app
 st.title("Historical Stock and ETF Data Downloader")
@@ -9,12 +8,33 @@ st.title("Historical Stock and ETF Data Downloader")
 # Input for the stock ticker
 ticker = st.text_input("Enter the Ticker Symbol (e.g., AAPL, SPY):")
 
-# Date selection
-col1, col2 = st.columns(2)
-with col1:
-    start_date = st.date_input("Start Date", value=datetime(2020, 1, 1))
-with col2:
-    end_date = st.date_input("End Date", value=datetime.today())
+# Interval preset buttons
+st.subheader("Select Date Range Preset:")
+col1, col2, col3, col4 = st.columns(4)
+
+# Default dates
+start_date = None
+end_date = datetime.today()
+
+# Interval buttons logic
+if col1.button("1 Month"):
+    start_date = end_date - timedelta(days=30)
+elif col2.button("3 Months"):
+    start_date = end_date - timedelta(days=90)
+elif col3.button("6 Months"):
+    start_date = end_date - timedelta(days=180)
+elif col4.button("1 Year"):
+    start_date = end_date - timedelta(days=365)
+
+# Manual date input
+st.subheader("Or Modify the Dates:")
+manual_start_date = st.date_input("Start Date", value=start_date or datetime(2020, 1, 1))
+manual_end_date = st.date_input("End Date", value=end_date)
+
+# Apply manual date inputs if changed
+if manual_start_date and manual_end_date:
+    start_date = manual_start_date
+    end_date = manual_end_date
 
 # Button to download data
 if st.button("Download Data"):
