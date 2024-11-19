@@ -3,7 +3,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 
 # Title of the app
-st.title("Historical Stock and ETF Data Downloader")
+st.title("Historical Stock and ETF Data Downloader with Trailing Stop Calculator")
 
 # Input for the stock ticker
 ticker = st.text_input("Enter the Ticker Symbol (e.g., AAPL, SPY):")
@@ -56,8 +56,8 @@ manual_end_date = st.date_input(
 st.session_state.start_date = manual_start_date
 st.session_state.end_date = manual_end_date
 
-# Button to download data
-if st.button("Download Data"):
+# Button to download data and calculate trailing stop
+if st.button("Download Data and Calculate Trailing Stop"):
     if ticker:
         try:
             # Fetching data from Yahoo Finance
@@ -80,8 +80,26 @@ if st.button("Download Data"):
                     mime="text/csv",
                 )
                 st.success(f"Data for {ticker} downloaded successfully!")
+
+                # Calculate trailing stop percentage
+                data['Daily_Range_Percent'] = (
+                    (data['High'] - data['Low']) / data['Low']
+                ) * 100
+                average_range_percent = data['Daily_Range_Percent'].mean()
+                std_dev_range_percent = data['Daily_Range_Percent'].std()
+                optimal_trailing_stop = average_range_percent + std_dev_range_percent
+
+                # Display trailing stop calculation
+                st.subheader("Trailing Stop Calculation")
+                st.write(f"**Average Daily Range (%):** {average_range_percent:.2f}%")
+                st.write(f"**Standard Deviation (%):** {std_dev_range_percent:.2f}%")
+                st.write(
+                    f"**Optimal Trailing Stop (%):** {optimal_trailing_stop:.2f}%"
+                )
             else:
-                st.error("No data found for the selected ticker and date range. Please check your inputs.")
+                st.error(
+                    "No data found for the selected ticker and date range. Please check your inputs."
+                )
         except Exception as e:
             st.error(f"An error occurred: {e}")
     else:
