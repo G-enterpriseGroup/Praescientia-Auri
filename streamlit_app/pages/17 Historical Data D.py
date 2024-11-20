@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
 # Title of the app
-st.title("Stock Data Downloader with Accurate Trailing Stop Loss Calculation")
+st.title("Stock Data Downloader with Trailing Stop Loss Calculator")
 
 # Input for the stock ticker
 ticker = st.text_input("Enter the Ticker Symbol (e.g., AAPL, SPY):")
@@ -54,39 +54,44 @@ if st.button("Download Data and Calculate Trailing Stop"):
                 # Step-by-step trailing stop loss calculation
                 st.subheader("Step-by-Step Trailing Stop Loss Calculation")
 
-                # 1. Daily Range Calculation
+                # 1. Calculate Daily Range
                 data["Daily_Range"] = data["High"] - data["Low"]
+                st.write("**Daily Range Calculation (High - Low):**")
+                st.write(data[["High", "Low", "Daily_Range"]].dropna())
+
+                # 2. Calculate Daily Range Percent
                 data["Daily_Range_Percent"] = (data["Daily_Range"] / data["Low"]) * 100
+                st.write("**Daily Range Percent Calculation:**")
+                st.write(data[["Daily_Range", "Low", "Daily_Range_Percent"]].dropna())
 
-                st.write("**Daily Range and Percentage Calculation:**")
-                st.write(data[["High", "Low", "Daily_Range", "Daily_Range_Percent"]].dropna())
-
-                # 2. Average Daily Range %
+                # 3. Average Daily Range %
                 average_range_percent = data["Daily_Range_Percent"].mean()
                 st.write(f"**Average Daily Range (%):** {average_range_percent:.2f}%")
 
-                # 3. Standard Deviation of Daily Range %
+                # 4. Standard Deviation of Daily Range %
                 std_dev_range_percent = data["Daily_Range_Percent"].std()
                 st.write(f"**Standard Deviation of Daily Range (%):** {std_dev_range_percent:.2f}%")
 
-                # 4. ATR (Average True Range) Calculation
+                # 5. Calculate True Range (TR)
                 data["TR"] = np.maximum(
                     data["High"] - data["Low"], 
                     np.maximum(abs(data["High"] - data["Close"].shift(1)), abs(data["Low"] - data["Close"].shift(1)))
                 )
+                st.write("**True Range (TR) Calculation:**")
+                st.write(data[["High", "Low", "Close", "TR"]].dropna())
+
+                # 6. Calculate ATR (Average True Range)
                 data["ATR"] = data["TR"].rolling(window=14).mean()
+                st.write("**Average True Range (ATR):**")
+                st.write(data[["TR", "ATR"]].dropna())
 
-                st.write("**True Range (TR) and ATR Calculation:**")
-                st.write(data[["High", "Low", "Close", "TR", "ATR"]].dropna())
-
-                # 5. ATR-Based Trailing Stop %
+                # 7. ATR-Based Trailing Stop %
                 last_close = data["Close"].iloc[-1]
                 last_atr = data["ATR"].iloc[-1]
                 atr_trailing_stop_percent = (last_atr / last_close) * 100
-
                 st.write(f"**ATR-Based Trailing Stop (%):** {atr_trailing_stop_percent:.2f}%")
 
-                # 6. Optimal Trailing Stop %
+                # 8. Optimal Trailing Stop %
                 optimal_trailing_stop_percent = average_range_percent + std_dev_range_percent
                 st.write(f"**Optimal Trailing Stop (%):** {optimal_trailing_stop_percent:.2f}%")
 
@@ -99,6 +104,8 @@ if st.button("Download Data and Calculate Trailing Stop"):
                 plt.plot(data["Trailing_Stop"], label="Trailing Stop", color="red", linestyle="--")
                 plt.title(f"Trailing Stop Loss for {ticker}")
                 plt.legend()
+                plt.xlabel("Date")
+                plt.ylabel("Price")
                 st.pyplot(plt)
 
             else:
