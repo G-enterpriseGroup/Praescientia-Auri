@@ -96,6 +96,37 @@ if st.button("Download Data and Calculate Trailing Stop"):
                 st.write(
                     f"**Optimal Trailing Stop (%):** {optimal_trailing_stop:.2f}%"
                 )
+                
+                # Detailed proof and explanation
+                st.subheader("Calculation Breakdown and Explanation")
+                st.markdown("""
+                ### How Calculations Are Done:
+                1. **Daily Range Percent**: Calculated as  
+                   `((High - Low) / Low) * 100`  
+                   This provides the percentage range of price movement within each trading day.
+                2. **Average Daily Range**:  
+                   This is the **mean** of all the daily range percentages for the given time period.  
+                   Formula: `Mean(Daily_Range_Percent)`.
+                3. **Standard Deviation**:  
+                   Measures the **volatility** of the daily range percentages.  
+                   Formula: `Std(Daily_Range_Percent)`.
+                4. **Optimal Trailing Stop**:  
+                   Combines the **average daily range** with the **standard deviation** to account for typical daily movements and market volatility.  
+                   Formula: `Average Daily Range + Standard Deviation`.
+
+                ### Why This Matters:
+                - The **Average Daily Range** tells us the typical price fluctuation, helping to set a baseline for the stop-loss order.
+                - The **Standard Deviation** accounts for price volatility, ensuring the stop-loss isn't triggered prematurely during normal price swings.
+                - The **Optimal Trailing Stop** provides a balance between minimizing losses and staying in the trade during regular price fluctuations.
+
+                ### Example:
+                If a stock has:
+                - Daily high of $105 and low of $100,  
+                  The Daily Range = `(105 - 100) / 100 * 100 = 5%`.
+                - Over time, if the average daily range is **1.37%** and standard deviation is **0.63%**,  
+                  The Optimal Trailing Stop = `1.37% + 0.63% = 2.00%`.
+                """)
+
             else:
                 st.error(
                     "No data found for the selected ticker and date range. Please check your inputs."
