@@ -85,8 +85,9 @@ if st.button("Download Data and Calculate Trailing Stop"):
                 # 1. Daily Range Calculation
                 data['Daily_Range'] = data['High'] - data['Low']
                 data['Daily_Range_Percent'] = (data['Daily_Range'] / data['Low']) * 100
+
                 st.write("**Daily Range (High - Low) and Daily Range Percent:**")
-                st.write(data[['High', 'Low', 'Daily_Range', 'Daily_Range_Percent']])
+                st.write(data[['High', 'Low', 'Daily_Range', 'Daily_Range_Percent']].dropna())
 
                 # Average Daily Range %
                 average_range_percent = data['Daily_Range_Percent'].mean()
@@ -102,8 +103,9 @@ if st.button("Download Data and Calculate Trailing Stop"):
                     np.maximum(abs(data['High'] - data['Close'].shift(1)), abs(data['Low'] - data['Close'].shift(1)))
                 )
                 data['ATR'] = data['TR'].rolling(window=14).mean()
+
                 st.write("**True Range (TR) and Average True Range (ATR):**")
-                st.write(data[['High', 'Low', 'Close', 'TR', 'ATR']])
+                st.write(data[['High', 'Low', 'Close', 'TR', 'ATR']].dropna())
 
                 # ATR-Based Trailing Stop %
                 atr_trailing_stop_percent = (data['ATR'].iloc[-1] / data['Close'].iloc[-1]) * 100
