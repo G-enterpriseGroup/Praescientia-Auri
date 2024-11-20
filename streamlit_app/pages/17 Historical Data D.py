@@ -85,7 +85,7 @@ if st.button("Download Data and Calculate Trailing Stop"):
                 # 1. Daily Range Calculation
                 data['Daily_Range'] = data['High'] - data['Low']
                 data['Daily_Range_Percent'] = (data['Daily_Range'] / data['Low']) * 100
-                st.write("**Daily Range (High - Low):**")
+                st.write("**Daily Range (High - Low) and Daily Range Percent:**")
                 st.write(data[['High', 'Low', 'Daily_Range', 'Daily_Range_Percent']])
 
                 # Average Daily Range %
