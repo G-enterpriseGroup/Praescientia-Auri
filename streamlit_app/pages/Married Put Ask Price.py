@@ -29,21 +29,38 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 
-def highlight_table(df):
-    """Highlight rows where Ask is 0 (red) and Max Loss is closest to 0 (green)."""
+def highlight_ask_and_loss(writer, df, worksheet_name):
+    """
+    Apply Excel formatting to highlight rows:
+    - Lime green for Max Loss closest to 0.
+    - Red for rows where Ask = 0.
+    """
+    workbook = writer.book
+    worksheet = writer.sheets[worksheet_name]
+
+    # Define formatting
+    lime_green = workbook.add_format({'bg_color': '#32CD32'})  # Lime Green
+    red = workbook.add_format({'bg_color': '#FF6666'})         # Red
+
     # Find the row where Max Loss is closest to 0
-    closest_to_zero = df['Max Loss'].abs().idxmin()
+    closest_to_zero_idx = df['Max Loss'].abs().idxmin()
 
-    # Apply styling
-    def apply_styles(row):
-        if row.name == closest_to_zero:
-            return ['background-color: green'] * len(row)
-        elif row['Ask'] == 0:
-            return ['background-color: red'] * len(row)
-        else:
-            return [''] * len(row)
+    # Iterate over rows to apply formatting
+    for row_num, (_, row) in enumerate(df.iterrows(), start=1):  # Start from 1 (Excel row)
+        if row['Ask'] == 0:
+            worksheet.set_row(row_num, None, red)  # Highlight entire row in red
+        elif row.name == closest_to_zero_idx:
+            worksheet.set_row(row_num, None, lime_green)  # Highlight entire row in lime green
 
-    return df.style.apply(apply_styles, axis=1)
+
+def download_data_with_formatting(data):
+    """Generate a downloadable Excel file with formatting."""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        data.to_excel(writer, index=False, sheet_name="Options Data")
+        highlight_ask_and_loss(writer, data, "Options Data")
+    output.seek(0)  # Ensure the pointer is reset to the start of the buffer
+    return output
 
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
@@ -79,11 +96,8 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 # Append data to the combined list
                 combined_data.append(puts_table)
                 
-                # Highlight rows based on conditions
-                styled_table = highlight_table(puts_table)
-                
                 # Display the table
-                st.write(styled_table)
+                st.dataframe(puts_table)
 
         # Combine all data into a single DataFrame
         if combined_data:
@@ -96,15 +110,6 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return None
-
-
-def download_data(data):
-    """Generate a downloadable Excel file."""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        data.to_excel(writer, index=False, sheet_name="Options Data")
-    output.seek(0)  # Ensure the pointer is reset to the start of the buffer
-    return output
 
 
 def main():
@@ -133,9 +138,9 @@ def main():
             combined_data = display_put_options_all_dates(ticker_symbol, stock_price)
 
             if combined_data is not None:
-                # Offer the data for download
+                # Offer the data for download with formatting
                 st.subheader("Download Data")
-                excel_data = download_data(combined_data)
+                excel_data = download_data_with_formatting(combined_data)
                 st.download_button(
                     label="Download Options Data as Excel",
                     data=excel_data,
