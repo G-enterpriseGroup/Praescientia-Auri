@@ -25,3 +25,4 @@ streamlit-aggrid
 selenium
 webdriver-manager
 python-dateutil
+xlsxwriter
