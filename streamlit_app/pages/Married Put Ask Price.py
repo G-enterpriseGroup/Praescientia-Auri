@@ -29,9 +29,21 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 
-def highlight_ask_zero(row):
-    """Highlight rows where Ask value is 0."""
-    return ['background-color: red' if row['Ask'] == 0 else '' for _ in row]
+def highlight_table(df):
+    """Highlight rows where Ask is 0 (red) and Max Loss is closest to 0 (green)."""
+    # Find the row where Max Loss is closest to 0
+    closest_to_zero = df['Max Loss'].abs().idxmin()
+
+    # Apply styling
+    def apply_styles(row):
+        if row.name == closest_to_zero:
+            return ['background-color: green'] * len(row)
+        elif row['Ask'] == 0:
+            return ['background-color: red'] * len(row)
+        else:
+            return [''] * len(row)
+
+    return df.style.apply(apply_styles, axis=1)
 
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
@@ -67,11 +79,11 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 # Append data to the combined list
                 combined_data.append(puts_table)
                 
-                # Highlight rows where Ask is 0
-                styled_table = puts_table.style.apply(highlight_ask_zero, axis=1)
+                # Highlight rows based on conditions
+                styled_table = highlight_table(puts_table)
                 
                 # Display the table
-                st.dataframe(styled_table)
+                st.write(styled_table)
 
         # Combine all data into a single DataFrame
         if combined_data:
