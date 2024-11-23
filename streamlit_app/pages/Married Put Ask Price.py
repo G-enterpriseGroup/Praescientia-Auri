@@ -29,6 +29,11 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 
+def highlight_ask_zero(row):
+    """Highlight rows where Ask value is 0."""
+    return ['background-color: red' if row['Ask'] == 0 else '' for _ in row]
+
+
 def display_put_options_all_dates(ticker_symbol, stock_price):
     combined_data = []
     try:
@@ -62,8 +67,11 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 # Append data to the combined list
                 combined_data.append(puts_table)
                 
+                # Highlight rows where Ask is 0
+                styled_table = puts_table.style.apply(highlight_ask_zero, axis=1)
+                
                 # Display the table
-                st.dataframe(puts_table)
+                st.dataframe(styled_table)
 
         # Combine all data into a single DataFrame
         if combined_data:
@@ -76,7 +84,6 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return None
-
 
 
 def download_data(data):
@@ -93,34 +100,36 @@ def main():
 
     # Input for ticker symbol
     ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
-    if not ticker_symbol:
-        st.warning("Please enter a valid ticker symbol.")
-        return
+    if ticker_symbol:
+        try:
+            # Fetch current stock price
+            stock = yf.Ticker(ticker_symbol)
+            current_price = stock.history(period="1d")['Close'].iloc[-1]
+        except Exception:
+            current_price = 0
+            st.warning("Could not fetch the current stock price. Please enter it manually.")
 
-    # Input for purchase price per share
-    try:
-        stock_price = st.number_input("Enter the purchase price per share of the stock:", min_value=0.0)
-        if stock_price <= 0:
-            st.warning("Please enter a valid stock price.")
-            return
-    except ValueError:
-        st.error("Please enter a numeric value for the stock price.")
-        return
+        # Input for purchase price per share (auto-filled with fetched price)
+        stock_price = st.number_input(
+            "Enter the purchase price per share of the stock:",
+            value=float(current_price) if current_price else 0.0,
+            min_value=0.0
+        )
 
-    # Fetch and display options data
-    if st.button("Fetch Options Data"):
-        combined_data = display_put_options_all_dates(ticker_symbol, stock_price)
+        # Fetch and display options data
+        if st.button("Fetch Options Data"):
+            combined_data = display_put_options_all_dates(ticker_symbol, stock_price)
 
-        if combined_data is not None:
-            # Offer the data for download
-            st.subheader("Download Data")
-            excel_data = download_data(combined_data)
-            st.download_button(
-                label="Download Options Data as Excel",
-                data=excel_data,
-                file_name=f"{ticker_symbol}_options_data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            if combined_data is not None:
+                # Offer the data for download
+                st.subheader("Download Data")
+                excel_data = download_data(combined_data)
+                st.download_button(
+                    label="Download Options Data as Excel",
+                    data=excel_data,
+                    file_name=f"{ticker_symbol}_options_data.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
 
 if __name__ == "__main__":
