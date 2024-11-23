@@ -78,13 +78,13 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
         return None
 
 
+
 def download_data(data):
     """Generate a downloadable Excel file."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         data.to_excel(writer, index=False, sheet_name="Options Data")
-        writer.save()
-    output.seek(0)
+    output.seek(0)  # Ensure the pointer is reset to the start of the buffer
     return output
 
 
