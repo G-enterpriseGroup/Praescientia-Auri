@@ -29,37 +29,48 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 
-def highlight_ask_and_loss(writer, df, worksheet_name):
-    """
-    Apply Excel formatting to highlight rows:
-    - Lime green for Max Loss closest to 0.
-    - Red for rows where Ask = 0.
-    """
-    workbook = writer.book
-    worksheet = writer.sheets[worksheet_name]
-
-    # Define formatting
-    lime_green = workbook.add_format({'bg_color': '#32CD32'})  # Lime Green
-    red = workbook.add_format({'bg_color': '#FF6666'})         # Red
-
+def highlight_table(df):
+    """Highlight rows where Ask is 0 (red) and Max Loss is closest to 0 (lime green)."""
     # Find the row where Max Loss is closest to 0
-    closest_to_zero_idx = df['Max Loss'].abs().idxmin()
+    closest_to_zero = df['Max Loss'].abs().idxmin()
 
-    # Iterate over rows to apply formatting
-    for row_num, (_, row) in enumerate(df.iterrows(), start=1):  # Start from 1 (Excel row)
-        if row['Ask'] == 0:
-            worksheet.set_row(row_num, None, red)  # Highlight entire row in red
-        elif row.name == closest_to_zero_idx:
-            worksheet.set_row(row_num, None, lime_green)  # Highlight entire row in lime green
+    # Apply styling
+    def apply_styles(row):
+        if row.name == closest_to_zero:
+            return ['background-color: limegreen'] * len(row)
+        elif row['Ask'] == 0:
+            return ['background-color: red'] * len(row)
+        else:
+            return [''] * len(row)
+
+    return df.style.apply(apply_styles, axis=1)
 
 
-def download_data_with_formatting(data):
-    """Generate a downloadable Excel file with formatting."""
+def save_to_excel(df, filename):
+    """Generate a downloadable Excel file with highlights for Ask = 0 and Max Loss nearest to 0."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        data.to_excel(writer, index=False, sheet_name="Options Data")
-        highlight_ask_and_loss(writer, data, "Options Data")
-    output.seek(0)  # Ensure the pointer is reset to the start of the buffer
+        # Write DataFrame without styling first
+        df.to_excel(writer, index=False, sheet_name='Options Data')
+
+        # Access workbook and worksheet for styling
+        workbook = writer.book
+        worksheet = writer.sheets['Options Data']
+
+        # Define formatting
+        red_format = workbook.add_format({'bg_color': '#FF0000', 'font_color': '#FFFFFF'})  # Bright red
+        lime_format = workbook.add_format({'bg_color': '#32CD32', 'font_color': '#000000'})  # Lime green
+
+        # Apply conditional formatting for "Ask = 0"
+        for row_idx, row in df.iterrows():
+            if row['Ask'] == 0:
+                worksheet.set_row(row_idx + 1, None, red_format)  # Row +1 because of header
+
+        # Apply conditional formatting for "Max Loss closest to 0"
+        closest_to_zero_idx = df['Max Loss'].abs().idxmin()
+        worksheet.set_row(closest_to_zero_idx + 1, None, lime_format)
+
+    output.seek(0)  # Reset buffer pointer
     return output
 
 
@@ -96,8 +107,11 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 # Append data to the combined list
                 combined_data.append(puts_table)
                 
+                # Highlight rows based on conditions
+                styled_table = highlight_table(puts_table)
+                
                 # Display the table
-                st.dataframe(puts_table)
+                st.write(styled_table)
 
         # Combine all data into a single DataFrame
         if combined_data:
@@ -138,11 +152,11 @@ def main():
             combined_data = display_put_options_all_dates(ticker_symbol, stock_price)
 
             if combined_data is not None:
-                # Offer the data for download with formatting
+                # Offer the data for download
                 st.subheader("Download Data")
-                excel_data = download_data_with_formatting(combined_data)
+                excel_data = save_to_excel(combined_data, f"{ticker_symbol}_options_data.xlsx")
                 st.download_button(
-                    label="Download Options Data as Excel",
+                    label="Download Options Data with Highlights as Excel",
                     data=excel_data,
                     file_name=f"{ticker_symbol}_options_data.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
