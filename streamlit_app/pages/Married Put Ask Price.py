@@ -44,27 +44,38 @@ def display_put_options(ticker_symbol, stock_price):
             st.warning(f"No options data available for ticker {ticker_symbol}.")
             return
 
-        st.write(f"Available expiration dates for {ticker_symbol}:")
-        selected_date = st.selectbox("Select an expiration date", expiration_dates)
+        st.write(f"Fetching put options for all available expiration dates of {ticker_symbol}...")
 
-        # Fetch put options for the selected expiration date
-        options_chain = ticker.option_chain(selected_date)
-        puts = options_chain.puts
+        # DataFrame to consolidate all expiration dates
+        all_data = pd.DataFrame()
 
-        if puts.empty:
-            st.warning(f"No put options available for expiration date {selected_date}.")
+        # Loop through all expiration dates
+        for chosen_date in expiration_dates:
+            # Fetch put options for the current expiration date
+            options_chain = ticker.option_chain(chosen_date)
+            puts = options_chain.puts
+
+            if puts.empty:
+                continue
+            
+            # Prepare put options table
+            puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
+            puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
+            puts_table["Expiration Date"] = chosen_date
+
+            # Calculate max loss for each option
+            puts_table = calculate_max_loss(stock_price, puts_table)
+
+            # Append to the main DataFrame
+            all_data = pd.concat([all_data, puts_table], ignore_index=True)
+
+        if all_data.empty:
+            st.warning(f"No put options found for {ticker_symbol}.")
             return
         
-        # Prepare put options table
-        puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
-        puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
-        
-        # Calculate max loss for each option
-        puts_table = calculate_max_loss(stock_price, puts_table)
-        
-        # Display the table
-        st.write(f"Put Options with Max Loss for {ticker_symbol} (Expiration Date: {selected_date})")
-        st.dataframe(puts_table)
+        # Display the combined data
+        st.write(f"Put Options with Max Loss for {ticker_symbol} across all expiration dates:")
+        st.dataframe(all_data)
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
@@ -73,7 +84,20 @@ st.title("Options Max Loss Calculator")
 
 # User Input
 ticker_symbol = st.text_input("Enter the ticker symbol").strip().upper()
-stock_price = st.number_input("Enter the purchase price per share of the stock", min_value=0.0, value=0.0, step=0.01)
 
-if ticker_symbol and stock_price > 0:
-    display_put_options(ticker_symbol, stock_price)
+if ticker_symbol:
+    # Automatically fetch the stock's current price
+    ticker = yf.Ticker(ticker_symbol)
+    stock_info = ticker.history(period="1d")
+    current_price = stock_info["Close"].iloc[-1] if not stock_info.empty else 0.0
+
+    # Display input for the stock price with the default set to the current price
+    stock_price = st.number_input(
+        "Enter the purchase price per share of the stock",
+        min_value=0.0,
+        value=float(current_price),
+        step=0.01
+    )
+
+    if stock_price > 0:
+        display_put_options(ticker_symbol, stock_price)
