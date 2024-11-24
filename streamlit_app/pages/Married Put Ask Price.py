@@ -46,6 +46,8 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             st.error(f"No options data available for ticker {ticker_symbol}.")
             return
 
+        all_data = pd.DataFrame()
+
         for chosen_date in expiration_dates:
             st.subheader(f"Expiration Date: {chosen_date}")
             
@@ -60,12 +62,31 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             # Prepare put options table
             puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
             puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
-            
+            puts_table["Expiration Date"] = chosen_date
+
             # Calculate max loss for each option
             puts_table = calculate_max_loss(stock_price, puts_table)
-            
-            # Display the table
-            st.dataframe(puts_table)
+
+            # Append data to main DataFrame
+            all_data = pd.concat([all_data, puts_table], ignore_index=True)
+
+            # Highlight Max Loss columns
+            styled_table = puts_table.style.highlight_max(
+                subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow"
+            )
+            st.dataframe(styled_table)
+
+        if not all_data.empty:
+            # Allow downloading the complete table as a CSV file
+            csv = all_data.to_csv(index=False)
+            st.download_button(
+                label="Download All Expiration Data as CSV",
+                data=csv,
+                file_name=f"{ticker_symbol}_put_options.csv",
+                mime="text/csv",
+            )
+        else:
+            st.warning(f"No put options data to display or download for {ticker_symbol}.")
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
