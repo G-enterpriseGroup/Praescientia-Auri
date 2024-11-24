@@ -1,9 +1,11 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+from datetime import datetime, timedelta
 
 # Set Streamlit page configuration
 st.set_page_config(page_title="Options Analysis", layout="wide")
+
 
 def calculate_max_loss(stock_price, options_table):
     """
@@ -37,6 +39,24 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 
+def calculate_trading_days_left(expiration_date):
+    """
+    Calculate the number of trading days left until the expiration date.
+    Trading days are assumed to be weekdays (Monday-Friday).
+    """
+    today = datetime.today()
+    expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
+    delta = expiration_date - today
+
+    trading_days = 0
+    for i in range(delta.days + 1):
+        day = today + timedelta(days=i)
+        if day.weekday() < 5:  # Weekdays (Monday-Friday)
+            trading_days += 1
+
+    return trading_days
+
+
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
         # Fetch Ticker object
@@ -51,7 +71,8 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
         all_data = pd.DataFrame()
 
         for chosen_date in expiration_dates:
-            st.subheader(f"Expiration Date: {chosen_date}")
+            trading_days_left = calculate_trading_days_left(chosen_date)
+            st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
             
             # Fetch put options for the current expiration date
             options_chain = ticker.option_chain(chosen_date)
