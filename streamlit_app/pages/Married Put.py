@@ -2,6 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
+# Set Streamlit page configuration
+st.set_page_config(page_title="Options Analysis", layout="wide")
 
 def calculate_max_loss(stock_price, options_table):
     """
