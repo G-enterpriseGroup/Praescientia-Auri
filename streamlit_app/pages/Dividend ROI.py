@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import requests
 from lxml import html
-
+st.set_page_config(page_title="Dividend Income Calculator")
 def get_stock_price(ticker):
     """
     Fetch the current stock price for the given ticker using Yahoo Finance.
