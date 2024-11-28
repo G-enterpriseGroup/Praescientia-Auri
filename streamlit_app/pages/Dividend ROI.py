@@ -101,8 +101,8 @@ st.title("Dividend Income Calculator")
 
 # Input fields
 ticker = st.text_input("Enter the Ticker Symbol:").strip().upper()
-days = st.number_input("Enter the Number of Days to Hold:", min_value=1, step=1)
-quantity = st.number_input("Enter the Quantity of Shares Held:", min_value=1, step=1)
+days = st.number_input("Enter the Number of Days to Hold:", min_value=366, step=1)
+quantity = st.number_input("Enter the Quantity of Shares Held:", min_value=100, step=1)
 
 # Calculation
 if st.button("Calculate"):
