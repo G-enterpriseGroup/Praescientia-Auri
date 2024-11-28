@@ -4,8 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # Set Streamlit page configuration
-st.set_page_config(page_title="Married Put")
-st.set_page_config(page_title="Options Analysis", layout="wide")
+st.set_page_config(page_title="Married Put", layout="wide")
 
 
 def calculate_max_loss(stock_price, options_table):
