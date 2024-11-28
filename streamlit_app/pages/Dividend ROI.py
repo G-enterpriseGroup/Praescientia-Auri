@@ -1,5 +1,7 @@
-import yfinance as yf
 import streamlit as st
+import yfinance as yf
+import requests
+from lxml import html
 
 def get_stock_price(ticker):
     """
@@ -10,26 +12,35 @@ def get_stock_price(ticker):
         float: The current stock price.
     """
     stock = yf.Ticker(ticker)
+    # Fetch the latest market data
     market_data = stock.history(period='1d')
     if not market_data.empty:
+        # Get the closing price of the latest trading day
         return market_data['Close'].iloc[-1]
     else:
-        st.warning(f"Could not retrieve data for ticker: {ticker}")
-        return 0.0
+        return None
 
-def get_annual_dividend(ticker):
+def get_annual_dividend(ticker, is_etf):
     """
-    Fetch the annual dividend for the given ticker using Yahoo Finance.
+    Fetch the annual dividend for the given ticker from stockanalysis.com using lxml.
     Args:
         ticker (str): The ticker symbol.
+        is_etf (bool): Whether the ticker represents an ETF or a stock.
     Returns:
         float: The annual dividend amount per share.
     """
-    stock = yf.Ticker(ticker)
-    dividend_info = stock.info.get("dividendRate", 0.0)
-    if dividend_info is None:
-        dividend_info = 0.0
-    return dividend_info
+    base_url = "https://stockanalysis.com"
+    url = f"{base_url}/{'etf' if is_etf else 'stocks'}/{ticker}/dividend/"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')
+            if annual_dividend:
+                return float(annual_dividend[0].replace("$", "").strip())
+        return 0.0
+    except Exception:
+        return 0.0
 
 def is_etf_ticker(ticker):
     """
@@ -55,7 +66,11 @@ def calculate_projected_income(ticker, days, quantity):
         dict: Contains projected income, stock price, total cost, and dividend yield percentage.
     """
     stock_price = get_stock_price(ticker)
-    annual_dividend = get_annual_dividend(ticker)
+    if stock_price is None:
+        return {"error": f"Could not fetch stock price for {ticker}"}
+
+    is_etf = is_etf_ticker(ticker)
+    annual_dividend = get_annual_dividend(ticker, is_etf)
     
     # Calculate financial metrics
     total_cost = stock_price * quantity
@@ -73,20 +88,22 @@ def calculate_projected_income(ticker, days, quantity):
 # Streamlit UI
 st.title("Dividend Income Calculator")
 
-# User Inputs
-ticker = st.text_input("Enter the ticker symbol:", "").strip().upper()
-days = st.number_input("Enter the number of days you plan to hold the security:", min_value=1, value=30)
-quantity = st.number_input("Enter the quantity of securities you are holding:", min_value=1, value=10)
+# Input fields
+ticker = st.text_input("Enter the Ticker Symbol:").strip().upper()
+days = st.number_input("Enter the Number of Days to Hold:", min_value=1, step=1)
+quantity = st.number_input("Enter the Quantity of Shares Held:", min_value=1, step=1)
 
-# Button to Calculate
+# Calculation
 if st.button("Calculate"):
     if ticker:
         results = calculate_projected_income(ticker, days, quantity)
-        st.subheader(f"Financial Summary for {ticker}:")
-        st.write(f"**Current Stock Price:** ${results['stock_price']:.2f}")
-        st.write(f"**Total Investment Cost:** ${results['total_cost']:.2f}")
-        st.write(f"**Dividend Yield:** {results['dividend_yield']:.2f}%")
-        st.write(f"**Projected Dividend Income over {days} days:** ${results['projected_income']:.2f}")
+        if "error" in results:
+            st.error(results["error"])
+        else:
+            st.subheader(f"Financial Summary for {ticker}")
+            st.write(f"**Current Stock Price:** ${results['stock_price']:.2f}")
+            st.write(f"**Total Investment Cost:** ${results['total_cost']:.2f}")
+            st.write(f"**Dividend Yield:** {results['dividend_yield']:.2f}%")
+            st.write(f"**Projected Dividend Income over {days} days:** ${results['projected_income']:.2f}")
     else:
         st.warning("Please enter a valid ticker symbol.")
-
