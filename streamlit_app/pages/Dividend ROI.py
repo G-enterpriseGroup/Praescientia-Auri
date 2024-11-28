@@ -6,9 +6,6 @@ import yfinance as yf
 import streamlit as st
 
 def get_stock_price(ticker):
-    """
-    Fetch the current stock price for the given ticker using Yahoo Finance.
-    """
     stock = yf.Ticker(ticker)
     market_data = stock.history(period='1d')
     if not market_data.empty:
@@ -18,19 +15,22 @@ def get_stock_price(ticker):
         return 0.0
 
 def get_annual_dividend(ticker, is_etf):
-    """
-    Fetch the annual dividend for the given ticker from stockanalysis.com.
-    """
     url = f"https://stockanalysis.com/{'etf' if is_etf else 'stocks'}/{ticker}/dividend/"
     xpath = "/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div"
     
+    # ChromeDriver Configuration
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
-    driver = webdriver.Chrome(service=Service(), options=options)
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    # Update ChromeDriver path as needed
+    driver_path = "/path/to/chromedriver"
+    driver = webdriver.Chrome(service=Service(driver_path), options=options)
     
     try:
         driver.get(url)
-        time.sleep(3)
+        time.sleep(3)  # Allow page load
         element = driver.find_element(By.XPATH, xpath)
         dividend_text = element.text
         annual_dividend = float(dividend_text.replace("$", "").strip())
@@ -43,18 +43,12 @@ def get_annual_dividend(ticker, is_etf):
     return annual_dividend
 
 def is_etf_ticker(ticker):
-    """
-    Determine if the ticker represents an ETF using Yahoo Finance.
-    """
     stock = yf.Ticker(ticker)
     info = stock.info
     quote_type = info.get('quoteType', '').lower()
     return 'etf' in quote_type
 
 def calculate_projected_income(ticker, days, quantity):
-    """
-    Calculate the projected dividend income and related financial metrics.
-    """
     stock_price = get_stock_price(ticker)
     is_etf = is_etf_ticker(ticker)
     annual_dividend = get_annual_dividend(ticker, is_etf)
@@ -74,7 +68,6 @@ def calculate_projected_income(ticker, days, quantity):
 # Streamlit UI
 st.title("Dividend Income Calculator")
 
-# User Inputs
 ticker = st.text_input("Enter the ticker symbol:", "").strip().upper()
 days = st.number_input("Enter the number of days you plan to hold the security:", min_value=1, value=30)
 quantity = st.number_input("Enter the quantity of securities you are holding:", min_value=1, value=10)
