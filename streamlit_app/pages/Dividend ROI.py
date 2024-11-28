@@ -12,13 +12,22 @@ def get_stock_price(ticker):
         float: The current stock price.
     """
     stock = yf.Ticker(ticker)
-    # Fetch the latest market data
     market_data = stock.history(period='1d')
     if not market_data.empty:
-        # Get the closing price of the latest trading day
         return market_data['Close'].iloc[-1]
     else:
         return None
+
+def get_full_security_name(ticker):
+    """
+    Fetch the full security name for the given ticker using Yahoo Finance.
+    Args:
+        ticker (str): The ticker symbol.
+    Returns:
+        str: The full security name.
+    """
+    stock = yf.Ticker(ticker)
+    return stock.info.get('longName', 'N/A')
 
 def get_annual_dividend(ticker, is_etf):
     """
@@ -63,7 +72,7 @@ def calculate_projected_income(ticker, days, quantity):
         days (int): Number of days the security is held.
         quantity (int): Number of shares held.
     Returns:
-        dict: Contains projected income, stock price, total cost, and dividend yield percentage.
+        dict: Contains projected income, stock price, total cost, dividend yield percentage, and security name.
     """
     stock_price = get_stock_price(ticker)
     if stock_price is None:
@@ -71,6 +80,7 @@ def calculate_projected_income(ticker, days, quantity):
 
     is_etf = is_etf_ticker(ticker)
     annual_dividend = get_annual_dividend(ticker, is_etf)
+    security_name = get_full_security_name(ticker)
     
     # Calculate financial metrics
     total_cost = stock_price * quantity
@@ -79,6 +89,7 @@ def calculate_projected_income(ticker, days, quantity):
     projected_income = daily_dividend_rate * days * quantity
     
     return {
+        'security_name': security_name,
         'projected_income': projected_income,
         'stock_price': stock_price,
         'total_cost': total_cost,
@@ -101,6 +112,7 @@ if st.button("Calculate"):
             st.error(results["error"])
         else:
             st.subheader(f"Financial Summary for {ticker}")
+            st.write(f"**Security Name:** {results['security_name']}")
             st.write(f"**Current Stock Price:** ${results['stock_price']:.2f}")
             st.write(f"**Total Investment Cost:** ${results['total_cost']:.2f}")
             st.write(f"**Dividend Yield:** {results['dividend_yield']:.2f}%")
