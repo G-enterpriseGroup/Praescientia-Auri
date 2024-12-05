@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from lxml import html
 import yfinance as yf
+st.set_page_config(page_title="DIV MATRIX", layout="wide")
 
 # Function to get stock data
 def get_stock_data(ticker):
