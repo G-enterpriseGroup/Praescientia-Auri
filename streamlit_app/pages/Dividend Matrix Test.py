@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 from lxml import html
 import yfinance as yf
+import time
+
 st.set_page_config(page_title="DIV MATRIX", layout="wide")
 
 # Function to get stock data
@@ -85,6 +87,7 @@ if tickers:
     for ticker in tickers:
         ticker = ticker.strip()
         if ticker:
+            time.sleep(8)  # Add an 8-second delay for each ticker
             stock_info = get_stock_data(ticker)
             stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
             data.append(stock_info)
@@ -92,7 +95,10 @@ if tickers:
     df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
 
     # Get additional data for each ticker
-    additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
+    additional_data = []
+    for ticker in df["Ticker"]:
+        time.sleep(8)  # Add another 8-second delay for additional data retrieval
+        additional_data.append(get_additional_stock_data(ticker))
     additional_df = pd.DataFrame(additional_data)
 
     # Combine main data and additional data
