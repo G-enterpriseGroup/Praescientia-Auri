@@ -19,10 +19,10 @@ def calculate_performance(ticker):
                 "5 Days": f"{((last_close - hist['Close'][-6]) / hist['Close'][-6]) * 100:.2f}%" if len(hist) > 5 else "N/A",
                 "1 Month": f"{((last_close - hist['Close'][-22]) / hist['Close'][-22]) * 100:.2f}%" if len(hist) > 22 else "N/A",
                 "6 Month": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) > 0 else "N/A",
-                "YTD": "N/A",  # Custom calculations for YTD can be added if needed
-                "1 Year": "N/A",  # Need 1 year of data
-                "5 Year": "N/A",  # Need 5 years of data
-                "All Time": "N/A",  # Need more historical data
+                "YTD": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if "YTD" in hist.columns else "N/A",
+                "1 Year": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) >= 252 else "N/A",  # Approx 252 trading days in a year
+                "5 Year": "N/A",  # You can fetch this using longer history
+                "All Time": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) > 0 else "N/A",
             }
         else:
             performance = {
@@ -59,6 +59,9 @@ def fetch_stock_data(ticker):
         ex_dividend_date = ticker_data.info.get("exDividendDate", "N/A")
         frequency = "Quarterly" if ticker_data.info.get("dividendFrequency", 1) == 4 else "Monthly"
 
+        # Ensure yield_percent is in percentage format
+        yield_percent = f"{yield_percent * 100:.2f}%" if yield_percent != "N/A" else "N/A"
+
         # Get performance data
         performance = calculate_performance(ticker)
 
@@ -66,7 +69,7 @@ def fetch_stock_data(ticker):
             "Name": long_name,
             "Ticker": ticker,
             "Price": f"${price:.2f}" if price != "N/A" else "N/A",
-            "Yield %": f"{yield_percent * 100:.2f}%" if yield_percent != "N/A" else "N/A",
+            "Yield %": yield_percent,
             "Annual Dividend": f"${annual_dividend:.2f}" if annual_dividend != "N/A" else "N/A",
             "Ex Dividend Date": pd.to_datetime(ex_dividend_date).strftime("%Y-%m-%d") if ex_dividend_date != "N/A" else "N/A",
             "Frequency": frequency,
