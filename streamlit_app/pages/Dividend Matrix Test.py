@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import streamlit as st
+from datetime import datetime
 
 # Set Streamlit page configuration
 st.set_page_config(page_title="Stock and ETF Dashboard", layout="wide")
@@ -9,20 +10,26 @@ st.set_page_config(page_title="Stock and ETF Dashboard", layout="wide")
 def calculate_performance(ticker):
     try:
         ticker_data = yf.Ticker(ticker)
-        hist = ticker_data.history(period="6mo")
+        hist = ticker_data.history(period="1y")
 
         if not hist.empty:
-            # Calculate returns
+            # Get current and past prices for performance calculations
             last_close = hist["Close"][-1]
+            day_ago = hist["Close"][-2] if len(hist) > 1 else None
+            five_days_ago = hist["Close"][-6] if len(hist) > 5 else None
+            one_month_ago = hist["Close"][-22] if len(hist) > 22 else None
+            six_months_ago = hist["Close"][0] if len(hist) > 0 else None
+
+            # Calculate percentage changes
             performance = {
-                "1 Day": f"{((last_close - hist['Close'][-2]) / hist['Close'][-2]) * 100:.2f}%" if len(hist) > 1 else "N/A",
-                "5 Days": f"{((last_close - hist['Close'][-6]) / hist['Close'][-6]) * 100:.2f}%" if len(hist) > 5 else "N/A",
-                "1 Month": f"{((last_close - hist['Close'][-22]) / hist['Close'][-22]) * 100:.2f}%" if len(hist) > 22 else "N/A",
-                "6 Month": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) > 0 else "N/A",
-                "YTD": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if "YTD" in hist.columns else "N/A",
-                "1 Year": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) >= 252 else "N/A",  # Approx 252 trading days in a year
-                "5 Year": "N/A",  # You can fetch this using longer history
-                "All Time": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) > 0 else "N/A",
+                "1 Day": f"{((last_close - day_ago) / day_ago) * 100:.2f}%" if day_ago else "N/A",
+                "5 Days": f"{((last_close - five_days_ago) / five_days_ago) * 100:.2f}%" if five_days_ago else "N/A",
+                "1 Month": f"{((last_close - one_month_ago) / one_month_ago) * 100:.2f}%" if one_month_ago else "N/A",
+                "6 Month": f"{((last_close - six_months_ago) / six_months_ago) * 100:.2f}%" if six_months_ago else "N/A",
+                "YTD": "N/A",  # Customize for Year-to-Date
+                "1 Year": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) > 0 else "N/A",
+                "5 Year": "N/A",  # Extend for longer data
+                "All Time": "N/A",  # Extend for longer data
             }
         else:
             performance = {
@@ -59,8 +66,9 @@ def fetch_stock_data(ticker):
         ex_dividend_date = ticker_data.info.get("exDividendDate", "N/A")
         frequency = "Quarterly" if ticker_data.info.get("dividendFrequency", 1) == 4 else "Monthly"
 
-        # Ensure yield_percent is in percentage format
-        yield_percent = f"{yield_percent * 100:.2f}%" if yield_percent != "N/A" else "N/A"
+        # Convert ex-dividend date if available
+        if ex_dividend_date != "N/A":
+            ex_dividend_date = datetime.utcfromtimestamp(ex_dividend_date).strftime("%Y-%m-%d")
 
         # Get performance data
         performance = calculate_performance(ticker)
@@ -69,9 +77,9 @@ def fetch_stock_data(ticker):
             "Name": long_name,
             "Ticker": ticker,
             "Price": f"${price:.2f}" if price != "N/A" else "N/A",
-            "Yield %": yield_percent,
+            "Yield %": f"{yield_percent * 100:.2f}%" if yield_percent != "N/A" else "N/A",
             "Annual Dividend": f"${annual_dividend:.2f}" if annual_dividend != "N/A" else "N/A",
-            "Ex Dividend Date": pd.to_datetime(ex_dividend_date).strftime("%Y-%m-%d") if ex_dividend_date != "N/A" else "N/A",
+            "Ex Dividend Date": ex_dividend_date,
             "Frequency": frequency,
             **performance,  # Include performance data
         }
