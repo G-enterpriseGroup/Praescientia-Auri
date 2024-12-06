@@ -94,7 +94,7 @@ if tickers:
                 data.append(stock_info)
 
         # Pause for 10 seconds after processing a batch
-        if i + 12 < len(tickers):  # Avoid unnecessary delay after the last batch
+        if i + 8 < len(tickers):  # Avoid unnecessary delay after the last batch
             time.sleep(30)
 
     # Create DataFrame
