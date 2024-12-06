@@ -97,7 +97,7 @@ if tickers:
     # Get additional data for each ticker
     additional_data = []
     for ticker in df["Ticker"]:
-        time.sleep(8)  # Add another 8-second delay for additional data retrieval
+        time.sleep(.5)  # Add another 8-second delay for additional data retrieval
         additional_data.append(get_additional_stock_data(ticker))
     additional_df = pd.DataFrame(additional_data)
 
