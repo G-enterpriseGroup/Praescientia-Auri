@@ -87,7 +87,7 @@ if tickers:
     for ticker in tickers:
         ticker = ticker.strip()
         if ticker:
-            time.sleep(8)  # Add an 8-second delay for each ticker
+            time.sleep(2)  # Add an 8-second delay for each ticker
             stock_info = get_stock_data(ticker)
             stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
             data.append(stock_info)
