@@ -1,134 +1,123 @@
-import yfinance as yf
-import pandas as pd
 import streamlit as st
-from datetime import datetime
+import pandas as pd
+import requests
+from lxml import html
+import yfinance as yf
+st.set_page_config(page_title="DIV MATRIX", layout="wide")
 
-# Set Streamlit page configuration
-st.set_page_config(page_title="Stock and ETF Dashboard", layout="wide")
+# Function to get stock data
+def get_stock_data(ticker):
+    base_url = "https://stockanalysis.com"
+    etf_url = f"{base_url}/etf/{ticker}/dividend/"
+    stock_url = f"{base_url}/stocks/{ticker}/dividend/"
 
-# Function to calculate performance data
-def calculate_performance(ticker):
     try:
-        ticker_data = yf.Ticker(ticker)
-        hist = ticker_data.history(period="1y")
-
-        if not hist.empty:
-            # Get current and past prices for performance calculations
-            last_close = hist["Close"][-1]
-            day_ago = hist["Close"][-2] if len(hist) > 1 else None
-            five_days_ago = hist["Close"][-6] if len(hist) > 5 else None
-            one_month_ago = hist["Close"][-22] if len(hist) > 22 else None
-            six_months_ago = hist["Close"][0] if len(hist) > 0 else None
-
-            # Calculate percentage changes
-            performance = {
-                "1 Day": f"{((last_close - day_ago) / day_ago) * 100:.2f}%" if day_ago else "N/A",
-                "5 Days": f"{((last_close - five_days_ago) / five_days_ago) * 100:.2f}%" if five_days_ago else "N/A",
-                "1 Month": f"{((last_close - one_month_ago) / one_month_ago) * 100:.2f}%" if one_month_ago else "N/A",
-                "6 Month": f"{((last_close - six_months_ago) / six_months_ago) * 100:.2f}%" if six_months_ago else "N/A",
-                "YTD": "N/A",  # Customize for Year-to-Date
-                "1 Year": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) > 0 else "N/A",
-                "5 Year": "N/A",  # Extend for longer data
-                "All Time": "N/A",  # Extend for longer data
-            }
+        response = requests.get(etf_url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+            price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
+            yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
+            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
+            ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
+            frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
+            dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
+            return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
         else:
-            performance = {
-                "1 Day": "N/A",
-                "5 Days": "N/A",
-                "1 Month": "N/A",
-                "6 Month": "N/A",
-                "YTD": "N/A",
-                "1 Year": "N/A",
-                "5 Year": "N/A",
-                "All Time": "N/A",
-            }
-        return performance
+            response = requests.get(stock_url)
+            if response.status_code == 200:
+                tree = html.fromstring(response.content)
+                price = tree.xpath('//*[@id="main"]/div[1]/div[2]/div/div[1]/text()')[0].strip()
+                yield_percent = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[1]/div/text()')[0].strip()
+                annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')[0].strip()
+                ex_dividend_date = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[3]/div/text()')[0].strip()
+                frequency = tree.xpath('//*[@id="main"]/div[2]/div/div[2]/div[4]/div/text()')[0].strip()
+                dividend_growth = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[6]/div/text()')[0].strip()
+                return {"Ticker": ticker, "Price": price, "Yield %": yield_percent, "Annual Dividend": annual_dividend, "Ex Dividend Date": ex_dividend_date, "Frequency": frequency, "Dividend Growth %": dividend_growth}
+            else:
+                return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
     except Exception as e:
-        return {
-            "1 Day": "N/A",
-            "5 Days": "N/A",
-            "1 Month": "N/A",
-            "6 Month": "N/A",
-            "YTD": "N/A",
-            "1 Year": "N/A",
-            "5 Year": "N/A",
-            "All Time": "N/A",
-        }
+        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
 
-# Function to fetch stock and ETF data
-def fetch_stock_data(ticker):
+# Function to get additional stock or ETF data
+def get_additional_stock_data(ticker):
+    base_url = f"https://www.tradingview.com/symbols/{ticker}/"
     try:
-        ticker_data = yf.Ticker(ticker)
-        long_name = ticker_data.info.get("longName", "N/A")
-        price = ticker_data.history(period="1d")["Close"][-1] if not ticker_data.history(period="1d").empty else "N/A"
-        yield_percent = ticker_data.info.get("dividendYield", "N/A")
-        annual_dividend = ticker_data.info.get("dividendRate", "N/A")
-        ex_dividend_date = ticker_data.info.get("exDividendDate", "N/A")
-        frequency = "Quarterly" if ticker_data.info.get("dividendFrequency", 1) == 4 else "Monthly"
+        response = requests.get(base_url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
 
-        # Convert ex-dividend date if available
-        if ex_dividend_date != "N/A":
-            ex_dividend_date = datetime.utcfromtimestamp(ex_dividend_date).strftime("%Y-%m-%d")
+            # Attempt both stock and ETF XPaths
+            try:
+                # First try stock XPath
+                day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
+                day_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')[0].strip()
+                month_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')[0].strip()
+                month_6 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')[0].strip()
+                ytd = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')[0].strip()
+                year_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')[0].strip()
+                year_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0].strip()
+                all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
+            except IndexError:
+                day_1 = tree.xpath('//button[span/span[text()="1 day"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                day_5 = tree.xpath('//button[span/span[text()="5 days"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_1 = tree.xpath('//button[span/span[text()="1 month"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_6 = tree.xpath('//button[span/span[text()="6 months"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                ytd = tree.xpath('//button[span/span[text()="Year to date"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_1 = tree.xpath('//button[span/span[text()="1 year"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_5 = tree.xpath('//button[span/span[text()="5 years"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                all_time = tree.xpath('//button[span/span[text()="All time"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
 
-        # Get performance data
-        performance = calculate_performance(ticker)
-
-        return {
-            "Name": long_name,
-            "Ticker": ticker,
-            "Price": f"${price:.2f}" if price != "N/A" else "N/A",
-            "Yield %": f"{yield_percent * 100:.2f}%" if yield_percent != "N/A" else "N/A",
-            "Annual Dividend": f"${annual_dividend:.2f}" if annual_dividend != "N/A" else "N/A",
-            "Ex Dividend Date": ex_dividend_date,
-            "Frequency": frequency,
-            **performance,  # Include performance data
-        }
+            return {"1 Day": day_1, "5 Days": day_5, "1 Month": month_1, "6 Month": month_6, "YTD": ytd, "1 Year": year_1, "5 Year": year_5, "All Time": all_time}
+        else:
+            return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
     except Exception as e:
-        return {
-            "Name": "N/A",
-            "Ticker": ticker,
-            "Price": "N/A",
-            "Yield %": "N/A",
-            "Annual Dividend": "N/A",
-            "Ex Dividend Date": "N/A",
-            "Frequency": "N/A",
-            "1 Day": "N/A",
-            "5 Days": "N/A",
-            "1 Month": "N/A",
-            "6 Month": "N/A",
-            "YTD": "N/A",
-            "1 Year": "N/A",
-            "5 Year": "N/A",
-            "All Time": "N/A",
-        }
+        return {"1 Day": "N/A", "5 Days": "N/A", "1 Month": "N/A", "6 Month": "N/A", "YTD": "N/A", "1 Year": "N/A", "5 Year": "N/A", "All Time": "N/A"}
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
 
-# Input for tickers
+# Input tickers
 tickers = st.text_input("Enter tickers separated by commas").split(',')
 
+# Fetch data for each ticker
 if tickers:
-    # Process tickers
-    data = [fetch_stock_data(ticker.strip().upper()) for ticker in tickers if ticker.strip()]
-    df = pd.DataFrame(data)
+    data = []
+    for ticker in tickers:
+        ticker = ticker.strip()
+        if ticker:
+            stock_info = get_stock_data(ticker)
+            stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
+            data.append(stock_info)
 
-    # Display data in Streamlit
+    df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
+
+    # Get additional data for each ticker
+    additional_data = [get_additional_stock_data(ticker) for ticker in df["Ticker"]]
+    additional_df = pd.DataFrame(additional_data)
+
+    # Combine main data and additional data
+    df = pd.concat([df, additional_df], axis=1)
+
+    # Display DataFrame
     st.write(df)
 
-    # Optional: Adjust page width and table styling
-    st.markdown(
-        """
-        <style>
-        .reportview-container .main .block-container {
-            max-width: 100%;
-            padding: 2rem;
-        }
-        table {
-            width: 100% !important;
-            table-layout: auto !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+# Adjust the width and height of the page and ensure table fits the data
+st.markdown(
+    """
+    <style>
+    .reportview-container .main .block-container{
+        max-width: 100%;
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+    }
+    table {
+        width: 100% !important;
+        height: 100% !important;
+        table-layout: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
