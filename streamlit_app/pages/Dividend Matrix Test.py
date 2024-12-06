@@ -5,6 +5,49 @@ import streamlit as st
 # Set Streamlit page configuration
 st.set_page_config(page_title="Stock and ETF Dashboard", layout="wide")
 
+# Function to calculate performance data
+def calculate_performance(ticker):
+    try:
+        ticker_data = yf.Ticker(ticker)
+        hist = ticker_data.history(period="6mo")
+
+        if not hist.empty:
+            # Calculate returns
+            last_close = hist["Close"][-1]
+            performance = {
+                "1 Day": f"{((last_close - hist['Close'][-2]) / hist['Close'][-2]) * 100:.2f}%" if len(hist) > 1 else "N/A",
+                "5 Days": f"{((last_close - hist['Close'][-6]) / hist['Close'][-6]) * 100:.2f}%" if len(hist) > 5 else "N/A",
+                "1 Month": f"{((last_close - hist['Close'][-22]) / hist['Close'][-22]) * 100:.2f}%" if len(hist) > 22 else "N/A",
+                "6 Month": f"{((last_close - hist['Close'][0]) / hist['Close'][0]) * 100:.2f}%" if len(hist) > 0 else "N/A",
+                "YTD": "N/A",  # Custom calculations for YTD can be added if needed
+                "1 Year": "N/A",  # Need 1 year of data
+                "5 Year": "N/A",  # Need 5 years of data
+                "All Time": "N/A",  # Need more historical data
+            }
+        else:
+            performance = {
+                "1 Day": "N/A",
+                "5 Days": "N/A",
+                "1 Month": "N/A",
+                "6 Month": "N/A",
+                "YTD": "N/A",
+                "1 Year": "N/A",
+                "5 Year": "N/A",
+                "All Time": "N/A",
+            }
+        return performance
+    except Exception as e:
+        return {
+            "1 Day": "N/A",
+            "5 Days": "N/A",
+            "1 Month": "N/A",
+            "6 Month": "N/A",
+            "YTD": "N/A",
+            "1 Year": "N/A",
+            "5 Year": "N/A",
+            "All Time": "N/A",
+        }
+
 # Function to fetch stock and ETF data
 def fetch_stock_data(ticker):
     try:
@@ -14,7 +57,10 @@ def fetch_stock_data(ticker):
         yield_percent = ticker_data.info.get("dividendYield", "N/A")
         annual_dividend = ticker_data.info.get("dividendRate", "N/A")
         ex_dividend_date = ticker_data.info.get("exDividendDate", "N/A")
-        frequency = "Quarterly" if ticker_data.info.get("dividendFrequency", 1) == 4 else "Monthly"  # Adjust based on known frequencies
+        frequency = "Quarterly" if ticker_data.info.get("dividendFrequency", 1) == 4 else "Monthly"
+
+        # Get performance data
+        performance = calculate_performance(ticker)
 
         return {
             "Name": long_name,
@@ -24,6 +70,7 @@ def fetch_stock_data(ticker):
             "Annual Dividend": f"${annual_dividend:.2f}" if annual_dividend != "N/A" else "N/A",
             "Ex Dividend Date": pd.to_datetime(ex_dividend_date).strftime("%Y-%m-%d") if ex_dividend_date != "N/A" else "N/A",
             "Frequency": frequency,
+            **performance,  # Include performance data
         }
     except Exception as e:
         return {
@@ -34,6 +81,14 @@ def fetch_stock_data(ticker):
             "Annual Dividend": "N/A",
             "Ex Dividend Date": "N/A",
             "Frequency": "N/A",
+            "1 Day": "N/A",
+            "5 Days": "N/A",
+            "1 Month": "N/A",
+            "6 Month": "N/A",
+            "YTD": "N/A",
+            "1 Year": "N/A",
+            "5 Year": "N/A",
+            "All Time": "N/A",
         }
 
 # Streamlit App
