@@ -95,7 +95,7 @@ if tickers:
 
         # Pause for 10 seconds after processing a batch
         if i + 12 < len(tickers):  # Avoid unnecessary delay after the last batch
-            time.sleep(10)
+            time.sleep(30)
 
     # Create DataFrame
     df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
