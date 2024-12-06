@@ -84,8 +84,8 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for tickers in batches of 12
 if tickers:
     data = []
-    for i in range(0, len(tickers), 2):  # Process in batches of 12
-        batch = tickers[i:i + 2]
+    for i in range(0, len(tickers), 12):  # Process in batches of 12
+        batch = tickers[i:i + 12]
         for ticker in batch:
             ticker = ticker.strip()
             if ticker:
@@ -94,8 +94,8 @@ if tickers:
                 data.append(stock_info)
 
         # Pause for 10 seconds after processing a batch
-        if i + 2 < len(tickers):  # Avoid unnecessary delay after the last batch
-            time.sleep(5)
+        if i + 12 < len(tickers):  # Avoid unnecessary delay after the last batch
+            time.sleep(10)
 
     # Create DataFrame
     df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
