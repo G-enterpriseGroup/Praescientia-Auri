@@ -1,62 +1,68 @@
-import streamlit as st
-import pandas as pd
-import requests
-from lxml import html
 import yfinance as yf
-import time
+import pandas as pd
+import streamlit as st
 
+# Set Streamlit page configuration
 st.set_page_config(page_title="Stock and ETF Dashboard", layout="wide")
 
-# Function to fetch stock/ETF data
+# Function to fetch stock and ETF data
 def fetch_stock_data(ticker):
-    base_url = f"https://stockanalysis.com/stocks/{ticker}/dividend/"
     try:
-        response = requests.get(base_url)
-        if response.status_code == 200:
-            tree = html.fromstring(response.content)
-            # Adjust these XPaths to match the current website structure
-            price = tree.xpath('//div[contains(@class, "price")]/text()')[0].strip()
-            yield_percent = tree.xpath('//div[contains(text(), "Yield")]/following-sibling::div/text()')[0].strip()
-            annual_dividend = tree.xpath('//div[contains(text(), "Annual Dividend")]/following-sibling::div/text()')[0].strip()
-            ex_dividend_date = tree.xpath('//div[contains(text(), "Ex-Dividend Date")]/following-sibling::div/text()')[0].strip()
-            frequency = tree.xpath('//div[contains(text(), "Frequency")]/following-sibling::div/text()')[0].strip()
-            dividend_growth = tree.xpath('//div[contains(text(), "Dividend Growth")]/following-sibling::div/text()')[0].strip()
-            return {
-                "Ticker": ticker,
-                "Price": price,
-                "Yield %": yield_percent,
-                "Annual Dividend": annual_dividend,
-                "Ex Dividend Date": ex_dividend_date,
-                "Frequency": frequency,
-                "Dividend Growth %": dividend_growth,
-            }
-        else:
-            return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+        ticker_data = yf.Ticker(ticker)
+        long_name = ticker_data.info.get("longName", "N/A")
+        price = ticker_data.history(period="1d")["Close"][-1] if not ticker_data.history(period="1d").empty else "N/A"
+        yield_percent = ticker_data.info.get("dividendYield", "N/A")
+        annual_dividend = ticker_data.info.get("dividendRate", "N/A")
+        ex_dividend_date = ticker_data.info.get("exDividendDate", "N/A")
+        frequency = "Quarterly" if ticker_data.info.get("dividendFrequency", 1) == 4 else "Monthly"  # Adjust based on known frequencies
+
+        return {
+            "Name": long_name,
+            "Ticker": ticker,
+            "Price": f"${price:.2f}" if price != "N/A" else "N/A",
+            "Yield %": f"{yield_percent * 100:.2f}%" if yield_percent != "N/A" else "N/A",
+            "Annual Dividend": f"${annual_dividend:.2f}" if annual_dividend != "N/A" else "N/A",
+            "Ex Dividend Date": pd.to_datetime(ex_dividend_date).strftime("%Y-%m-%d") if ex_dividend_date != "N/A" else "N/A",
+            "Frequency": frequency,
+        }
     except Exception as e:
-        return {"Ticker": ticker, "Price": "N/A", "Yield %": "N/A", "Annual Dividend": "N/A", "Ex Dividend Date": "N/A", "Frequency": "N/A", "Dividend Growth %": "N/A"}
+        return {
+            "Name": "N/A",
+            "Ticker": ticker,
+            "Price": "N/A",
+            "Yield %": "N/A",
+            "Annual Dividend": "N/A",
+            "Ex Dividend Date": "N/A",
+            "Frequency": "N/A",
+        }
 
 # Streamlit App
 st.title("Stock and ETF Dashboard")
 
-# User input for tickers
+# Input for tickers
 tickers = st.text_input("Enter tickers separated by commas").split(',')
 
 if tickers:
-    data = []
-    for ticker in tickers:
-        ticker = ticker.strip().upper()
-        if ticker:
-            # Introduce delay to avoid server issues
-            time.sleep(8)
-            stock_data = fetch_stock_data(ticker)
-            stock_data["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")  # Fetch additional info using Yahoo Finance
-            data.append(stock_data)
-    
-    # Create DataFrame
-    df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
+    # Process tickers
+    data = [fetch_stock_data(ticker.strip().upper()) for ticker in tickers if ticker.strip()]
+    df = pd.DataFrame(data)
+
+    # Display data in Streamlit
     st.write(df)
 
-    # Display warning if too many requests fail
-    failed_tickers = [row["Ticker"] for row in data if row["Price"] == "N/A"]
-    if failed_tickers:
-        st.warning(f"Data not found for the following tickers: {', '.join(failed_tickers)}. Check ticker validity or server response.")
+    # Optional: Adjust page width and table styling
+    st.markdown(
+        """
+        <style>
+        .reportview-container .main .block-container {
+            max-width: 100%;
+            padding: 2rem;
+        }
+        table {
+            width: 100% !important;
+            table-layout: auto !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
