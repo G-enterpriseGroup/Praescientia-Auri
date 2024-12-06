@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 from lxml import html
 import yfinance as yf
+import time
+
 st.set_page_config(page_title="DIV MATRIX", layout="wide")
 
 # Function to get stock data
@@ -79,16 +81,23 @@ st.title("Stock and ETF Dashboard")
 # Input tickers
 tickers = st.text_input("Enter tickers separated by commas").split(',')
 
-# Fetch data for each ticker
+# Fetch data for tickers in batches of 12
 if tickers:
     data = []
-    for ticker in tickers:
-        ticker = ticker.strip()
-        if ticker:
-            stock_info = get_stock_data(ticker)
-            stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
-            data.append(stock_info)
+    for i in range(0, len(tickers), 12):  # Process in batches of 12
+        batch = tickers[i:i + 12]
+        for ticker in batch:
+            ticker = ticker.strip()
+            if ticker:
+                stock_info = get_stock_data(ticker)
+                stock_info["Name"] = yf.Ticker(ticker).info.get("longName", "N/A")
+                data.append(stock_info)
 
+        # Pause for 10 seconds after processing a batch
+        if i + 12 < len(tickers):  # Avoid unnecessary delay after the last batch
+            time.sleep(10)
+
+    # Create DataFrame
     df = pd.DataFrame(data, columns=["Name", "Ticker", "Price", "Yield %", "Annual Dividend", "Ex Dividend Date", "Frequency", "Dividend Growth %"])
 
     # Get additional data for each ticker
