@@ -84,8 +84,8 @@ tickers = st.text_input("Enter tickers separated by commas").split(',')
 # Fetch data for tickers in batches of 12
 if tickers:
     data = []
-    for i in range(0, len(tickers), 12):  # Process in batches of 12
-        batch = tickers[i:i + 12]
+    for i in range(0, len(tickers), 2):  # Process in batches of 12
+        batch = tickers[i:i + 2]
         for ticker in batch:
             ticker = ticker.strip()
             if ticker:
