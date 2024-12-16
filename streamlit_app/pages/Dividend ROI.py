@@ -83,10 +83,11 @@ def calculate_projected_income(ticker, days, quantity):
     security_name = get_full_security_name(ticker)
     
     # Calculate financial metrics
-    total_cost = stock_price * quantity
-    dividend_yield = (annual_dividend / stock_price) * 100 if stock_price else 0
-    daily_dividend_rate = annual_dividend / 365
-    projected_income = daily_dividend_rate * days * quantity
+    total_cost = stock_price * quantity  # Total investment cost
+    dividend_yield = (annual_dividend / stock_price) * 100 if stock_price else 0  # Annual dividend yield percentage
+    daily_dividend_rate = annual_dividend / 365  # Daily dividend rate
+    projected_income = total_cost * (daily_dividend_rate / stock_price) * days  # Projected income based on daily dividends
+
     
     return {
         'security_name': security_name,
