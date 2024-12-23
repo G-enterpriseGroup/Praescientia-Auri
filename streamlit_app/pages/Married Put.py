@@ -39,17 +39,15 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 
+from datetime import datetime
+
 def calculate_trading_days_left(expiration_date):
     """
-    Calculate the number of days left until the expiration date.
-    This includes all days (weekdays and weekends).
+    Calculate the total number of days left until the expiration date.
     """
     today = datetime.today()
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
-    delta = expiration_date - today
-
-    trading_days = delta.days + 1  # Include today in the count
-    return trading_days
+    return (expiration_date - today).days
 
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
