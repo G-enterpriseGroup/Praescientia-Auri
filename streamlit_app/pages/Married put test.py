@@ -129,12 +129,13 @@ def main():
         return
 
     # Input for contract size
-    contract_size = st.number_input(
-        "Enter the contract size (number of options per contract):",
+    contract_multiplier = st.number_input(
+        "Enter the contract size (multiplier, typically 1 for 100 shares):",
         min_value=1,
-        value=100,
+        value=1,
         step=1
     )
+    contract_size = contract_multiplier * 100
 
     # Input for number of shares
     number_of_shares = st.number_input(
