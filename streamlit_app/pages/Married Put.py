@@ -41,19 +41,14 @@ def calculate_max_loss(stock_price, options_table):
 
 def calculate_trading_days_left(expiration_date):
     """
-    Calculate the number of trading days left until the expiration date.
-    Trading days are assumed to be weekdays (Monday-Friday).
+    Calculate the number of days left until the expiration date.
+    This includes all days (weekdays and weekends).
     """
     today = datetime.today()
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     delta = expiration_date - today
 
-    trading_days = 0
-    for i in range(delta.days + 1):
-        day = today + timedelta(days=i)
-        if day.weekday() < 5:  # Weekdays (Monday-Friday)
-            trading_days += 1
-
+    trading_days = delta.days + 1  # Include today in the count
     return trading_days
 
 
