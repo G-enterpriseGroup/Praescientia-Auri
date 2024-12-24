@@ -21,11 +21,11 @@ def main():
 
     # User Inputs
     distance = st.number_input("Enter the total round-trip distance (in miles):", min_value=0.0, step=0.1, format="%.1f")
-    mpg = st.number_input("Enter your vehicle's fuel efficiency (in MPG):", min_value=0.1, step=0.1, format="%.1f")
-    gas_price = st.number_input("Enter the current gas price (per gallon):", min_value=0.0, step=0.01, format="%.2f")
+    mpg = st.number_input("Enter your vehicle's fuel efficiency (in MPG):",value=16.5, min_value=0.1, step=0.1, format="%.1f")
+    gas_price = st.number_input("Enter the current gas price (per gallon):",value=3.14, min_value=0.0, step=0.01, format="%.2f")
     wear_tear_rate = st.number_input("Enter the wear and tear rate (e.g., IRS rate per mile):", value=0.655, min_value=0.0, step=0.001, format="%.3f")
-    num_stops = st.number_input("Enter the number of red lights/stops during the trip:", min_value=0, step=1)
-    idle_time_per_stop = st.number_input("Enter the average idle time per stop (in minutes):", min_value=0.0, step=0.1, format="%.1f")
+    num_stops = st.number_input("Enter the number of red lights/stops during the trip:",value=5, min_value=0, step=1)
+    idle_time_per_stop = st.number_input("Enter the average idle time per stop (in minutes):",value=1.4, min_value=0.0, step=0.1, format="%.1f")
 
     # Calculate costs
     if st.button("Calculate Costs"):
