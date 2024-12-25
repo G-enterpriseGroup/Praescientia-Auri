@@ -10,7 +10,7 @@ def calculate_wear_and_tear(distance, rate_per_mile):
     return round(wear_tear_cost, 2)
 
 def calculate_red_light_cost(num_stops, idle_time_per_stop, gas_price):
-    fuel_consumption_per_hour = 0.7  # Average fuel consumption while idling in gallons/hour
+    fuel_consumption_per_hour = 0.3  # Average fuel consumption while idling in gallons/hour
     fuel_consumed_per_stop = (fuel_consumption_per_hour / 60) * idle_time_per_stop  # Fuel consumed per stop in gallons
     cost_per_stop = fuel_consumed_per_stop * gas_price
     total_red_light_cost = num_stops * cost_per_stop
@@ -20,12 +20,12 @@ def main():
     st.title("Fuel, Wear & Tear, and Red Light Cost Calculator")
 
     # User Inputs
-    distance = st.number_input("Enter the total round-trip distance (in miles):",value=12, min_value=0.0, step=0.1, format="%.1f")
-    mpg = st.number_input("Enter your vehicle's fuel efficiency (in MPG):",value=15, min_value=0.1, step=0.1, format="%.1f")
-    gas_price = st.number_input("Enter the current gas price (per gallon):",value=3.19, min_value=0.0, step=0.01, format="%.2f")
+    distance = st.number_input("Enter the total round-trip distance (in miles):", value=12.0, min_value=0.0, step=0.1, format="%.1f")
+    mpg = st.number_input("Enter your vehicle's fuel efficiency (in MPG):", value=15.0, min_value=0.1, step=0.1, format="%.1f")
+    gas_price = st.number_input("Enter the current gas price (per gallon):", value=3.19, min_value=0.0, step=0.01, format="%.2f")
     wear_tear_rate = st.number_input("Enter the wear and tear rate (e.g., IRS rate per mile):", value=0.655, min_value=0.0, step=0.001, format="%.3f")
-    num_stops = st.number_input("Enter the number of red lights/stops during the trip:",value=12, min_value=0, step=1)
-    idle_time_per_stop = st.number_input("Enter the average idle time per stop (in minutes):",value=1.35, min_value=0.0, step=0.1, format="%.1f")
+    num_stops = st.number_input("Enter the number of red lights/stops during the trip:", value=12, min_value=0, step=1)
+    idle_time_per_stop = st.number_input("Enter the average idle time per stop (in minutes):", value=1.4, min_value=0.0, step=0.1, format="%.1f")
 
     # Calculate costs
     if st.button("Calculate Costs"):
