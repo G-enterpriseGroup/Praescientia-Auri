@@ -20,12 +20,6 @@ def fetch_ttm_dividend_yield(tickers):
             info = stock.info
 
             long_name = info.get("longName", "N/A")
-            dividend_yield = info.get("trailingAnnualDividendYield", None)
-
-            if dividend_yield is not None:
-                dividend_yield_percentage = dividend_yield * 100
-            else:
-                dividend_yield_percentage = "N/A"
 
             # Determine if it's a stock or ETF
             quote_type = info.get("quoteType", "N/A").lower()
@@ -36,7 +30,7 @@ def fetch_ttm_dividend_yield(tickers):
 
             additional_data = get_additional_stock_data(ticker)
 
-            data.append([ticker, long_name, dividend_yield_percentage, link] + additional_data)
+            data.append([ticker, long_name, link] + additional_data)
         except HTTPError:
             # Handle HTTP errors silently
             data.append([ticker, "Error fetching data", "N/A", "N/A"])
@@ -44,7 +38,7 @@ def fetch_ttm_dividend_yield(tickers):
             # Handle all other errors silently
             data.append([ticker, "Error fetching data", "N/A", "N/A"])
 
-    columns = ["Ticker", "Long Name", "TTM Dividend Yield (%)", "StockAnalysis Link", 
+    columns = ["Ticker", "Long Name", "StockAnalysis Link", 
                "DIVID", "1 Day", "5 Days", "1 Month", "6 Months", "YTD", "1 Year", "5 Years", "All Time"]
     df = pd.DataFrame(data, columns=columns)
     return df
