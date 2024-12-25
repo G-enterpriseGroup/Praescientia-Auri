@@ -5,6 +5,7 @@ import warnings
 from requests.exceptions import HTTPError
 import requests
 from lxml import html
+st.set_page_config(page_title="DIV MATRIX", layout="wide")
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
