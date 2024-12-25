@@ -10,7 +10,7 @@ def calculate_wear_and_tear(distance, rate_per_mile):
     return round(wear_tear_cost, 2)
 
 def calculate_red_light_cost(num_stops, idle_time_per_stop, gas_price):
-    fuel_consumption_per_hour = 0.3  # Average fuel consumption while idling in gallons/hour
+    fuel_consumption_per_hour = 0.7  # Average fuel consumption while idling in gallons/hour
     fuel_consumed_per_stop = (fuel_consumption_per_hour / 60) * idle_time_per_stop  # Fuel consumed per stop in gallons
     cost_per_stop = fuel_consumed_per_stop * gas_price
     total_red_light_cost = num_stops * cost_per_stop
