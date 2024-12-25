@@ -5,6 +5,7 @@ import warnings
 from requests.exceptions import HTTPError
 import requests
 from lxml import html
+
 st.set_page_config(page_title="DIV MATRIX", layout="wide")
 
 # Suppress warnings
@@ -44,7 +45,7 @@ def fetch_ttm_dividend_yield(tickers):
             data.append([ticker, "Error fetching data", "N/A", "N/A"])
 
     columns = ["Ticker", "Long Name", "TTM Dividend Yield (%)", "StockAnalysis Link", 
-               "1 Day", "5 Days", "1 Month", "6 Months", "YTD", "1 Year", "5 Years", "All Time"]
+               "DIVID", "1 Day", "5 Days", "1 Month", "6 Months", "YTD", "1 Year", "5 Years", "All Time"]
     df = pd.DataFrame(data, columns=columns)
     return df
 
@@ -59,6 +60,7 @@ def get_additional_stock_data(ticker):
             # Attempt both stock and ETF XPaths
             try:
                 # First try stock XPath
+                divid = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[3]/div[2]/div/div[2]/div[2]/div[1]/div/text()')[0].strip()
                 day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
                 day_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')[0].strip()
                 month_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')[0].strip()
@@ -68,6 +70,7 @@ def get_additional_stock_data(ticker):
                 year_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0].strip()
                 all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
             except IndexError:
+                divid = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[2]/div[2]/div/div[3]/div[2]/div[1]/div/text()')[0].strip()
                 day_1 = tree.xpath('//button[span/span[text()="1 day"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
                 day_5 = tree.xpath('//button[span/span[text()="5 days"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
                 month_1 = tree.xpath('//button[span/span[text()="1 month"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
@@ -77,11 +80,11 @@ def get_additional_stock_data(ticker):
                 year_5 = tree.xpath('//button[span/span[text()="5 years"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
                 all_time = tree.xpath('//button[span/span[text()="All time"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
 
-            return [day_1, day_5, month_1, month_6, ytd, year_1, year_5, all_time]
+            return [divid, day_1, day_5, month_1, month_6, ytd, year_1, year_5, all_time]
         else:
-            return ["N/A"] * 8
+            return ["N/A"] * 9
     except Exception as e:
-        return ["N/A"] * 8
+        return ["N/A"] * 9
 
 def main():
     st.title("TTM Dividend Yield and Stock Data Fetcher")
