@@ -3,6 +3,8 @@ import pandas as pd
 import streamlit as st
 import warnings
 from requests.exceptions import HTTPError
+import requests
+from lxml import html
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -30,7 +32,9 @@ def fetch_ttm_dividend_yield(tickers):
             else:
                 link = f"https://stockanalysis.com/stocks/{ticker}/"
 
-            data.append([ticker, long_name, dividend_yield_percentage, link])
+            additional_data = get_additional_stock_data(ticker)
+
+            data.append([ticker, long_name, dividend_yield_percentage, link] + additional_data)
         except HTTPError:
             # Handle HTTP errors silently
             data.append([ticker, "Error fetching data", "N/A", "N/A"])
@@ -38,15 +42,52 @@ def fetch_ttm_dividend_yield(tickers):
             # Handle all other errors silently
             data.append([ticker, "Error fetching data", "N/A", "N/A"])
 
-    df = pd.DataFrame(data, columns=["Ticker", "Long Name", "TTM Dividend Yield (%)", "StockAnalysis Link"])
+    columns = ["Ticker", "Long Name", "TTM Dividend Yield (%)", "StockAnalysis Link", 
+               "1 Day", "5 Days", "1 Month", "6 Months", "YTD", "1 Year", "5 Years", "All Time"]
+    df = pd.DataFrame(data, columns=columns)
     return df
 
+# Function to get additional stock or ETF data
+def get_additional_stock_data(ticker):
+    base_url = f"https://www.tradingview.com/symbols/{ticker}/"
+    try:
+        response = requests.get(base_url)
+        if response.status_code == 200:
+            tree = html.fromstring(response.content)
+
+            # Attempt both stock and ETF XPaths
+            try:
+                # First try stock XPath
+                day_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[1]/span/span[2]/text()')[0].strip()
+                day_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[2]/span/span[2]/text()')[0].strip()
+                month_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[3]/span/span[2]/text()')[0].strip()
+                month_6 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[4]/span/span[2]/text()')[0].strip()
+                ytd = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[5]/span/span[2]/text()')[0].strip()
+                year_1 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[6]/span/span[2]/text()')[0].strip()
+                year_5 = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[7]/span/span[2]/text()')[0].strip()
+                all_time = tree.xpath('//*[@id="js-category-content"]/div[2]/div/section/div[1]/div[2]/div/div[2]/div/div[2]/button[8]/span/span[2]/text()')[0].strip()
+            except IndexError:
+                day_1 = tree.xpath('//button[span/span[text()="1 day"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                day_5 = tree.xpath('//button[span/span[text()="5 days"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_1 = tree.xpath('//button[span/span[text()="1 month"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                month_6 = tree.xpath('//button[span/span[text()="6 months"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                ytd = tree.xpath('//button[span/span[text()="Year to date"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_1 = tree.xpath('//button[span/span[text()="1 year"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                year_5 = tree.xpath('//button[span/span[text()="5 years"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+                all_time = tree.xpath('//button[span/span[text()="All time"]]/span/span[@class="change-tEo1hPMj"]/text()')[0].strip()
+
+            return [day_1, day_5, month_1, month_6, ytd, year_1, year_5, all_time]
+        else:
+            return ["N/A"] * 8
+    except Exception as e:
+        return ["N/A"] * 8
+
 def main():
-    st.title("TTM Dividend Yield Fetcher")
+    st.title("TTM Dividend Yield and Stock Data Fetcher")
 
     st.markdown("""
     Enter stock or ETF tickers below (separated by commas) to fetch the TTM dividend yield.
-    The results will also include a link to StockAnalysis for more information.
+    The results will also include additional stock data and a link to StockAnalysis for more information.
     """)
 
     tickers_input = st.text_input("Enter Tickers (comma-separated):")
