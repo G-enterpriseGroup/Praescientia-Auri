@@ -1,10 +1,15 @@
-if not data.empty:
-    # Validate required columns
+# Fetch the stock data
+try:
+    data = yf.download(ticker, period='1y', interval='1d')
+except Exception as e:
+    st.write(f"Error fetching data: {e}")
+    data = pd.DataFrame()
+
+# Validate the data
+if isinstance(data, pd.DataFrame) and not data.empty:
     required_columns = ['High', 'Low', 'Close']
     if all(col in data.columns for col in required_columns):
-        # Drop rows with NaN in required columns
         data.dropna(subset=required_columns, inplace=True)
-        
         if not data.empty:
             # Proceed with calculations
             current_price = data['Close'].iloc[-1]
@@ -19,8 +24,8 @@ if not data.empty:
             st.write(f"Stop Loss: {stop_loss:.2f}")
             st.write(f"Percentage Difference: {percent_difference:.2f}%")
         else:
-            st.write("Insufficient data after removing invalid rows.")
+            st.write("No sufficient data after filtering.")
     else:
-        st.write("Data for the entered ticker is missing required columns.")
+        st.write("Data is missing required columns.")
 else:
     st.write("No data found. Please enter a valid ticker symbol.")
