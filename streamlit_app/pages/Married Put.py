@@ -111,11 +111,17 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 def main():
     st.title("Options Analysis with Max Loss Calculation")
 
-    # Input for ticker symbol
-    ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
-    if not ticker_symbol:
-        st.warning("Please enter a valid ticker symbol.")
-        return
+# Input for ticker symbol
+ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
+
+# Display the long name of the ticker symbol
+if ticker_symbol:
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        long_name = ticker.info.get("longName", "N/A")
+        st.write(f"**Company Name:** {long_name}")
+    except Exception as e:
+        st.warning(f"Unable to fetch company name: {e}")
 
     # Automatically fetch the current stock price
     try:
