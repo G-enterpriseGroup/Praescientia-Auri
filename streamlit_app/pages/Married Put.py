@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 # Set Streamlit page configuration
 st.set_page_config(page_title="Married Put", layout="wide")
 
-
 def calculate_max_loss(stock_price, options_table):
     """
     Calculate Max Loss for each option using both Ask Price and Last Price:
@@ -38,9 +37,6 @@ def calculate_max_loss(stock_price, options_table):
 
     return options_table
 
-
-from datetime import datetime
-
 def calculate_trading_days_left(expiration_date):
     """
     Calculate the total number of days left until the expiration date.
@@ -49,12 +45,11 @@ def calculate_trading_days_left(expiration_date):
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
-
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
         # Fetch Ticker object
         ticker = yf.Ticker(ticker_symbol)
-        
+
         # Fetch available expiration dates
         expiration_dates = ticker.options
         if not expiration_dates:
@@ -66,7 +61,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
         for chosen_date in expiration_dates:
             trading_days_left = calculate_trading_days_left(chosen_date)
             st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
-            
+
             # Fetch put options for the current expiration date
             options_chain = ticker.option_chain(chosen_date)
             puts = options_chain.puts
@@ -74,7 +69,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             if puts.empty:
                 st.warning(f"No puts available for expiration date {chosen_date}.")
                 continue
-            
+
             # Prepare put options table
             puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
             puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
@@ -107,21 +102,24 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
-
 def main():
     st.title("Options Analysis with Max Loss Calculation")
 
-# Input for ticker symbol
-ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
+    # Input for ticker symbol
+    ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
 
-# Display the long name of the ticker symbol
-if ticker_symbol:
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        long_name = ticker.info.get("longName", "N/A")
-        st.write(f"**Company Name:** {long_name}")
-    except Exception as e:
-        st.warning(f"Unable to fetch company name: {e}")
+    # Display the long name of the ticker symbol
+    if ticker_symbol:
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            long_name = ticker.info.get("longName", "N/A")
+            st.write(f"**Company Name:** {long_name}")
+        except Exception as e:
+            st.warning(f"Unable to fetch company name: {e}")
+
+    if not ticker_symbol:
+        st.warning("Please enter a valid ticker symbol.")
+        return
 
     # Automatically fetch the current stock price
     try:
@@ -146,7 +144,5 @@ if ticker_symbol:
     if st.button("Fetch Options Data"):
         display_put_options_all_dates(ticker_symbol, stock_price)
 
-
 if __name__ == "__main__":
     main()
-
