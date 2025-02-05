@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-
+st.set_page_config(layout="wide")
 def display_put_options_all_dates(ticker_symbol, cost, old_premium, old_strike):
     try:
         ticker = yf.Ticker(ticker_symbol)
