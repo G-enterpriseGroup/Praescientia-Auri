@@ -7,15 +7,16 @@ st.title("O1 Chatbot")
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 def get_bot_response(prompt):
-    response = openai.Completion.create(
-        engine="text-davinci-003",  # or your preferred model/engine
-        prompt=prompt,
-        max_tokens=150,
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": prompt}
+    ]
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # or your chosen model
+        messages=messages,
         temperature=0.7,
-        n=1,
-        stop=None,
     )
-    return response.choices[0].text.strip()
+    return response.choices[0].message.content.strip()
 
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
