@@ -83,7 +83,7 @@ def compute_wacc_raw(ticker: str) -> float:
     info       = yf.Ticker(ticker).info
     market_cap = info.get("marketCap") or 0
     ttm_int, book_debt, kd = calculate_cost_of_debt(ticker)
-    d_e        = book_debt / market_cap
+    d_e = book_debt / market_cap
 
     raw_b      = get_raw_beta(ticker)
     _, _, badj = adjust_beta(raw_b, tax, d_e)
@@ -123,7 +123,7 @@ def fetch_baseline(ticker):
 def forecast_5_years(val, rate=0.04, years=5):
     return {i: val * ((1+rate)**i) for i in range(1, years+1)}
 
-def run_dcf_streamlit(ticker, wacc, ltg=0.04, fg=0.04, years=5):
+def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
     base = fetch_baseline(ticker)
     if not base["Shares"] or pd.isna(base["EBITDA"]) or pd.isna(base["FCF"]):
         st.warning("Insufficient data for DCF.")
@@ -132,16 +132,16 @@ def run_dcf_streamlit(ticker, wacc, ltg=0.04, fg=0.04, years=5):
     st.subheader("Baseline Financials")
     st.table(pd.DataFrame.from_dict(base, orient="index", columns=["Value"]))
 
-    e_proj = forecast_5_years(base["EBITDA"], fg, years)
-    f_proj = forecast_5_years(base["FCF"],   fg, years)
+    # projections
+    e_proj = forecast_5_years(base["EBITDA"], forecast_growth, years)
+    f_proj = forecast_5_years(base["FCF"],    forecast_growth, years)
     st.subheader("EBITDA Projections")
     st.table(pd.DataFrame(list(e_proj.items()), columns=["Year","EBITDA"]))
     st.subheader("FCF Projections")
     st.table(pd.DataFrame(list(f_proj.items()), columns=["Year","FCF"]))
 
-    # Discounted FCF
-    rows = []
-    total_pv = 0
+    # discounted FCF
+    rows, total_pv = [], 0
     for i in range(1, years+1):
         t  = i - 0.5
         df = (1 + wacc)**t
@@ -151,20 +151,21 @@ def run_dcf_streamlit(ticker, wacc, ltg=0.04, fg=0.04, years=5):
     st.subheader("Discounted FCF")
     st.table(pd.DataFrame(rows, columns=["Year","Timing","Proj FCF","DF","PV"]))
 
-    # Terminal Value
-    last  = f_proj[years]
-    tv    = last * (1+ltg) / (wacc - ltg)
+    # terminal value
+    last = f_proj[years]
+    tv   = last * (1 + terminal_growth) / (wacc - terminal_growth)
     df_tv = (1 + wacc)**(years - 0.5)
     pv_tv = tv / df_tv
     term = [
         [f"FCF in {base['Year']+years}", last],
-        ["Terminal Value (undisc)", tv],
+        ["Terminal (undisc)", tv],
         ["DF", df_tv],
-        ["PV of Terminal Value", pv_tv]
+        ["PV of Terminal", pv_tv]
     ]
     st.subheader("Terminal Value")
     st.table(pd.DataFrame(term, columns=["Item","Value"]))
 
+    # final valuation
     ent_val = total_pv + pv_tv
     fair    = ent_val / base["Shares"]
     final = [
@@ -177,18 +178,26 @@ def run_dcf_streamlit(ticker, wacc, ltg=0.04, fg=0.04, years=5):
 
 # ─── STREAMLIT UI ────────────────────────────────────────────────────────────────
 
-st.title("DCF Calculator with Auto‑WACC")
+st.title("DCF Calculator with Editable WACC & Growth")
 
-tickers   = st.text_input("1) Enter ticker(s) (comma‑separated)")
-adjuster  = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
+tickers        = st.text_input("1) Enter ticker(s) (comma‑separated)")
+adjuster_pct   = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
+forecast_pct   = st.number_input("3) Forecast growth rate (%)", value=4.0, step=0.1, format="%.2f")
+terminal_pct   = st.number_input("4) Terminal growth rate (%)", value=4.0, step=0.1, format="%.2f")
 if st.button("Run Model") and tickers:
+    fore = forecast_pct / 100.0
+    term = terminal_pct / 100.0
+    adj  = adjuster_pct   / 100.0
+
     for t in [s.strip().upper() for s in tickers.split(",") if s.strip()]:
         st.header(t)
         try:
-            raw  = compute_wacc_raw(t)
-            wacc = raw + adjuster/100
-            st.markdown(f"""**Raw WACC:** {raw*100:.2f}%
-**Adjusted WACC:** {wacc*100:.2f}%""")
-            run_dcf_streamlit(t, wacc)
+            raw   = compute_wacc_raw(t)
+            wacc  = raw + adj
+            st.markdown(f"""**Raw WACC:** {raw*100:.2f}%  
+**Adjusted WACC:** {wacc*100:.2f}%  
+**Forecast Growth:** {forecast_pct:.2f}%  
+**Terminal Growth:** {terminal_pct:.2f}%""")
+            run_dcf_streamlit(t, wacc, fore, term)
         except Exception as e:
             st.error(f"Error for {t}: {e}")
