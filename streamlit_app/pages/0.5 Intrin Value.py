@@ -97,6 +97,12 @@ def compute_wacc_raw(ticker: str) -> float:
 # ─── DCF MODEL ─────────────────────────────────────────────────────────────────
 
 def fetch_baseline(ticker):
+    """
+    Baseline financials are fetched directly via yfinance:
+    • ticker.financials → most recent annual EBITDA
+    • ticker.cashflow   → most recent annual Free Cash Flow
+    • ticker.info       → price, cash, debt, shares outstanding
+    """
     tk  = yf.Ticker(ticker)
     fin = tk.financials.sort_index(axis=1)
     cf  = tk.cashflow.sort_index(axis=1)
@@ -129,7 +135,14 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
         st.warning("Insufficient data for DCF.")
         return
 
-    # Format baseline table values
+    # Show explanation of baseline data
+    st.markdown(
+        "**How baseline financials are obtained:**  \n"
+        "• **Annual EBITDA & Free Cash Flow:** via `ticker.financials` and `ticker.cashflow` on the most recent period.  \n"
+        "• **Price, Cash, Debt, Shares:** via `ticker.info` fields: `regularMarketPrice`, `totalCash`, `totalDebt`, `sharesOutstanding`."
+    )
+
+    # Format and display baseline table
     display = {}
     for k, v in base.items():
         if k in {"Price", "EBITDA", "FCF", "Cash", "Debt"}:
