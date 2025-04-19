@@ -97,7 +97,7 @@ def compute_wacc_raw(ticker: str) -> float:
 # ─── DCF MODEL ─────────────────────────────────────────────────────────────────
 
 def fetch_baseline(ticker):
-    tk = yf.Ticker(ticker)
+    tk  = yf.Ticker(ticker)
     fin = tk.financials.sort_index(axis=1)
     cf  = tk.cashflow.sort_index(axis=1)
     info = tk.info
@@ -129,48 +129,73 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
         st.warning("Insufficient data for DCF.")
         return
 
+    # Format baseline table values
+    display = {}
+    for k, v in base.items():
+        if k in {"Price", "EBITDA", "FCF", "Cash", "Debt"}:
+            display[k] = f"${v:,.2f}"
+        elif k == "Shares":
+            display[k] = f"{int(v):,}" if v is not None else "N/A"
+        else:
+            display[k] = v
     st.subheader("Baseline Financials")
-    st.table(pd.DataFrame.from_dict(base, orient="index", columns=["Value"]))
+    st.table(pd.DataFrame.from_dict(display, orient="index", columns=["Value"]))
 
+    # Projections
     e_proj = forecast_5_years(base["EBITDA"], forecast_growth, years)
     f_proj = forecast_5_years(base["FCF"],    forecast_growth, years)
+    e_rows = [{"Year": base["Year"]+i, "EBITDA": f"${e_proj[i]:,.2f}"} for i in e_proj]
+    f_rows = [{"Year": base["Year"]+i, "FCF":    f"${f_proj[i]:,.2f}"} for i in f_proj]
     st.subheader("EBITDA Projections")
-    st.table(pd.DataFrame(list(e_proj.items()), columns=["Year","EBITDA"]))
+    st.table(pd.DataFrame(e_rows))
     st.subheader("FCF Projections")
-    st.table(pd.DataFrame(list(f_proj.items()), columns=["Year","FCF"]))
+    st.table(pd.DataFrame(f_rows))
 
-    rows, total_pv = [], 0
+    # Discounted FCF
+    disc = []
+    total_pv = 0
     for i in range(1, years+1):
-        t  = i - 0.5
+        year = base["Year"] + i
+        t = i - 0.5
+        proj = f_proj[i]
         df = (1 + wacc)**t
-        pv = f_proj[i] / df
-        rows.append([base["Year"]+i, t, f_proj[i], df, pv])
+        pv = proj / df
         total_pv += pv
+        disc.append({
+            "Year": year,
+            "Timing": f"{t:.1f}",
+            "Projected FCF": f"${proj:,.2f}",
+            "Discount Factor": f"{df:.4f}",
+            "PV of FCF": f"${pv:,.2f}"
+        })
     st.subheader("Discounted FCF")
-    st.table(pd.DataFrame(rows, columns=["Year","Timing","Proj FCF","DF","PV"]))
+    st.table(pd.DataFrame(disc))
 
+    # Terminal Value
     last = f_proj[years]
     tv   = last * (1 + terminal_growth) / (wacc - terminal_growth)
     df_tv = (1 + wacc)**(years - 0.5)
     pv_tv = tv / df_tv
     term = [
-        [f"FCF in {base['Year']+years}", last],
-        ["Terminal (undisc)", tv],
-        ["DF", df_tv],
-        ["PV of Terminal", pv_tv]
+        ["FCF in " + str(base["Year"]+years), f"${last:,.2f}"],
+        ["Terminal Value (undisc)",           f"${tv:,.2f}"],
+        ["Discount Factor",                   f"{df_tv:.4f}"],
+        ["PV of Terminal Value",              f"${pv_tv:,.2f}"]
     ]
     st.subheader("Terminal Value")
     st.table(pd.DataFrame(term, columns=["Item","Value"]))
 
+    # Final Valuation
     ent_val = total_pv + pv_tv
     fair    = ent_val / base["Shares"]
     final = [
-        ["Enterprise Value", ent_val],
-        ["Shares Outstanding", base["Shares"]],
-        ["Fair Price per Share", fair]
+        ["Enterprise Value",   f"${ent_val:,.2f}"],
+        ["Shares Outstanding", f"{int(base['Shares']):,}"],
+        ["Fair Price per Share", f"${fair:,.2f}"]
     ]
     st.subheader("Final Valuation")
     st.table(pd.DataFrame(final, columns=["Metric","Value"]))
+
 
 # ─── STREAMLIT UI ────────────────────────────────────────────────────────────────
 
