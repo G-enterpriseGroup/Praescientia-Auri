@@ -123,7 +123,7 @@ def fetch_baseline(ticker):
 def forecast_5_years(val, rate=0.04, years=5):
     return {i: val * ((1+rate)**i) for i in range(1, years+1)}
 
-def run_dcf_streamlit(ticker, wacc, ltg=0.04, fg=0.04, years=5):
+def run_dcf_streamlit(ticker, wacc, ltg=0.03, fg=0.03, years=5):
     base = fetch_baseline(ticker)
     if not base["Shares"] or pd.isna(base["EBITDA"]) or pd.isna(base["FCF"]):
         st.warning("Insufficient data for DCF.")
@@ -179,16 +179,23 @@ def run_dcf_streamlit(ticker, wacc, ltg=0.04, fg=0.04, years=5):
 
 st.title("DCF Calculator with Auto‑WACC")
 
-tickers   = st.text_input("1) Enter ticker(s) (comma‑separated)")
-adjuster  = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
+tickers      = st.text_input("1) Enter ticker(s) (comma‑separated)")
+wacc_adj     = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
+fg_pct       = st.number_input("3) Forecast growth rate (%)", value=3.0, step=0.1, format="%.2f")
+ltg_pct      = st.number_input("4) Terminal growth rate (%)", value=3.0, step=0.1, format="%.2f")
 if st.button("Run Model") and tickers:
     for t in [s.strip().upper() for s in tickers.split(",") if s.strip()]:
         st.header(t)
         try:
             raw  = compute_wacc_raw(t)
-            wacc = raw + adjuster/100
-            st.markdown(f"""**Raw WACC:** {raw*100:.2f}%
+            wacc = raw + wacc_adj/100
+            st.markdown(f"""**Raw WACC:** {raw*100:.2f}%  
 **Adjusted WACC:** {wacc*100:.2f}%""")
-            run_dcf_streamlit(t, wacc)
+            run_dcf_streamlit(
+                t,
+                wacc,
+                ltg=ltg_pct/100,
+                fg=fg_pct/100
+            )
         except Exception as e:
             st.error(f"Error for {t}: {e}")
