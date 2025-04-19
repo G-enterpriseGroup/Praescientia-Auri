@@ -169,7 +169,7 @@ st.title("DCF Calculator with Upside/Downside & WACC Sensitivity")
 with st.sidebar:
     st.header("Model Inputs")
     tickers      = st.text_input("Tickers (comma‑separated)", "")
-    adjust_pct   = st.number_input("WACC adjust (%)",       value=-2.4, step=0.1, format="%.2f")
+    adjust_pct   = st.number_input("WACC adjust (%)",       value=-1.71, step=0.1, format="%.2f")
     forecast_pct = st.number_input("Forecast growth (%)",   value=4.0,  step=0.1, format="%.2f")
     terminal_pct = st.number_input("Terminal growth (%)",   value=4.0,  step=0.1, format="%.2f")
     run          = st.button("Run Model")
