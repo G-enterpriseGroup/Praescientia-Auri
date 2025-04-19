@@ -99,9 +99,9 @@ def compute_wacc_raw(ticker: str) -> float:
 def fetch_baseline(ticker):
     """
     Baseline financials are fetched directly via yfinance:
-    • ticker.financials → most recent annual EBITDA
-    • ticker.cashflow   → most recent annual Free Cash Flow
-    • ticker.info       → price, cash, debt, shares outstanding
+      • ticker.financials → most recent annual EBITDA
+      • ticker.cashflow   → most recent annual Free Cash Flow
+      • ticker.info       → price, cash, debt, shares outstanding
     """
     tk  = yf.Ticker(ticker)
     fin = tk.financials.sort_index(axis=1)
@@ -135,14 +135,13 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
         st.warning("Insufficient data for DCF.")
         return
 
-    # Show explanation of baseline data
     st.markdown(
         "**How baseline financials are obtained:**  \n"
         "• **Annual EBITDA & Free Cash Flow:** via `ticker.financials` and `ticker.cashflow` on the most recent period.  \n"
         "• **Price, Cash, Debt, Shares:** via `ticker.info` fields: `regularMarketPrice`, `totalCash`, `totalDebt`, `sharesOutstanding`."
     )
 
-    # Format and display baseline table
+    # Format baseline table values
     display = {}
     for k, v in base.items():
         if k in {"Price", "EBITDA", "FCF", "Cash", "Debt"}:
@@ -209,7 +208,6 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
     st.subheader("Final Valuation")
     st.table(pd.DataFrame(final, columns=["Metric","Value"]))
 
-
 # ─── STREAMLIT UI ────────────────────────────────────────────────────────────────
 
 st.title("DCF Calculator with Editable WACC & Growth")
@@ -241,3 +239,5 @@ if run and tickers:
             run_dcf_streamlit(t, wacc, fore, term)
         except Exception as e:
             st.error(f"Error for {t}: {e}")
+
+# Everything is calced—go and do this for me, thanks!
