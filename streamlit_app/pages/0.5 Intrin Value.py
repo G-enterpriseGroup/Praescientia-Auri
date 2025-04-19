@@ -108,7 +108,7 @@ def fetch_baseline(ticker):
     except:
         year = pd.Timestamp.now().year
 
-    base = {
+    return {
         "Ticker": ticker,
         "Name":   info.get("shortName", ticker),
         "Year":   year,
@@ -119,7 +119,6 @@ def fetch_baseline(ticker):
         "Debt":   info.get("totalDebt", 0),
         "Shares": info.get("sharesOutstanding", None)
     }
-    return base
 
 def forecast_5_years(val, rate=0.04, years=5):
     return {i: val * ((1+rate)**i) for i in range(1, years+1)}
@@ -130,77 +129,66 @@ def run_dcf_streamlit(ticker, wacc, ltg=0.04, fg=0.04, years=5):
         st.warning("Insufficient data for DCF.")
         return
 
-    # Baseline table
-    baseline_df = pd.DataFrame.from_dict(base, orient="index", columns=["Value"])
-    st.table(baseline_df)
+    st.subheader("Baseline Financials")
+    st.table(pd.DataFrame.from_dict(base, orient="index", columns=["Value"]))
 
-    # Projections
     e_proj = forecast_5_years(base["EBITDA"], fg, years)
     f_proj = forecast_5_years(base["FCF"],   fg, years)
-    ebitda_df = pd.DataFrame(list(e_proj.items()), columns=["Year","EBITDA"])
-    fcf_df    = pd.DataFrame(list(f_proj.items()), columns=["Year","FCF"])
-    st.subheader("EBITDA Projections"); st.table(ebitda_df)
-    st.subheader("FCF Projections");    st.table(fcf_df)
+    st.subheader("EBITDA Projections")
+    st.table(pd.DataFrame(list(e_proj.items()), columns=["Year","EBITDA"]))
+    st.subheader("FCF Projections")
+    st.table(pd.DataFrame(list(f_proj.items()), columns=["Year","FCF"]))
 
-    # Discount FCF
+    # Discounted FCF
     rows = []
     total_pv = 0
     for i in range(1, years+1):
-        t = i - 0.5
+        t  = i - 0.5
         df = (1 + wacc)**t
         pv = f_proj[i] / df
-        rows.append({
-            "Year": base["Year"]+i,
-            "Timing": t,
-            "Projected FCF": f_proj[i],
-            "Discount Factor": df,
-            "PV of FCF": pv
-        })
+        rows.append([base["Year"]+i, t, f_proj[i], df, pv])
         total_pv += pv
-    disc_df = pd.DataFrame(rows)
-    st.subheader("Discounted FCF"); st.table(disc_df)
+    st.subheader("Discounted FCF")
+    st.table(pd.DataFrame(rows, columns=["Year","Timing","Proj FCF","DF","PV"]))
 
     # Terminal Value
-    last = f_proj[years]
-    tv   = last * (1+ltg) / (wacc - ltg)
+    last  = f_proj[years]
+    tv    = last * (1+ltg) / (wacc - ltg)
     df_tv = (1 + wacc)**(years - 0.5)
     pv_tv = tv / df_tv
-    term_df = pd.DataFrame({
-        "Item": [
-            f"FCF in {base['Year']+years}",
-            "Terminal Value (undiscounted)",
-            "Discount Factor",
-            "PV of Terminal Value"
-        ],
-        "Value": [
-            last, tv, df_tv, pv_tv
-        ]
-    })
-    st.subheader("Terminal Value"); st.table(term_df)
+    term = [
+        [f"FCF in {base['Year']+years}", last],
+        ["Terminal Value (undisc)", tv],
+        ["DF", df_tv],
+        ["PV of Terminal Value", pv_tv]
+    ]
+    st.subheader("Terminal Value")
+    st.table(pd.DataFrame(term, columns=["Item","Value"]))
 
-    # Final Valuation
     ent_val = total_pv + pv_tv
     fair    = ent_val / base["Shares"]
-    final_df = pd.DataFrame({
-        "Metric": ["Enterprise Value","Shares Outstanding","Fair Price"],
-        "Value":  [ent_val, base["Shares"], fair]
-    })
-    st.subheader("Final Valuation"); st.table(final_df)
+    final = [
+        ["Enterprise Value", ent_val],
+        ["Shares Outstanding", base["Shares"]],
+        ["Fair Price per Share", fair]
+    ]
+    st.subheader("Final Valuation")
+    st.table(pd.DataFrame(final, columns=["Metric","Value"]))
 
 # ─── STREAMLIT UI ────────────────────────────────────────────────────────────────
 
 st.title("DCF Calculator with Auto‑WACC")
 
-tickers = st.text_input("1) Enter ticker(s) (comma‑separated)", "")
-adjuster = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
+tickers   = st.text_input("1) Enter ticker(s) (comma‑separated)")
+adjuster  = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
 if st.button("Run Model") and tickers:
-    for t in [x.strip().upper() for x in tickers.split(",") if x.strip()]:
-        st.header(f"{t}")
+    for t in [s.strip().upper() for s in tickers.split(",") if s.strip()]:
+        st.header(t)
         try:
-            raw = compute_wacc_raw(t)
+            raw  = compute_wacc_raw(t)
             wacc = raw + adjuster/100
-            st.markdown(f"**Raw WACC:** {raw*100:.2f}%  
-**Adjusted WACC:** {wacc*100:.2f}%")
+            st.markdown(f"""**Raw WACC:** {raw*100:.2f}%
+**Adjusted WACC:** {wacc*100:.2f}%""")
             run_dcf_streamlit(t, wacc)
         except Exception as e:
             st.error(f"Error for {t}: {e}")
