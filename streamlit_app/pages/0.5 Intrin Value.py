@@ -132,7 +132,6 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
     st.subheader("Baseline Financials")
     st.table(pd.DataFrame.from_dict(base, orient="index", columns=["Value"]))
 
-    # projections
     e_proj = forecast_5_years(base["EBITDA"], forecast_growth, years)
     f_proj = forecast_5_years(base["FCF"],    forecast_growth, years)
     st.subheader("EBITDA Projections")
@@ -140,7 +139,6 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
     st.subheader("FCF Projections")
     st.table(pd.DataFrame(list(f_proj.items()), columns=["Year","FCF"]))
 
-    # discounted FCF
     rows, total_pv = [], 0
     for i in range(1, years+1):
         t  = i - 0.5
@@ -151,7 +149,6 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
     st.subheader("Discounted FCF")
     st.table(pd.DataFrame(rows, columns=["Year","Timing","Proj FCF","DF","PV"]))
 
-    # terminal value
     last = f_proj[years]
     tv   = last * (1 + terminal_growth) / (wacc - terminal_growth)
     df_tv = (1 + wacc)**(years - 0.5)
@@ -165,7 +162,6 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
     st.subheader("Terminal Value")
     st.table(pd.DataFrame(term, columns=["Item","Value"]))
 
-    # final valuation
     ent_val = total_pv + pv_tv
     fair    = ent_val / base["Shares"]
     final = [
@@ -180,24 +176,30 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
 
 st.title("DCF Calculator with Editable WACC & Growth")
 
-tickers        = st.text_input("1) Enter ticker(s) (comma‑separated)")
-adjuster_pct   = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
-forecast_pct   = st.number_input("3) Forecast growth rate (%)", value=4.0, step=0.1, format="%.2f")
-terminal_pct   = st.number_input("4) Terminal growth rate (%)", value=4.0, step=0.1, format="%.2f")
-if st.button("Run Model") and tickers:
-    fore = forecast_pct / 100.0
-    term = terminal_pct / 100.0
-    adj  = adjuster_pct   / 100.0
+with st.sidebar:
+    st.header("Model Inputs")
+    tickers      = st.text_input("Tickers (comma‑separated)", "")
+    adjuster_pct = st.number_input("WACC adjuster (%)",       value=-2.4, step=0.1, format="%.2f")
+    forecast_pct = st.number_input("Forecast growth rate (%)", value=4.0,  step=0.1, format="%.2f")
+    terminal_pct = st.number_input("Terminal growth rate (%)", value=4.0,  step=0.1, format="%.2f")
+    run          = st.button("Run Model")
+
+if run and tickers:
+    adj  = adjuster_pct / 100.0
+    fore = forecast_pct   / 100.0
+    term = terminal_pct   / 100.0
 
     for t in [s.strip().upper() for s in tickers.split(",") if s.strip()]:
         st.header(t)
         try:
-            raw   = compute_wacc_raw(t)
-            wacc  = raw + adj
-            st.markdown(f"""**Raw WACC:** {raw*100:.2f}%  
-**Adjusted WACC:** {wacc*100:.2f}%  
-**Forecast Growth:** {forecast_pct:.2f}%  
-**Terminal Growth:** {terminal_pct:.2f}%""")
+            raw  = compute_wacc_raw(t)
+            wacc = raw + adj
+            st.markdown(
+                f"**Raw WACC:** {raw*100:.2f}%  \n"
+                f"**Adjusted WACC:** {wacc*100:.2f}%  \n"
+                f"**Forecast Growth:** {forecast_pct:.2f}%  \n"
+                f"**Terminal Growth:** {terminal_pct:.2f}%"
+            )
             run_dcf_streamlit(t, wacc, fore, term)
         except Exception as e:
             st.error(f"Error for {t}: {e}")
