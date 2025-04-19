@@ -3,21 +3,20 @@ import numpy as np
 import streamlit as st
 import yfinance as yf
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 from datetime import datetime, timedelta
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import plotly.graph_objects as go
 from pandas.tseries.holiday import USFederalHolidayCalendar
-from pandas.tseries.offsets import CustomBusinessDay, BDay
+from pandas.tseries.offsets import BDay
 import warnings
 
-# Attempt to import pmdarima; provide fallback if unavailable
+# Attempt to import pmdarima; catch all exceptions to avoid C-extension load errors
 try:
     from pmdarima import auto_arima
     PMDARIMA_AVAILABLE = True
-except ImportError:
+except Exception as e:
     PMDARIMA_AVAILABLE = False
-    warnings.warn("pmdarima not installed; defaulting to ARIMA(1,1,1)")
+    warnings.warn(f"pmdarima unavailable ({e}); defaulting to ARIMA(1,1,1)")
 
 # Streamlit page configuration
 st.set_page_config(layout="wide")
@@ -58,35 +57,34 @@ end_date = st.sidebar.date_input('End Date', value=calculate_business_date(30).d
 
 if st.sidebar.button('Run SARIMAX Forecast'):
     with st.spinner('Running SARIMAX model...'):
-        # Fetch data
+        # Fetch historical close data
         full_df = yf.Ticker(Ticker).history(start=start_date, end=end_date)
         df = full_df[['Close']].dropna()
         df.index = pd.to_datetime(df.index).tz_localize('America/New_York', nonexistent='shift_forward')
 
-        # Determine ARIMA order
+        # Determine ARIMA order or fallback
         if PMDARIMA_AVAILABLE:
             auto_model = auto_arima(df['Close'], trace=False, suppress_warnings=True)
             arima_order = auto_model.order
         else:
             arima_order = (1, 1, 1)
-            st.info("Using fallback ARIMA order (1,1,1)")
+            st.info("Using fallback ARIMA order (1,1,1) due to pmdarima import issue.")
 
         seasonal_order = (*arima_order, SN)
-        # Fit model
         model = SARIMAX(df['Close'], order=arima_order, seasonal_order=seasonal_order).fit(disp=False)
 
         # Generate future business dates excluding US federal holidays
         cal = USFederalHolidayCalendar()
-        holidays = cal.holidays(start=df.index.max(), end=df.index.max()+BDay(60))
-        future_idx = pd.bdate_range(start=df.index.max()+BDay(1), periods=30+len(holidays), freq='B')
+        holidays = cal.holidays(start=df.index.max(), end=df.index.max() + BDay(60))
+        future_idx = pd.bdate_range(start=df.index.max() + BDay(1), periods=30 + len(holidays), freq='B')
         future_idx = future_idx.difference(holidays)[:30]
 
         # Forecast
-        forecast = model.get_prediction(start=len(df), end=len(df)+len(future_idx)-1, dynamic=False)
+        forecast = model.get_prediction(start=len(df), end=len(df) + len(future_idx) - 1)
         forecast_vals = forecast.predicted_mean
         forecast_vals.index = future_idx
 
-        # Plot results
+        # Plot actual vs forecast
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.plot(df.index, df['Close'], label='Actual')
         ax.plot(forecast_vals.index, forecast_vals, '--', label='Forecast')
@@ -96,7 +94,7 @@ if st.sidebar.button('Run SARIMAX Forecast'):
         ax.legend()
         st.pyplot(fig)
 
-        # Show forecast table
+        # Display forecast data
         st.write(forecast_vals.to_frame('Forecasted Close'))
 
 # Section 2: Candlestick Chart
@@ -132,7 +130,7 @@ st.header('Date Calculations')
 today = datetime.now()
 metrics = {
     '30 Business Days Ago': (today - BDay(30)).strftime('%Y-%m-%d'),
-    'QTD Start': datetime(today.year, 3*((today.month-1)//3)+1, 1).strftime('%Y-%m-%d'),
+    'QTD Start': datetime(today.year, 3 * ((today.month-1)//3) + 1, 1).strftime('%Y-%m-%d'),
     'YTD Start': datetime(today.year, 1, 1).strftime('%Y-%m-%d'),
     'MTD Start': datetime(today.year, today.month, 1).strftime('%Y-%m-%d'),
     '1 Year Ago': (today - BDay(365)).strftime('%Y-%m-%d'),
