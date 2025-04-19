@@ -75,6 +75,17 @@ def calculate_cost_of_debt(ticker: str) -> tuple[float, float, float]:
     return ttm_int, bd, ttm_int / bd
 
 def compute_wacc_raw(ticker: str) -> float:
+    """
+    Compute raw WACC:
+     1. Tax rate from GuruFocus
+     2. Risk-free rate = 10‑yr Treasury yield
+     3. ERP = (8.5%–10%) – rf
+     4. Beta adjustment (unlever, relever, 0.67/0.33 adjust)
+     5. Ke = rf + β_adj * ERP_avg
+     6. Kd = TTM interest / book debt
+     7. We = E/(E+D), Wd = D/(E+D)
+     8. WACC = We·Ke + Wd·Kd·(1–tax)
+    """
     tax = get_tax_rate_gf(ticker)
     rf  = get_risk_free_rate()
     erp_low, erp_high = compute_erp_range(rf)
@@ -98,10 +109,10 @@ def compute_wacc_raw(ticker: str) -> float:
 
 def fetch_baseline(ticker):
     """
-    Baseline financials are fetched directly via yfinance:
-      • ticker.financials → most recent annual EBITDA
-      • ticker.cashflow   → most recent annual Free Cash Flow
-      • ticker.info       → price, cash, debt, shares outstanding
+    Baseline financials fetched via yfinance:
+     • fin = ticker.financials → most recent annual EBITDA
+     • cf  = ticker.cashflow   → most recent annual Free Cash Flow
+     • info = ticker.info      → price, cash, debt, shares
     """
     tk  = yf.Ticker(ticker)
     fin = tk.financials.sort_index(axis=1)
@@ -127,6 +138,7 @@ def fetch_baseline(ticker):
     }
 
 def forecast_5_years(val, rate=0.04, years=5):
+    """Project val forward at constant rate for given years."""
     return {i: val * ((1+rate)**i) for i in range(1, years+1)}
 
 def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
@@ -135,39 +147,39 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
         st.warning("Insufficient data for DCF.")
         return
 
-    st.markdown(
-        "**How baseline financials are obtained:**  \n"
-        "• **Annual EBITDA & Free Cash Flow:** via `ticker.financials` and `ticker.cashflow` on the most recent period.  \n"
-        "• **Price, Cash, Debt, Shares:** via `ticker.info` fields: `regularMarketPrice`, `totalCash`, `totalDebt`, `sharesOutstanding`."
-    )
+    # Explanation of baseline
+    st.markdown("### Baseline Financials\n"
+                "We pull the latest annual figures directly from Yahoo Finance:\n"
+                "- **EBITDA & FCF** from `ticker.financials` and `ticker.cashflow`.\n"
+                "- **Market Price, Cash, Debt, Shares** from `ticker.info` fields.\n")
 
-    # Format baseline table values
+    # Format & display baseline
     display = {}
     for k, v in base.items():
         if k in {"Price", "EBITDA", "FCF", "Cash", "Debt"}:
             display[k] = f"${v:,.2f}"
         elif k == "Shares":
-            display[k] = f"{int(v):,}" if v is not None else "N/A"
+            display[k] = f"{int(v):,}" if v else "N/A"
         else:
             display[k] = v
-    st.subheader("Baseline Financials")
     st.table(pd.DataFrame.from_dict(display, orient="index", columns=["Value"]))
 
-    # Projections
+    # Projection explanation
+    st.markdown("### 5‑Year Projections\n"
+                f"We grow both EBITDA and Free Cash Flow at **{forecast_growth*100:.2f}%** per year for {years} years.")
     e_proj = forecast_5_years(base["EBITDA"], forecast_growth, years)
     f_proj = forecast_5_years(base["FCF"],    forecast_growth, years)
     e_rows = [{"Year": base["Year"]+i, "EBITDA": f"${e_proj[i]:,.2f}"} for i in e_proj]
     f_rows = [{"Year": base["Year"]+i, "FCF":    f"${f_proj[i]:,.2f}"} for i in f_proj]
-    st.subheader("EBITDA Projections")
-    st.table(pd.DataFrame(e_rows))
-    st.subheader("FCF Projections")
-    st.table(pd.DataFrame(f_rows))
+    st.subheader("EBITDA Projections"); st.table(pd.DataFrame(e_rows))
+    st.subheader("FCF Projections");    st.table(pd.DataFrame(f_rows))
 
-    # Discounted FCF
-    disc = []
-    total_pv = 0
+    # Discounting explanation
+    st.markdown("### Discounted Cash Flows\n"
+                "We apply a **mid‑year convention** discount factor: (1+WACC)^(t−0.5) to each projected FCF.")
+    disc, total_pv = [], 0
     for i in range(1, years+1):
-        year = base["Year"] + i
+        year = base["Year"]+i
         t = i - 0.5
         proj = f_proj[i]
         df = (1 + wacc)**t
@@ -180,33 +192,37 @@ def run_dcf_streamlit(ticker, wacc, forecast_growth, terminal_growth, years=5):
             "Discount Factor": f"{df:.4f}",
             "PV of FCF": f"${pv:,.2f}"
         })
-    st.subheader("Discounted FCF")
-    st.table(pd.DataFrame(disc))
+    st.subheader("Discounted FCF"); st.table(pd.DataFrame(disc))
 
-    # Terminal Value
+    # Terminal explanation
+    st.markdown("### Terminal Value\n"
+                f"Using a **Gordon Growth** model at **{terminal_growth*100:.2f}%**:\n"
+                "TV = FCF_last × (1+g) / (WACC − g), then discounted back.")
     last = f_proj[years]
     tv   = last * (1 + terminal_growth) / (wacc - terminal_growth)
     df_tv = (1 + wacc)**(years - 0.5)
     pv_tv = tv / df_tv
     term = [
         ["FCF in " + str(base["Year"]+years), f"${last:,.2f}"],
-        ["Terminal Value (undisc)",           f"${tv:,.2f}"],
-        ["Discount Factor",                   f"{df_tv:.4f}"],
-        ["PV of Terminal Value",              f"${pv_tv:,.2f}"]
+        ["TV (undisc)",                      f"${tv:,.2f}"],
+        ["Discount Factor",                 f"{df_tv:.4f}"],
+        ["PV of TV",                        f"${pv_tv:,.2f}"]
     ]
-    st.subheader("Terminal Value")
-    st.table(pd.DataFrame(term, columns=["Item","Value"]))
+    st.subheader("Terminal Value"); st.table(pd.DataFrame(term, columns=["Item","Value"]))
 
-    # Final Valuation
+    # Final valuation explanation
+    st.markdown("### Valuation Summary\n"
+                "- **Enterprise Value** = sum of discounted FCF + PV of Terminal Value\n"
+                "- **Fair Price** = EV / Shares Outstanding\n")
     ent_val = total_pv + pv_tv
     fair    = ent_val / base["Shares"]
     final = [
         ["Enterprise Value",   f"${ent_val:,.2f}"],
         ["Shares Outstanding", f"{int(base['Shares']):,}"],
-        ["Fair Price per Share", f"${fair:,.2f}"]
+        ["Fair Price",         f"${fair:,.2f}"]
     ]
-    st.subheader("Final Valuation")
-    st.table(pd.DataFrame(final, columns=["Metric","Value"]))
+    st.subheader("Final Valuation"); st.table(pd.DataFrame(final, columns=["Metric","Value"]))
+
 
 # ─── STREAMLIT UI ────────────────────────────────────────────────────────────────
 
@@ -227,17 +243,20 @@ if run and tickers:
 
     for t in [s.strip().upper() for s in tickers.split(",") if s.strip()]:
         st.header(t)
-        try:
-            raw  = compute_wacc_raw(t)
-            wacc = raw + adj
-            st.markdown(
-                f"**Raw WACC:** {raw*100:.2f}%  \n"
-                f"**Adjusted WACC:** {wacc*100:.2f}%  \n"
-                f"**Forecast Growth:** {forecast_pct:.2f}%  \n"
-                f"**Terminal Growth:** {terminal_pct:.2f}%"
-            )
-            run_dcf_streamlit(t, wacc, fore, term)
-        except Exception as e:
-            st.error(f"Error for {t}: {e}")
-
-# Everything is calced—go and do this for me, thanks!
+        raw  = compute_wacc_raw(t)
+        wacc = raw + adj
+        # WACC explanation
+        st.markdown("### WACC Calculation\n"
+                    f"- **Raw WACC** = {raw*100:.2f}%\n"
+                    f"- **Adjusted WACC** = Raw WACC + {adjuster_pct:.2f}% = **{wacc*100:.2f}%**\n"
+                    "Calculation steps:\n"
+                    "1. Get effective tax rate from GuruFocus.\n"
+                    "2. Fetch 10‑yr Treasury yield.\n"
+                    "3. Compute ERP = (8.5%–10%) – RF, take average.\n"
+                    "4. Pull beta, un‑ and re‑leverage, adjust to β_adj.\n"
+                    "5. Ke = RF + β_adj × ERP_avg.\n"
+                    "6. Kd = TTM interest expense / book debt.\n"
+                    "7. We = E/(E+D), Wd = D/(E+D).\n"
+                    "8. WACC = We·Ke + Wd·Kd·(1–T)."
+                    )
+        run_dcf_streamlit(t, wacc, fore, term)
