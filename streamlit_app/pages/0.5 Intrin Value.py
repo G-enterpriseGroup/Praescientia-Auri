@@ -5,6 +5,25 @@ import re
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import locale
+
+# Set locale for currency formatting
+try:
+    locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+except locale.Error:
+    # fallback if the environment doesn't support the locale
+    pass
+
+# ─── HELPERS ───────────────────────────────────────────────────────────────────
+
+def fmt_currency(x):
+    try:
+        return locale.currency(x, grouping=True)
+    except Exception:
+        return f"${x:,.2f}"
+
+def fmt_pct(x):
+    return f"{x*100:.2f}%"
 
 # ─── WACC CALCULATION ──────────────────────────────────────────────────────────
 
@@ -13,189 +32,153 @@ def get_tax_rate_gf(ticker: str) -> float:
     resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     resp.raise_for_status()
     tree = html.fromstring(resp.content)
-    nodes = tree.xpath('/html/body/div[2]/div[2]/div/div/div/div[2]/h1/font')
-    if not nodes:
-        raise ValueError("Tax rate not found")
-    text = nodes[0].text_content().strip()
+    node = tree.xpath('/html/body/div[2]/div[2]/div/div/div/div[2]/h1/font')
+    text = node[0].text_content().strip() if node else ""
     m = re.search(r"(\d+(?:\.\d+)?)%", text)
-    if not m:
-        raise ValueError(f"Could not parse tax rate from '{text}'")
-    return float(m.group(1)) / 100
+    return float(m.group(1))/100 if m else 0.21  # default ~21%
 
 def get_risk_free_rate() -> float:
     data = yf.Ticker("^TNX").history(period="1d")["Close"]
-    if data.empty:
-        raise ValueError("Could not fetch 10‑yr yield")
-    return data.iloc[-1] / 100
+    return float(data.iloc[-1])/100 if not data.empty else 0.035
 
-def compute_erp_range(rf: float,
-                      market_return_low: float = 0.085,
-                      market_return_high: float = 0.10) -> tuple[float, float]:
-    return market_return_low - rf, market_return_high - rf
+def compute_erp(rf: float, low=0.085, high=0.10) -> float:
+    return ((low - rf) + (high - rf)) / 2
 
 def get_raw_beta(ticker: str) -> float:
     beta = yf.Ticker(ticker).info.get("beta")
-    if beta is None:
-        raise ValueError("Beta not available")
-    return float(beta)
+    return float(beta) if beta else 1.0
 
-def adjust_beta(raw_beta: float, tax: float, d_e: float) -> tuple[float, float, float]:
-    factor = (1 - tax) * d_e
-    bu = raw_beta / (1 + factor)
-    bl_p = bu * (1 + factor)
-    badj = 0.67 * bl_p + 0.33
-    return bu, bl_p, badj
+def adjust_beta(raw_b, tax, d_e):
+    unlev = raw_b / (1 + (1-tax)*d_e)
+    re_lever = unlev * (1 + (1-tax)*d_e)
+    adj = 0.67*re_lever + 0.33
+    return adj
 
-def calculate_cost_of_debt(ticker: str) -> tuple[float, float, float]:
+def calculate_cost_of_debt(ticker: str):
     tk = yf.Ticker(ticker)
     qfin = tk.quarterly_financials
-    if qfin.empty:
-        raise ValueError("Quarterly income not found")
-    rows = [r for r in qfin.index if "interest" in r.lower()]
-    if not rows:
-        raise KeyError("Interest row not found")
-    row = next((r for r in rows if "expense" in r.lower()), rows[0])
-    ttm_int = abs(qfin.loc[row].iloc[:4].sum())
-
-    info_debt = tk.info.get("totalDebt") or 0
-    if info_debt > 0:
-        bd = info_debt
-    else:
-        qbs = tk.quarterly_balance_sheet
-        if qbs.empty:
-            raise ValueError("Quarterly BS not found")
-        keys = [r for r in qbs.index
-                if "short term debt" in r.lower() or "long term debt" in r.lower()]
-        if not keys:
-            raise KeyError("Debt lines not found")
-        bd = qbs.loc[keys, qbs.columns[0]].sum()
-
-    if bd == 0:
-        raise ZeroDivisionError("Book debt is zero")
-    return ttm_int, bd, ttm_int / bd
+    rows = [r for r in qfin.index if "interest" in r.lower()] if not qfin.empty else []
+    ttm_int = abs(qfin.loc[rows[0]].iloc[:4].sum()) if rows else 0
+    debt = tk.info.get("totalDebt") or 0
+    if debt == 0 and not qfin.empty:
+        bs = tk.quarterly_balance_sheet
+        keys = [r for r in bs.index if "debt" in r.lower()]
+        debt = bs.loc[keys, bs.columns[0]].sum() if keys else 0
+    rate = (ttm_int/debt) if debt else 0
+    return ttm_int, debt, rate
 
 def compute_wacc_raw(ticker: str) -> float:
     tax = get_tax_rate_gf(ticker)
-    rf  = get_risk_free_rate()
-    erp_low, erp_high = compute_erp_range(rf)
-    erp_avg = (erp_low + erp_high) / 2
-
-    info       = yf.Ticker(ticker).info
-    market_cap = info.get("marketCap") or 0
-    ttm_int, book_debt, kd = calculate_cost_of_debt(ticker)
-    d_e        = book_debt / market_cap
-
-    raw_b      = get_raw_beta(ticker)
-    _, _, badj = adjust_beta(raw_b, tax, d_e)
-
-    ke = rf + badj * erp_avg
-    we = market_cap / (market_cap + book_debt)
-    wd = book_debt / (market_cap + book_debt)
-
-    return we * ke + wd * kd * (1 - tax)
+    rf = get_risk_free_rate()
+    erp = compute_erp(rf)
+    info = yf.Ticker(ticker).info
+    mcap = info.get("marketCap") or 0
+    ttm_int, debt, kd = calculate_cost_of_debt(ticker)
+    d_e = (debt/mcap) if mcap else 0
+    beta_adj = adjust_beta(get_raw_beta(ticker), tax, d_e)
+    ke = rf + beta_adj * erp
+    we = mcap/(mcap + debt) if (mcap+debt) else 0
+    wd = debt/(mcap + debt) if (mcap+debt) else 0
+    return we*ke + wd*kd*(1-tax)
 
 # ─── DCF MODEL ─────────────────────────────────────────────────────────────────
 
 def fetch_baseline(ticker):
     tk = yf.Ticker(ticker)
     fin = tk.financials.sort_index(axis=1)
-    cf  = tk.cashflow.sort_index(axis=1)
+    cf = tk.cashflow.sort_index(axis=1)
     info = tk.info
-
-    latest = fin.columns[-1]
-    try:
-        year = pd.to_datetime(latest).year
-    except:
-        year = pd.Timestamp.now().year
-
+    col = fin.columns[-1] if not fin.empty else pd.Timestamp.now()
+    year = pd.to_datetime(col).year if hasattr(col, 'year') else pd.Timestamp.now().year
     return {
         "Ticker": ticker,
-        "Name":   info.get("shortName", ticker),
-        "Year":   year,
-        "Price":  info.get("regularMarketPrice", np.nan),
-        "EBITDA": fin.loc["EBITDA", latest] if "EBITDA" in fin.index else np.nan,
-        "FCF":    cf.loc["Free Cash Flow", latest] if "Free Cash Flow" in cf.index else np.nan,
-        "Cash":   info.get("totalCash", 0),
-        "Debt":   info.get("totalDebt", 0),
-        "Shares": info.get("sharesOutstanding", None)
+        "Name": info.get("shortName", ticker),
+        "Year": year,
+        "Price": info.get("regularMarketPrice", np.nan),
+        "EBITDA": fin.loc["EBITDA", col] if "EBITDA" in fin.index else np.nan,
+        "FCF": cf.loc["Free Cash Flow", col] if "Free Cash Flow" in cf.index else np.nan,
+        "Cash": info.get("totalCash", 0),
+        "Debt": info.get("totalDebt", 0),
+        "Shares": info.get("sharesOutstanding", np.nan)
     }
 
-def forecast_5_years(val, rate=0.04, years=5):
-    return {i: val * ((1+rate)**i) for i in range(1, years+1)}
+def forecast(vals, rate, years):
+    return {i: vals*((1+rate)**i) for i in range(1, years+1)}
 
-def run_dcf_streamlit(ticker, wacc, ltg=0.03, fg=0.03, years=5):
+def run_dcf(ticker, wacc, ltg, fg, years):
     base = fetch_baseline(ticker)
-    if not base["Shares"] or pd.isna(base["EBITDA"]) or pd.isna(base["FCF"]):
-        st.warning("Insufficient data for DCF.")
-        return
+    st.subheader(f"🔍 {base['Name']} ({ticker})")
+    # Two‑column summary
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Price", fmt_currency(base["Price"]))
+    col1.metric("Shares", f"{int(base['Shares']):,}")
+    col2.metric("EBITDA", fmt_currency(base["EBITDA"]))
+    col2.metric("FCF", fmt_currency(base["FCF"]))
+    col3.metric("Cash", fmt_currency(base["Cash"]))
+    col3.metric("Debt", fmt_currency(base["Debt"]))
 
-    st.subheader("Baseline Financials")
-    st.table(pd.DataFrame.from_dict(base, orient="index", columns=["Value"]))
+    # Projections
+    e_proj = forecast(base["EBITDA"], fg, years)
+    f_proj = forecast(base["FCF"], fg, years)
+    st.table(pd.DataFrame.from_dict(e_proj, orient="index", columns=["EBITDA"])
+                 .rename_axis("Year Offset"))
+    st.table(pd.DataFrame.from_dict(f_proj, orient="index", columns=["FCF"])
+                 .rename_axis("Year Offset"))
 
-    e_proj = forecast_5_years(base["EBITDA"], fg, years)
-    f_proj = forecast_5_years(base["FCF"],   fg, years)
-    st.subheader("EBITDA Projections")
-    st.table(pd.DataFrame(list(e_proj.items()), columns=["Year","EBITDA"]))
-    st.subheader("FCF Projections")
-    st.table(pd.DataFrame(list(f_proj.items()), columns=["Year","FCF"]))
-
-    # Discounted FCF
-    rows = []
-    total_pv = 0
+    # Discounting
+    df_rows, total_pv = [], 0
     for i in range(1, years+1):
-        t  = i - 0.5
-        df = (1 + wacc)**t
-        pv = f_proj[i] / df
-        rows.append([base["Year"]+i, t, f_proj[i], df, pv])
+        t = i - 0.5
+        pv = f_proj[i] / ((1+wacc)**t)
+        df_rows.append({
+            "Year": base["Year"]+i,
+            "Proj FCF": fmt_currency(f_proj[i]),
+            "DF": fmt_pct(1/((1+wacc)**t)),
+            "PV": fmt_currency(pv)
+        })
         total_pv += pv
-    st.subheader("Discounted FCF")
-    st.table(pd.DataFrame(rows, columns=["Year","Timing","Proj FCF","DF","PV"]))
+    st.table(pd.DataFrame(df_rows))
 
-    # Terminal Value
-    last  = f_proj[years]
-    tv    = last * (1+ltg) / (wacc - ltg)
-    df_tv = (1 + wacc)**(years - 0.5)
-    pv_tv = tv / df_tv
-    term = [
-        [f"FCF in {base['Year']+years}", last],
-        ["Terminal Value (undisc)", tv],
-        ["DF", df_tv],
-        ["PV of Terminal Value", pv_tv]
-    ]
-    st.subheader("Terminal Value")
-    st.table(pd.DataFrame(term, columns=["Item","Value"]))
+    # Terminal
+    last = f_proj[years]
+    tv = last*(1+ltg)/(wacc-ltg)
+    df_tv = (1+wacc)**(years-0.5)
+    pv_tv = tv/df_tv
+    st.table(pd.DataFrame([
+        ["Terminal Undisc FCF", fmt_currency(last)],
+        ["Terminal Value", fmt_currency(tv)],
+        ["PV of Terminal", fmt_currency(pv_tv)]
+    ], columns=["Metric","Value"]))
 
-    ent_val = total_pv + pv_tv
-    fair    = ent_val / base["Shares"]
-    final = [
-        ["Enterprise Value", ent_val],
-        ["Shares Outstanding", base["Shares"]],
-        ["Fair Price per Share", fair]
-    ]
-    st.subheader("Final Valuation")
-    st.table(pd.DataFrame(final, columns=["Metric","Value"]))
+    # Final
+    ent = total_pv + pv_tv
+    fair = ent/base["Shares"] if base["Shares"] else np.nan
+    upside = (fair - base["Price"])/base["Price"] if base["Price"] else 0
 
-# ─── STREAMLIT UI ────────────────────────────────────────────────────────────────
+    final = pd.DataFrame([
+        ["Enterprise Value", fmt_currency(ent)],
+        ["Fair Price", fmt_currency(fair)],
+        ["Upside/Downside", fmt_pct(upside)]
+    ], columns=["Metric","Value"])
+    st.table(final)
 
-st.title("DCF Calculator with Auto‑WACC")
+# ─── UI ───────────────────────────────────────────────────────────────────────
 
-tickers      = st.text_input("1) Enter ticker(s) (comma‑separated)")
-wacc_adj     = st.number_input("2) WACC adjuster (%)", value=-2.4, step=0.1, format="%.2f")
-fg_pct       = st.number_input("3) Forecast growth rate (%)", value=3.0, step=0.1, format="%.2f")
-ltg_pct      = st.number_input("4) Terminal growth rate (%)", value=3.0, step=0.1, format="%.2f")
-if st.button("Run Model") and tickers:
-    for t in [s.strip().upper() for s in tickers.split(",") if s.strip()]:
-        st.header(t)
+st.title("📊 DCF & Auto‑WACC Calculator")
+with st.sidebar:
+    tickers = st.text_input("Ticker(s), comma‑separated").upper()
+    wacc_adj = st.number_input("WACC adjust (%)", value=-2.4, format="%.2f")
+    fg = st.number_input("Forecast Growth (%)", value=3.0, format="%.2f")/100
+    ltg = st.number_input("Terminal Growth (%)", value=3.0, format="%.2f")/100
+    years = st.slider("Forecast Years", 3, 10, 5)
+    run = st.button("Run")
+
+if run and tickers:
+    for t in [x.strip() for x in tickers.split(",") if x.strip()]:
         try:
-            raw  = compute_wacc_raw(t)
-            wacc = raw + wacc_adj/100
-            st.markdown(f"""**Raw WACC:** {raw*100:.2f}%  
-**Adjusted WACC:** {wacc*100:.2f}%""")
-            run_dcf_streamlit(
-                t,
-                wacc,
-                ltg=ltg_pct/100,
-                fg=fg_pct/100
-            )
+            raw = compute_wacc_raw(t)
+            adj_wacc = raw + wacc_adj/100
+            st.markdown(f"**Raw WACC:** {fmt_pct(raw)}  &nbsp;&nbsp; **Adj WACC:** {fmt_pct(adj_wacc)}")
+            run_dcf(t, adj_wacc, ltg, fg, years)
         except Exception as e:
-            st.error(f"Error for {t}: {e}")
+            st.error(f"{t}: {e}")
