@@ -68,23 +68,32 @@ st.write(f"**Forecasting {Ticker}**  |  Seasonality: {SN}  |  Period: {start_dat
 if st.button("Run SARIMAX Model"):
     with st.spinner("Running SARIMAX… this may take a few minutes"):
         progress = st.progress(0)
-        # load and trim history
+        # load history
         df = fetch_history(Ticker)
-        df = df.loc[start_date:end_date].tz_localize("UTC").tz_convert("America/New_York")[["Close"]]
-        progress.progress(20)
+        progress.progress(10)
 
-        C = df["Close"].dropna()
-        # grid-search instead of auto_arima
+        # ensure index datetime and tz-aware in UTC
+        df.index = pd.to_datetime(df.index)
+        if df.index.tz is None:
+            df = df.tz_localize('UTC')
+        df = df.tz_convert('America/New_York')
+
+        # slice and select close
+        start_ts = pd.Timestamp(start_date).tz_localize('America/New_York')
+        end_ts   = pd.Timestamp(end_date).tz_localize('America/New_York')
+        df = df.loc[start_ts:end_ts][['Close']]
+        progress.progress(30)
+
+        C = df['Close'].dropna()
         order, seas = select_best_order(C, SN)
-        progress.progress(50)
+        progress.progress(60)
 
         model = SARIMAX(C, order=order, seasonal_order=seas).fit(disp=False)
         progress.progress(80)
 
-        # build prediction index skipping US federal holidays
         cal = USFederalHolidayCalendar()
         hols = cal.holidays(start=df.index[-1], end=df.index[-1] + pd.DateOffset(days=90))
-        future_bdays = pd.bdate_range(start=df.index[-1], periods=SN + len(hols), freq="B")
+        future_bdays = pd.bdate_range(start=df.index[-1], periods=SN + len(hols), freq='B')
         future = future_bdays.difference(hols)[:SN]
 
         preds = model.predict(start=len(C), end=len(C) + len(future) - 1)
@@ -92,53 +101,53 @@ if st.button("Run SARIMAX Model"):
         preds.index = future_idx
         progress.progress(100)
 
-        # plot
+        # plot actual vs forecast
         fig1, ax = plt.subplots(figsize=(10,5))
-        ax.plot(df.index, df["Close"], label="Actual")
-        ax.plot(preds.index, preds, "--", label="Forecast")
-        ax.set(title=f"{Ticker} Forecast", xlabel="Date", ylabel="Price")
+        ax.plot(df.index, df['Close'], label='Actual')
+        ax.plot(preds.index, preds, '--', label='Forecast')
+        ax.set(title=f'{Ticker} Forecast', xlabel='Date', ylabel='Price')
         ax.legend()
         st.pyplot(fig1)
-
-        st.write(pd.DataFrame(preds, columns=["Forecasted Price"]))
+        st.write(pd.DataFrame(preds, columns=['Forecasted Price']))
 
 # ─── Candlestick Chart Section ──────────────────────────────────────────────────
-st.title("30-Day Candlestick Chart")
-symbol = st.text_input("Enter Stock Ticker for Candles:", value=Ticker).upper()
+st.title('30-Day Candlestick Chart')
+symbol = st.text_input('Enter Stock Ticker for Candles:', value=Ticker).upper()
 end_dt = datetime.today()
 start_dt = end_dt - timedelta(days=43)
-data = fetch_data(symbol, start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d"))
+
+data = fetch_data(symbol, start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'))
 
 if not data.empty:
     fig2 = go.Figure(data=[go.Candlestick(
-        x=data.index, open=data["Open"], high=data["High"],
-        low=data["Low"], close=data["Close"]
+        x=data.index, open=data['Open'], high=data['High'],
+        low=data['Low'], close=data['Close']
     )])
     fig2.update_layout(
-        title=f"{symbol} Candlestick (last 30 biz days)",
+        title=f'{symbol} Candlestick (last 30 biz days)',
         xaxis_rangeslider_visible=False,
-        xaxis=dict(tickmode="array", tickvals=data.index[::3],
-                   ticktext=[d.strftime("%Y-%m-%d") for d in data.index][::3]),
+        xaxis=dict(tickmode='array', tickvals=data.index[::3],
+                   ticktext=[d.strftime('%Y-%m-%d') for d in data.index][::3]),
         autosize=False, width=900, height=500
     )
     st.plotly_chart(fig2, use_container_width=True)
 else:
-    st.write("No data for that ticker.")
+    st.write('No data for that ticker.')
 
 # ─── Date Metrics Section ───────────────────────────────────────────────────────
 def get_date_metrics():
     today = datetime.now()
     return {
-        "30 Biz Days Ago":      (today - BDay(30)).strftime("%Y-%m-%d"),
-        "QTD Start":            datetime(today.year, 3*((today.month-1)//3)+1, 1).strftime("%Y-%m-%d"),
-        "YTD Start":            datetime(today.year, 1, 1).strftime("%Y-%m-%d"),
-        "MTD Start":            datetime(today.year, today.month, 1).strftime("%Y-%m-%d"),
-        "1 Year Ago":           (today - BDay(365)).strftime("%Y-%m-%d"),
-        "2 Years Ago":          (today - BDay(365*2)).strftime("%Y-%m-%d"),
-        "3 Years Ago":          (today - BDay(365*3)).strftime("%Y-%m-%d"),
+        '30 Biz Days Ago': (today - BDay(30)).strftime('%Y-%m-%d'),
+        'QTD Start': datetime(today.year, 3*((today.month-1)//3)+1, 1).strftime('%Y-%m-%d'),
+        'YTD Start': datetime(today.year, 1, 1).strftime('%Y-%m-%d'),
+        'MTD Start': datetime(today.year, today.month, 1).strftime('%Y-%m-%d'),
+        '1 Year Ago': (today - BDay(365)).strftime('%Y-%m-%d'),
+        '2 Years Ago': (today - BDay(365*2)).strftime('%Y-%m-%d'),
+        '3 Years Ago': (today - BDay(365*3)).strftime('%Y-%m-%d'),
     }
 
-st.title("Date Calculations")
+st.title('Date Calculations')
 for name, val in get_date_metrics().items():
     st.subheader(name)
     st.text(val)
