@@ -1,122 +1,143 @@
 import streamlit as st
 import yfinance as yf
-import requests
-from lxml import html
-st.set_page_config(page_title="Dividend Income Calculator")
-def get_stock_price(ticker):
+from datetime import datetime, timedelta
+
+st.set_page_config(page_title="Dividend Income Calculator", layout="centered")
+
+# ---------- Helpers (cached where useful) ----------
+
+@st.cache_data(show_spinner=False, ttl=15 * 60)
+def _get_ticker(ticker: str):
+    return yf.Ticker(ticker)
+
+@st.cache_data(show_spinner=False, ttl=5 * 60)
+def get_stock_price(ticker: str):
     """
-    Fetch the current stock price for the given ticker using Yahoo Finance.
-    Args:
-        ticker (str): The ticker symbol.
-    Returns:
-        float: The current stock price.
+    Fetch the latest price using multiple fallbacks.
     """
-    stock = yf.Ticker(ticker)
-    market_data = stock.history(period='1d')
-    if not market_data.empty:
-        return market_data['Close'].iloc[-1]
-    else:
+    try:
+        t = _get_ticker(ticker)
+        # Try fast_info first (quick); fallback to 1d history
+        price = getattr(t, "fast_info", {}).get("last_price")
+        if price is None:
+            hist = t.history(period="1d", auto_adjust=False)
+            if not hist.empty:
+                price = float(hist["Close"].iloc[-1])
+        return float(price) if price is not None else None
+    except Exception:
         return None
 
-def get_full_security_name(ticker):
+@st.cache_data(show_spinner=False, ttl=6 * 60 * 60)
+def get_full_security_name(ticker: str):
     """
-    Fetch the full security name for the given ticker using Yahoo Finance.
-    Args:
-        ticker (str): The ticker symbol.
-    Returns:
-        str: The full security name.
+    Fetch the long security name; fallback to ticker if unavailable.
     """
-    stock = yf.Ticker(ticker)
-    return stock.info.get('longName', 'N/A')
-
-def get_annual_dividend(ticker, is_etf):
-    """
-    Fetch the annual dividend for the given ticker from stockanalysis.com using lxml.
-    Args:
-        ticker (str): The ticker symbol.
-        is_etf (bool): Whether the ticker represents an ETF or a stock.
-    Returns:
-        float: The annual dividend amount per share.
-    """
-    base_url = "https://stockanalysis.com"
-    url = f"{base_url}/{'etf' if is_etf else 'stocks'}/{ticker}/dividend/"
     try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            tree = html.fromstring(response.content)
-            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')
-            if annual_dividend:
-                return float(annual_dividend[0].replace("$", "").strip())
-        return 0.0
+        t = _get_ticker(ticker)
+        # yfinance .info can be slow/spotty; try fast_info “shortName” first if available
+        name = getattr(t, "fast_info", {}).get("shortName")
+        if not name:
+            info = getattr(t, "info", {}) or {}
+            name = info.get("longName") or info.get("shortName")
+        return name if name else ticker
+    except Exception:
+        return ticker
+
+@st.cache_data(show_spinner=False, ttl=6 * 60 * 60)
+def get_ttm_dividend_per_share(ticker: str):
+    """
+    Total dividends per share paid in the last 365 days (TTM) via Yahoo Finance.
+    Returns float amount per share over last 12 months.
+    """
+    try:
+        t = _get_ticker(ticker)
+        end = datetime.utcnow()
+        start = end - timedelta(days=370)  # small buffer
+        div = t.dividends
+        if div is None or div.empty:
+            return 0.0
+        # Filter to last ~12 months and sum
+        div_ttm = div[div.index >= start].sum()
+        return float(div_ttm) if div_ttm is not None else 0.0
     except Exception:
         return 0.0
 
-def is_etf_ticker(ticker):
+@st.cache_data(show_spinner=False, ttl=6 * 60 * 60)
+def is_etf_ticker(ticker: str):
     """
-    Determine if the ticker represents an ETF using Yahoo Finance.
-    Args:
-        ticker (str): The ticker symbol.
-    Returns:
-        bool: True if it's an ETF, False otherwise.
+    Heuristic via quoteType.
     """
-    stock = yf.Ticker(ticker)
-    info = stock.info
-    quote_type = info.get('quoteType', '').lower()
-    return 'etf' in quote_type
+    try:
+        info = _get_ticker(ticker).info or {}
+        qt = str(info.get("quoteType", "")).lower()
+        return "etf" in qt
+    except Exception:
+        return False
 
-def calculate_projected_income(ticker, days, quantity):
-    """
-    Calculate the projected dividend income and related financial metrics.
-    Args:
-        ticker (str): The ticker symbol.
-        days (int): Number of days the security is held.
-        quantity (int): Number of shares held.
-    Returns:
-        dict: Contains projected income, stock price, total cost, dividend yield percentage, and security name.
-    """
-    stock_price = get_stock_price(ticker)
-    if stock_price is None:
-        return {"error": f"Could not fetch stock price for {ticker}"}
 
-    is_etf = is_etf_ticker(ticker)
-    annual_dividend = get_annual_dividend(ticker, is_etf)
-    security_name = get_full_security_name(ticker)
-    
-    # Calculate financial metrics
-    total_cost = stock_price * quantity  # Total investment cost
-    dividend_yield = (annual_dividend / stock_price) * 100 if stock_price else 0  # Annual dividend yield percentage
-    daily_dividend_rate = annual_dividend / 365  # Daily dividend rate
-    projected_income = total_cost * (daily_dividend_rate / stock_price) * days  # Projected income based on daily dividends
+def calculate_projected_income(ticker: str, days: int, quantity: float):
+    """
+    Uses TTM dividends from Yahoo (per-share) for yield and projection.
+    """
+    price = get_stock_price(ticker)
+    if price is None or price <= 0:
+        return {"error": f"Could not fetch a valid price for '{ticker}'."}
 
-    
+    ttm_div_ps = get_ttm_dividend_per_share(ticker)  # per share, last 12 months
+    name = get_full_security_name(ticker)
+
+    total_cost = price * quantity
+    annual_div_yield_pct = (ttm_div_ps / price) * 100 if price else 0.0
+
+    # Projected income assuming the TTM run-rate is representative
+    daily_div_ps = ttm_div_ps / 365.0
+    projected_income = daily_div_ps * quantity * days
+
     return {
-        'security_name': security_name,
-        'projected_income': projected_income,
-        'stock_price': stock_price,
-        'total_cost': total_cost,
-        'dividend_yield': dividend_yield
+        "security_name": name,
+        "is_etf": is_etf_ticker(ticker),
+        "projected_income": projected_income,
+        "stock_price": price,
+        "total_cost": total_cost,
+        "dividend_yield": annual_div_yield_pct,
+        "ttm_div_ps": ttm_div_ps,
     }
 
-# Streamlit UI
+# ---------- UI ----------
+
 st.title("Dividend Income Calculator")
 
-# Input fields
-ticker = st.text_input("Enter the Ticker Symbol:").strip().upper()
-days = st.number_input("Enter the Number of Days to Hold:", min_value=366, step=1)
-quantity = st.number_input("Enter the Quantity of Shares Held:", min_value=100, step=1)
+with st.form("inputs"):
+    ticker = st.text_input("Ticker Symbol").strip().upper()
+    # No minimums; you can enter any positive integer/float (days & quantity validated below)
+    days = st.number_input("Number of Days to Hold", value=365, step=1, format="%d")
+    quantity = st.number_input("Quantity of Shares Held", value=100.0, step=1.0)
+    submitted = st.form_submit_button("Calculate")
 
-# Calculation
-if st.button("Calculate"):
-    if ticker:
-        results = calculate_projected_income(ticker, days, quantity)
+if submitted:
+    # Basic validation without arbitrary caps
+    if not ticker:
+        st.warning("Please enter a valid ticker symbol.")
+    elif days <= 0:
+        st.warning("Days must be greater than 0.")
+    elif quantity <= 0:
+        st.warning("Quantity must be greater than 0.")
+    else:
+        results = calculate_projected_income(ticker, int(days), float(quantity))
         if "error" in results:
             st.error(results["error"])
         else:
             st.subheader(f"Financial Summary for {ticker}")
             st.write(f"**Security Name:** {results['security_name']}")
-            st.write(f"**Current Stock Price:** ${results['stock_price']:.2f}")
-            st.write(f"**Total Investment Cost:** ${results['total_cost']:.2f}")
-            st.write(f"**Dividend Yield:** {results['dividend_yield']:.2f}%")
-            st.write(f"**Projected Dividend Income over {days} days:** ${results['projected_income']:.2f}")
-    else:
-        st.warning("Please enter a valid ticker symbol.")
+            st.write(f"**Current Stock Price:** ${results['stock_price']:,.2f}")
+            st.write(f"**Total Investment Cost:** ${results['total_cost']:,.2f}")
+            st.write(f"**TTM Dividend (per share):** ${results['ttm_div_ps']:,.4f}")
+            st.write(f"**Dividend Yield (TTM):** {results['dividend_yield']:.2f}%")
+            st.write(f"**Projected Dividend Income over {int(days)} days:** ${results['projected_income']:,.2f}")
+
+            with st.expander("Details / Assumptions"):
+                st.markdown(
+                    "- Dividend data uses **TTM** from Yahoo Finance (sum of dividends paid over the last 12 months).\n"
+                    "- Projected income assumes the TTM dividend rate continues pro-rata by day.\n"
+                    "- Prices and dividends can change; refresh to update cached data."
+                )
