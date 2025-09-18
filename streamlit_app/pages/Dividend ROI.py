@@ -1,133 +1,213 @@
 import streamlit as st
 import yfinance as yf
-import requests
-from lxml import html
+from datetime import datetime, timedelta
+import pandas as pd
+import numpy as np
 
-st.set_page_config(page_title="Dividend Income Calculator")
+st.set_page_config(page_title="Dividend Income Calculator", layout="centered")
 
-def get_stock_price(ticker):
-    """
-    Fetch the current stock price for the given ticker using Yahoo Finance.
-    Args:
-        ticker (str): The ticker symbol.
-    Returns:
-        float: The current stock price.
-    """
+# ----------------- Data Helpers -----------------
+
+@st.cache_data(ttl=15*60, show_spinner=False)
+def get_price(ticker: str):
     try:
-        stock = yf.Ticker(ticker)
-        market_data = stock.history(period='1d')
-        if not market_data.empty:
-            return float(market_data['Close'].iloc[-1])
+        t = yf.Ticker(ticker)
+        hist = t.history(period="1d", auto_adjust=False)
+        if not hist.empty:
+            return float(hist["Close"].iloc[-1])
     except Exception:
         pass
     return None
 
-def get_full_security_name(ticker):
-    """
-    Fetch the full security name for the given ticker using Yahoo Finance.
-    Args:
-        ticker (str): The ticker symbol.
-    Returns:
-        str: The full security name.
-    """
+@st.cache_data(ttl=6*60*60, show_spinner=False)
+def get_name(ticker: str):
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info or {}
-        return info.get('longName', 'N/A')
+        info = yf.Ticker(ticker).info or {}
+        return info.get("longName") or info.get("shortName") or ticker
     except Exception:
-        return 'N/A'
+        return ticker
 
-def get_annual_dividend(ticker, is_etf):
-    """
-    Fetch the annual dividend for the given ticker from stockanalysis.com using lxml.
-    Args:
-        ticker (str): The ticker symbol.
-        is_etf (bool): Whether the ticker represents an ETF or a stock.
-    Returns:
-        float: The annual dividend amount per share.
-    """
-    base_url = "https://stockanalysis.com"
-    url = f"{base_url}/{'etf' if is_etf else 'stocks'}/{ticker}/dividend/"
+@st.cache_data(ttl=6*60*60, show_spinner=False)
+def get_dividends(ticker: str) -> pd.Series:
+    # pandas Series indexed by ex-dividend dates, values = cash per share
     try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            tree = html.fromstring(response.content)
-            # XPath from your original code
-            annual_dividend = tree.xpath('/html/body/div/div[1]/div[2]/main/div[2]/div/div[2]/div[2]/div/text()')
-            if annual_dividend:
-                return float(annual_dividend[0].replace("$", "").strip())
+        s = yf.Ticker(ticker).dividends
+        if s is None:
+            return pd.Series(dtype=float)
+        return s.astype(float)
     except Exception:
-        pass
-    return 0.0
+        return pd.Series(dtype=float)
 
-def is_etf_ticker(ticker):
+def infer_frequency(divs: pd.Series):
     """
-    Determine if the ticker represents an ETF using Yahoo Finance.
-    Args:
-        ticker (str): The ticker symbol.
-    Returns:
-        bool: True if it's an ETF, False otherwise.
+    Infer payment frequency from the last few ex-div dates.
+    Returns ('monthly'|'quarterly'|'semiannual'|'annual'|None, avg_interval_days)
     """
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info or {}
-        quote_type = str(info.get('quoteType', '')).lower()
-        return 'etf' in quote_type
-    except Exception:
-        return False
+    if divs.empty or len(divs.index) < 3:
+        return None, None
+    dates = divs.index.sort_values()
+    recent = dates[-6:] if len(dates) >= 6 else dates
+    if len(recent) < 3:
+        return None, None
+    gaps = np.diff(recent.values).astype('timedelta64[D]').astype(int)
+    if len(gaps) == 0:
+        return None, None
+    med = int(np.median(gaps))
+    if 25 <= med <= 35:
+        return "monthly", med
+    if 70 <= med <= 100:
+        return "quarterly", med
+    if 150 <= med <= 210:
+        return "semiannual", med
+    if 330 <= med <= 390:
+        return "annual", med
+    return None, med
 
-def calculate_projected_income(ticker, days, quantity):
+def estimate_amount_per_payment(divs: pd.Series, freq: str):
     """
-    Calculate the projected dividend income and related financial metrics.
-    Args:
-        ticker (str): The ticker symbol.
-        days (int): Number of days the security is held.
-        quantity (int): Number of shares held.
-    Returns:
-        dict: Contains projected income, stock price, total cost, dividend yield percentage, and security name.
+    Choose a reasonable expected payment per share based on recent history.
+    - monthly: average of last 3
+    - quarterly: last value (most recent declared usually repeats)
+    - semiannual/annual/unknown: average of last 2 (if available) else last
     """
-    stock_price = get_stock_price(ticker)
-    if stock_price is None:
-        return {"error": f"Could not fetch stock price for {ticker}"}
+    if divs.empty:
+        return 0.0
+    tail = divs.tail(3).values
+    if freq == "monthly":
+        return float(np.mean(tail)) if len(tail) >= 3 else float(np.mean(divs.tail(2).values))
+    if freq == "quarterly":
+        return float(divs.iloc[-1])
+    # semiannual/annual/unknown
+    if len(divs) >= 2:
+        return float(np.mean(divs.tail(2).values))
+    return float(divs.iloc[-1])
 
-    etf_flag = is_etf_ticker(ticker)
-    annual_dividend = get_annual_dividend(ticker, etf_flag)
-    security_name = get_full_security_name(ticker)
+def project_ex_dates(divs: pd.Series, days_ahead: int):
+    """
+    Build a list of projected ex-dividend dates inside [today, today+days_ahead),
+    based on the last ex-date and inferred average interval.
+    """
+    today = pd.Timestamp(datetime.utcnow().date())
+    if divs.empty:
+        return []
+    freq, avg_gap = infer_frequency(divs)
+    last_ex = pd.Timestamp(divs.index.max().date())
+    if avg_gap is None:
+        # Cannot infer interval: no schedule
+        return []
+    # Generate forward schedule
+    horizon = today + pd.Timedelta(days=days_ahead)
+    ex_dates = []
+    # Start from the next expected date after the most recent ex-date
+    next_date = last_ex + pd.Timedelta(days=avg_gap)
+    # If that lands in the past relative to today (irregular payer), roll it forward
+    while next_date < today:
+        next_date += pd.Timedelta(days=avg_gap)
+    while next_date < horizon:
+        ex_dates.append(next_date)
+        next_date += pd.Timedelta(days=avg_gap)
+    return ex_dates, freq
 
-    total_cost = stock_price * quantity
-    dividend_yield = (annual_dividend / stock_price) * 100 if stock_price else 0
-    daily_dividend_rate = annual_dividend / 365
-    projected_income = total_cost * (daily_dividend_rate / stock_price) * days
+def ttm_daily(divs: pd.Series):
+    """TTM dividends per share per day (fallback)."""
+    if divs.empty:
+        return 0.0
+    cutoff = pd.Timestamp(datetime.utcnow().date()) - pd.Timedelta(days=370)
+    ttm = divs[divs.index >= cutoff].sum()
+    return float(ttm) / 365.0
+
+# ----------------- Calculation -----------------
+
+def calculate_dividends_forward(ticker: str, days: int, qty: float):
+    """
+    Estimate dividends to be EARNED during the next `days` days:
+    - Try projecting ex-dates from recent history and sum expected cash per payment.
+    - If schedule can't be inferred, fallback to TTM prorata per day.
+    """
+    price = get_price(ticker)
+    if price is None or price <= 0:
+        return {"error": f"Could not fetch a valid price for '{ticker}'."}
+
+    name = get_name(ticker)
+    divs = get_dividends(ticker)
+
+    schedule_out = []
+    total_cash = 0.0
+    used_model = "schedule"
+
+    proj = project_ex_dates(divs, days)
+    if isinstance(proj, tuple) and len(proj) == 2:
+        ex_dates, freq = proj
+        if ex_dates:
+            amt_per = estimate_amount_per_payment(divs, freq)
+            for d in ex_dates:
+                cash = amt_per * qty
+                schedule_out.append({"ex_date": str(d.date()), "per_share": amt_per, "cash": cash})
+                total_cash += cash
+        else:
+            # No upcoming projected ex-dates within the window
+            used_model = "ttm_prorata"
+    else:
+        used_model = "ttm_prorata"
+
+    if used_model == "ttm_prorata":
+        daily_ps = ttm_daily(divs)  # per share per day
+        total_cash = daily_ps * qty * max(days, 0)
+        schedule_out = []
+
+    total_cost = price * qty
+    ttm_ps = float(divs.tail(370).sum()) if not divs.empty else 0.0
+    yield_pct_ttm = (ttm_ps / price * 100.0) if price else 0.0
 
     return {
-        'security_name': security_name,
-        'projected_income': projected_income,
-        'stock_price': stock_price,
-        'total_cost': total_cost,
-        'dividend_yield': dividend_yield
+        "security_name": name,
+        "price": price,
+        "quantity": qty,
+        "days": int(days),
+        "total_investment": total_cost,
+        "dividends_expected": total_cash,
+        "method": used_model,
+        "schedule": schedule_out,
+        "ttm_div_per_share": ttm_ps,
+        "ttm_yield_pct": yield_pct_ttm,
     }
 
-# ---------------- Streamlit UI ----------------
+# ----------------- UI -----------------
+
 st.title("Dividend Income Calculator")
 
-ticker = st.text_input("Enter the Ticker Symbol:").strip().upper()
-# Free tier: exactly as before (minimum 366), and block anything > 366
-days = st.number_input("Enter the Number of Days to Hold (Free up to 366):", min_value=366, step=1)
-quantity = st.number_input("Enter the Quantity of Shares Held:", min_value=100, step=1)
+with st.form("inputs"):
+    ticker = st.text_input("Ticker Symbol").strip().upper()
+    days = st.number_input("Number of Days (forward from today)", min_value=1, value=365, step=1, format="%d")
+    quantity = st.number_input("Quantity of Shares", min_value=1.0, value=100.0, step=1.0)
+    submitted = st.form_submit_button("Calculate")
 
-if st.button("Calculate"):
+if submitted:
     if not ticker:
         st.warning("Please enter a valid ticker symbol.")
-    elif days > 366:
-        st.info("Pro feature: Holding periods above 366 days require an upgrade.")
     else:
-        results = calculate_projected_income(ticker, int(days), int(quantity))
-        if "error" in results:
-            st.error(results["error"])
+        res = calculate_dividends_forward(ticker, int(days), float(quantity))
+        if "error" in res:
+            st.error(res["error"])
         else:
-            st.subheader(f"Financial Summary for {ticker}")
-            st.write(f"**Security Name:** {results['security_name']}")
-            st.write(f"**Current Stock Price:** ${results['stock_price']:.2f}")
-            st.write(f"**Total Investment Cost:** ${results['total_cost']:.2f}")
-            st.write(f"**Dividend Yield:** {results['dividend_yield']:.2f}%")
-            st.write(f"**Projected Dividend Income over {int(days)} days:** ${results['projected_income']:.2f}")
+            st.subheader(f"Summary for {ticker}")
+            st.write(f"**Security Name:** {res['security_name']}")
+            st.write(f"**Current Stock Price:** ${res['price']:,.2f}")
+            st.write(f"**Total Investment:** ${res['total_investment']:,.2f}")
+            st.write(f"**TTM Dividend (per share):** ${res['ttm_div_per_share']:,.4f}")
+            st.write(f"**TTM Yield:** {res['ttm_yield_pct']:.2f}%")
+            st.write(f"**Estimated Dividends over next {res['days']} days:** ${res['dividends_expected']:,.2f}")
+            st.caption(f"Method: {'Projected schedule' if res['method']=='schedule' else 'TTM pro-rata fallback'}")
+
+            if res["schedule"]:
+                st.markdown("**Projected Ex-Dividend Schedule (within window)**")
+                df = pd.DataFrame(res["schedule"])
+                df["cash"] = df["cash"].map(lambda x: f"${x:,.2f}")
+                df["per_share"] = df["per_share"].map(lambda x: f"${x:,.4f}")
+                st.dataframe(df, use_container_width=True)
+
+            with st.expander("Notes"):
+                st.markdown(
+                    "- Ex-dividend dates and amounts are inferred from recent history; issuers can change them.\n"
+                    "- If no reliable schedule is inferred, the app uses TTM dividends prorated by day."
+                )
