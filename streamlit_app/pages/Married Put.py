@@ -1,37 +1,39 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
+import json
 
 # Set Streamlit page configuration
 st.set_page_config(page_title="Married Put", layout="wide")
+
+NUMBER_OF_SHARES = 100  # Standard contract size
 
 def calculate_max_loss(stock_price, options_table):
     """
     Calculate Max Loss for each option using both Ask Price and Last Price:
     Max Loss = (Strike Price × 100) - (Cost of Stock + Cost of Put)
     """
-    number_of_shares = 100  # Standard contract size
-
     # Perform calculations using the Ask Price
-    options_table['Cost of Put (Ask)'] = options_table['Ask'] * number_of_shares
+    options_table['Cost of Put (Ask)'] = options_table['Ask'] * NUMBER_OF_SHARES
     options_table['Max Loss (Ask)'] = (
-        (options_table['Strike'] * number_of_shares) -
-        (stock_price * number_of_shares + options_table['Cost of Put (Ask)'])
+        (options_table['Strike'] * NUMBER_OF_SHARES) -
+        (stock_price * NUMBER_OF_SHARES + options_table['Cost of Put (Ask)'])
     )
     options_table['Max Loss Calc (Ask)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Ask)']:.2f})",
+        lambda row: f"({row['Strike']:.2f} × {NUMBER_OF_SHARES}) - ({stock_price * NUMBER_OF_SHARES:.2f} + {row['Cost of Put (Ask)']:.2f})",
         axis=1
     )
 
     # Perform calculations using the Last Price
-    options_table['Cost of Put (Last)'] = options_table['Last Price'] * number_of_shares
+    options_table['Cost of Put (Last)'] = options_table['Last Price'] * NUMBER_OF_SHARES
     options_table['Max Loss (Last)'] = (
-        (options_table['Strike'] * number_of_shares) -
-        (stock_price * number_of_shares + options_table['Cost of Put (Last)'])
+        (options_table['Strike'] * NUMBER_OF_SHARES) -
+        (stock_price * NUMBER_OF_SHARES + options_table['Cost of Put (Last)'])
     )
     options_table['Max Loss Calc (Last)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Last)']:.2f})",
+        lambda row: f"({row['Strike']:.2f} × {NUMBER_OF_SHARES}) - ({stock_price * NUMBER_OF_SHARES:.2f} + {row['Cost of Put (Last)']:.2f})",
         axis=1
     )
 
@@ -45,18 +47,19 @@ def calculate_trading_days_left(expiration_date):
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
-# ----- NEW: helper to show copy buttons (no UI/theme changes to your table) -----
-def render_contract_copy_panel(puts_table, exp_key: str):
-    st.caption("Quick copy (contract symbols):")
-    # Ensure the column exists and is string
-    if "Contract" in puts_table.columns:
-        contracts = puts_table["Contract"].astype(str).tolist()
-        for i, c in enumerate(contracts):
-            cols = st.columns([1, 0.14])
-            cols[0].write(c)
-            cols[1].copy_button("Copy", data=c, key=f"copy_{exp_key}_{i}", help="Copy contract symbol")
-    else:
-        st.info("No contract symbols available to copy.")
+# --- Copy-to-clipboard plumbing (tiny helper) ---
+def _queue_copy(text: str):
+    st.session_state["_copy_text"] = text
+
+def _flush_copy_js():
+    # If a copy was queued by a button, emit client-side JS once to write to clipboard.
+    txt = st.session_state.pop("_copy_text", None)
+    if txt is not None:
+        components.html(
+            f"<script>navigator.clipboard.writeText({json.dumps(txt)});</script>",
+            height=0,
+        )
+        st.toast(f"Copied: {txt}")
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
@@ -84,8 +87,19 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 continue
 
             # Prepare put options table
-            puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
-            puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
+            puts_table = puts[[
+                "contractSymbol", "strike", "lastPrice", "bid", "ask",
+                "volume", "openInterest", "impliedVolatility"
+            ]].rename(columns={
+                "contractSymbol": "Contract",
+                "strike": "Strike",
+                "lastPrice": "Last Price",
+                "bid": "Bid",
+                "ask": "Ask",
+                "volume": "Volume",
+                "openInterest": "Open Interest",
+                "impliedVolatility": "Implied Volatility",
+            })
             puts_table["Expiration Date"] = chosen_date
 
             # Calculate max loss for each option
@@ -94,14 +108,37 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             # Append data to main DataFrame
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
-            # Highlight Max Loss columns
-            styled_table = puts_table.style.highlight_max(
-                subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow"
-            )
-            st.dataframe(styled_table)
+            # ---------- MINIMAL CHANGE START ----------
+            # We render with st.data_editor to allow a per-row ButtonColumn that sits next to Contract.
+            # Create a shallow display copy so we can add a "Copy" button column.
+            display_cols = [
+                "Contract", "Copy", "Strike", "Last Price", "Bid", "Ask",
+                "Volume", "Open Interest", "Implied Volatility",
+                "Expiration Date", "Cost of Put (Ask)", "Max Loss (Ask)", "Max Loss Calc (Ask)",
+                "Cost of Put (Last)", "Max Loss (Last)", "Max Loss Calc (Last)"
+            ]
+            display_df = puts_table.copy()
+            # The "Copy" column holds the same contract text; the ButtonColumn uses the cell value.
+            display_df.insert(1, "Copy", display_df["Contract"])
 
-            # ----- NEW: add a simple copy panel under the table -----
-            render_contract_copy_panel(puts_table, exp_key=chosen_date)
+            edited = st.data_editor(
+                display_df[display_cols],
+                hide_index=True,
+                disabled=True,  # keep read-only look/behavior
+                use_container_width=True,
+                column_config={
+                    "Copy": st.column_config.ButtonColumn(
+                        "Copy",
+                        help="Copy contract symbol",
+                        width="small",
+                        on_click=_queue_copy,   # server-side callback
+                        args=None,              # value from the cell is passed automatically
+                    ),
+                },
+            )
+            # If any copy button was pressed during this run, push text to clipboard once:
+            _flush_copy_js()
+            # ---------- MINIMAL CHANGE END ----------
 
         if not all_data.empty:
             # Allow downloading the complete table as a CSV file
