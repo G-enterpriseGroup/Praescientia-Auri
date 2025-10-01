@@ -34,78 +34,57 @@ def calculate_max_loss(stock_price, options_table):
         lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Last)']:.2f})",
         axis=1
     )
-
     return options_table
 
-def calculate_trading_days_left(expiration_date):
+def fetch_put_options(ticker_symbol):
+    ticker = yf.Ticker(ticker_symbol)
+    expiration_dates = ticker.options
+    options_data = {}
+
+    for exp in expiration_dates:
+        opt = ticker.option_chain(exp)
+        puts = opt.puts.copy()
+        puts['expirationDate'] = exp
+        options_data[exp] = puts
+
+    return options_data
+
+# Function to make contract clickable (copy on click)
+def make_clickable_contract(contract):
+    return f"""
+    <a href="#" onclick="navigator.clipboard.writeText('{contract}'); return false;">
+        {contract}
+    </a>
     """
-    Calculate the total number of days left until the expiration date.
-    """
-    today = datetime.today()
-    expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
-    return (expiration_date - today).days
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
-    try:
-        # Fetch Ticker object
-        ticker = yf.Ticker(ticker_symbol)
+    options_data = fetch_put_options(ticker_symbol)
 
-        # Fetch available expiration dates
-        expiration_dates = ticker.options
-        if not expiration_dates:
-            st.error(f"No options data available for ticker {ticker_symbol}.")
-            return
+    for exp, puts in options_data.items():
+        puts = puts[['contractSymbol', 'lastPrice', 'bid', 'ask', 'strike', 'volume', 'openInterest']]
+        puts.rename(columns={
+            'contractSymbol': 'Contract',
+            'lastPrice': 'Last Price',
+            'bid': 'Bid',
+            'ask': 'Ask',
+            'strike': 'Strike',
+            'volume': 'Volume',
+            'openInterest': 'Open Interest'
+        }, inplace=True)
 
-        all_data = pd.DataFrame()
+        # Calculate max loss columns
+        puts = calculate_max_loss(stock_price, puts)
 
-        for chosen_date in expiration_dates:
-            trading_days_left = calculate_trading_days_left(chosen_date)
-            st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
+        # Make only Contract column clickable
+        puts['Contract'] = puts['Contract'].apply(make_clickable_contract)
 
-            # Fetch put options for the current expiration date
-            options_chain = ticker.option_chain(chosen_date)
-            puts = options_chain.puts
-
-            if puts.empty:
-                st.warning(f"No puts available for expiration date {chosen_date}.")
-                continue
-
-            # Prepare put options table
-            puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
-            puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
-            puts_table["Expiration Date"] = chosen_date
-
-            # Calculate max loss for each option
-            puts_table = calculate_max_loss(stock_price, puts_table)
-
-            # Append data to main DataFrame
-            all_data = pd.concat([all_data, puts_table], ignore_index=True)
-
-            # Highlight Max Loss columns
-            styled_table = puts_table.style.highlight_max(
-                subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow"
-            )
-            st.dataframe(styled_table)
-
-        if not all_data.empty:
-            # Allow downloading the complete table as a CSV file
-            csv = all_data.to_csv(index=False)
-            st.download_button(
-                label="Download All Expiration Data as CSV",
-                data=csv,
-                file_name=f"{ticker_symbol}_put_options.csv",
-                mime="text/csv",
-            )
-        else:
-            st.warning(f"No put options data to display or download for {ticker_symbol}.")
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+        # Convert to HTML and keep formatting
+        st.subheader(f"Options Expiring: {exp}")
+        st.write(puts.to_html(escape=False, index=False), unsafe_allow_html=True)
 
 def main():
-    st.title("Options Analysis with Max Loss Calculation")
+    st.title("Married Put Strategy Calculator")
 
-    # Input for ticker symbol
     ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
 
     # Display the long name of the ticker symbol
