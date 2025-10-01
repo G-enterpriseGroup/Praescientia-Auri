@@ -78,14 +78,16 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             # Calculate max loss for each option
             puts_table = calculate_max_loss(stock_price, puts_table)
 
-            # Append data to main DataFrame
-            all_data = pd.concat([all_data, puts_table], ignore_index=True)
-
-            # Highlight Max Loss columns
-            styled_table = puts_table.style.highlight_max(
-                subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow"
+            # ✅ ONLY CHANGE: add a copy button inside the Contract cell
+            puts_table["Contract"] = puts_table["Contract"].apply(
+                lambda c: f"{c} <button onclick=\"navigator.clipboard.writeText('{c}')\" style='font-size:12px;padding:2px 6px;margin-left:6px;border:1px solid #ccc;border-radius:4px;background:#f1f1f1;cursor:pointer;'>📋</button>"
             )
-            st.dataframe(styled_table)
+
+            # Render table with HTML (so copy buttons work)
+            st.write(puts_table.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            # Append data to main DataFrame (we keep original values for CSV)
+            all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
         if not all_data.empty:
             # Allow downloading the complete table as a CSV file
