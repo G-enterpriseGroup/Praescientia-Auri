@@ -49,13 +49,15 @@ def fetch_put_options(ticker_symbol):
 
     return options_data
 
-# Function to make contract clickable (copy on click)
-def make_clickable_contract(contract):
-    return f"""
-    <a href="#" onclick="navigator.clipboard.writeText('{contract}'); return false;">
-        {contract}
-    </a>
-    """
+# Build a copy button table (aligned with contracts)
+def build_copy_table(contracts):
+    copy_table = pd.DataFrame({
+        "Copy": [
+            f"""<button onclick="navigator.clipboard.writeText('{c}')">Copy</button>"""
+            for c in contracts
+        ]
+    })
+    return copy_table
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
     options_data = fetch_put_options(ticker_symbol)
@@ -75,12 +77,17 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
         # Calculate max loss columns
         puts = calculate_max_loss(stock_price, puts)
 
-        # Make only Contract column clickable
-        puts['Contract'] = puts['Contract'].apply(make_clickable_contract)
+        # Make a second table with copy buttons
+        copy_table = build_copy_table(puts["Contract"])
 
-        # Convert to HTML and keep formatting
-        st.subheader(f"Options Expiring: {exp}")
-        st.write(puts.to_html(escape=False, index=False), unsafe_allow_html=True)
+        # Align side-by-side
+        col1, col2 = st.columns([4,1])
+        with col1:
+            st.subheader(f"Options Expiring: {exp}")
+            st.dataframe(puts, use_container_width=True)
+        with col2:
+            st.markdown("<br><br>", unsafe_allow_html=True)  # add spacing
+            st.write(copy_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
 def main():
     st.title("Married Put Strategy Calculator")
