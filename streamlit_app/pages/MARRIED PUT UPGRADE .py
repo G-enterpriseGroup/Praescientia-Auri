@@ -34,22 +34,18 @@ def calculate_max_loss(stock_price, options_table):
         lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Last)']:.2f})",
         axis=1
     )
+
     return options_table
 
-def fetch_put_options(ticker_symbol):
-    ticker = yf.Ticker(ticker_symbol)
-    expiration_dates = ticker.options
-    options_data = {}
+def calculate_trading_days_left(expiration_date):
+    """
+    Calculate the total number of days left until the expiration date.
+    """
+    today = datetime.today()
+    expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
+    return (expiration_date - today).days
 
-    for exp in expiration_dates:
-        opt = ticker.option_chain(exp)
-        puts = opt.puts.copy()
-        puts['expirationDate'] = exp
-        options_data[exp] = puts
-
-    return options_data
-
-# Build a copy button table (aligned with contracts)
+# Build a copy-button table aligned with contracts
 def build_copy_table(contracts):
     copy_table = pd.DataFrame({
         "Copy": [
@@ -60,41 +56,62 @@ def build_copy_table(contracts):
     return copy_table
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
-    options_data = fetch_put_options(ticker_symbol)
+    try:
+        # Fetch Ticker object
+        ticker = yf.Ticker(ticker_symbol)
 
-    for exp, puts in options_data.items():
-        puts = puts[['contractSymbol', 'lastPrice', 'bid', 'ask', 'strike', 'volume', 'openInterest']]
-        puts.rename(columns={
-            'contractSymbol': 'Contract',
-            'lastPrice': 'Last Price',
-            'bid': 'Bid',
-            'ask': 'Ask',
-            'strike': 'Strike',
-            'volume': 'Volume',
-            'openInterest': 'Open Interest'
-        }, inplace=True)
+        # Fetch available expiration dates
+        expiration_dates = ticker.options
+        if not expiration_dates:
+            st.error(f"No options data available for ticker {ticker_symbol}.")
+            return
 
-        # Calculate max loss columns
-        puts = calculate_max_loss(stock_price, puts)
+        all_data = pd.DataFrame()
 
-        # Make a second table with copy buttons
-        copy_table = build_copy_table(puts["Contract"])
+        for chosen_date in expiration_dates:
+            trading_days_left = calculate_trading_days_left(chosen_date)
+            st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
 
-        # Align side-by-side
-        col1, col2 = st.columns([4,1])
-        with col1:
-            st.subheader(f"Options Expiring: {exp}")
-            st.dataframe(puts, use_container_width=True)
-        with col2:
-            st.markdown("<br><br>", unsafe_allow_html=True)  # add spacing
-            st.write(copy_table.to_html(escape=False, index=False), unsafe_allow_html=True)
+            # Fetch put options for the current expiration date
+            options_chain = ticker.option_chain(chosen_date)
+            puts = options_chain.puts
+
+            if puts.empty:
+                st.warning(f"No puts available for expiration date {chosen_date}.")
+                continue
+
+            # Prepare put options table
+            puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
+            puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
+            puts_table["Expiration Date"] = chosen_date
+
+            # Calculate max loss for each option
+            puts_table = calculate_max_loss(stock_price, puts_table)
+
+            # Build copy button table aligned with contracts
+            copy_table = build_copy_table(puts_table["Contract"])
+
+            # Display side by side
+            col1, col2 = st.columns([5,1])
+            with col1:
+                st.dataframe(puts_table, use_container_width=True)
+            with col2:
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                st.write(copy_table.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            all_data = pd.concat([all_data, puts_table], ignore_index=True)
+
+        return all_data
+
+    except Exception as e:
+        st.error(f"Error fetching data for {ticker_symbol}: {e}")
+        return pd.DataFrame()
 
 def main():
     st.title("Married Put Strategy Calculator")
 
     ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
 
-    # Display the long name of the ticker symbol
     if ticker_symbol:
         try:
             ticker = yf.Ticker(ticker_symbol)
@@ -107,7 +124,6 @@ def main():
         st.warning("Please enter a valid ticker symbol.")
         return
 
-    # Automatically fetch the current stock price
     try:
         ticker = yf.Ticker(ticker_symbol)
         stock_info = ticker.history(period="1d")
@@ -115,7 +131,6 @@ def main():
     except Exception:
         current_price = 0.0
 
-    # Input for purchase price per share with default value
     stock_price = st.number_input(
         "Enter the purchase price per share of the stock:",
         min_value=0.0,
@@ -126,7 +141,6 @@ def main():
         st.warning("Please enter a valid stock price.")
         return
 
-    # Fetch and display options data
     if st.button("Fetch Options Data"):
         display_put_options_all_dates(ticker_symbol, stock_price)
 
