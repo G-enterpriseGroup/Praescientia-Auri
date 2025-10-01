@@ -15,7 +15,7 @@ def calculate_max_loss(stock_price, options_table):
     Calculate Max Loss for each option using both Ask Price and Last Price:
     Max Loss = (Strike Price × 100) - (Cost of Stock + Cost of Put)
     """
-    # Perform calculations using the Ask Price
+    # Ask-based
     options_table['Cost of Put (Ask)'] = options_table['Ask'] * NUMBER_OF_SHARES
     options_table['Max Loss (Ask)'] = (
         (options_table['Strike'] * NUMBER_OF_SHARES) -
@@ -26,7 +26,7 @@ def calculate_max_loss(stock_price, options_table):
         axis=1
     )
 
-    # Perform calculations using the Last Price
+    # Last-based
     options_table['Cost of Put (Last)'] = options_table['Last Price'] * NUMBER_OF_SHARES
     options_table['Max Loss (Last)'] = (
         (options_table['Strike'] * NUMBER_OF_SHARES) -
@@ -36,7 +36,6 @@ def calculate_max_loss(stock_price, options_table):
         lambda row: f"({row['Strike']:.2f} × {NUMBER_OF_SHARES}) - ({stock_price * NUMBER_OF_SHARES:.2f} + {row['Cost of Put (Last)']:.2f})",
         axis=1
     )
-
     return options_table
 
 def calculate_trading_days_left(expiration_date):
@@ -47,12 +46,11 @@ def calculate_trading_days_left(expiration_date):
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
-# --- Copy-to-clipboard plumbing (tiny helper) ---
+# ---------- Helper: tiny clipboard bridge (used by both modes) ----------
 def _queue_copy(text: str):
     st.session_state["_copy_text"] = text
 
 def _flush_copy_js():
-    # If a copy was queued by a button, emit client-side JS once to write to clipboard.
     txt = st.session_state.pop("_copy_text", None)
     if txt is not None:
         components.html(
@@ -61,27 +59,41 @@ def _flush_copy_js():
         )
         st.toast(f"Copied: {txt}")
 
+# ---------- Fallback mini copy list (only shown if data_editor ButtonColumn unavailable) ----------
+def render_contract_copy_panel(puts_table, exp_key: str):
+    st.caption("Quick copy (contract symbols):")
+    for i, c in enumerate(puts_table["Contract"].astype(str).tolist()):
+        cols = st.columns([1, 0.12])
+        cols[0].write(c)
+        if cols[1].button("Copy", key=f"copy_{exp_key}_{i}"):
+            _queue_copy(c)
+    _flush_copy_js()
+
+def _has_button_column():
+    # Detect availability of ButtonColumn in this Streamlit version
+    try:
+        _ = st.column_config.ButtonColumn
+        return True
+    except Exception:
+        return False
+
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
-        # Fetch Ticker object
         ticker = yf.Ticker(ticker_symbol)
-
-        # Fetch available expiration dates
         expiration_dates = ticker.options
         if not expiration_dates:
             st.error(f"No options data available for ticker {ticker_symbol}.")
             return
 
         all_data = pd.DataFrame()
+        can_inline_copy = _has_button_column()
 
         for chosen_date in expiration_dates:
             trading_days_left = calculate_trading_days_left(chosen_date)
             st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
 
-            # Fetch put options for the current expiration date
             options_chain = ticker.option_chain(chosen_date)
             puts = options_chain.puts
-
             if puts.empty:
                 st.warning(f"No puts available for expiration date {chosen_date}.")
                 continue
@@ -98,50 +110,53 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 "ask": "Ask",
                 "volume": "Volume",
                 "openInterest": "Open Interest",
-                "impliedVolatility": "Implied Volatility",
+                "impliedVolatility": "Implied Volatility"
             })
             puts_table["Expiration Date"] = chosen_date
 
-            # Calculate max loss for each option
+            # Calculate max loss
             puts_table = calculate_max_loss(stock_price, puts_table)
 
-            # Append data to main DataFrame
+            # Append
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
-            # ---------- MINIMAL CHANGE START ----------
-            # We render with st.data_editor to allow a per-row ButtonColumn that sits next to Contract.
-            # Create a shallow display copy so we can add a "Copy" button column.
-            display_cols = [
-                "Contract", "Copy", "Strike", "Last Price", "Bid", "Ask",
-                "Volume", "Open Interest", "Implied Volatility",
-                "Expiration Date", "Cost of Put (Ask)", "Max Loss (Ask)", "Max Loss Calc (Ask)",
-                "Cost of Put (Last)", "Max Loss (Last)", "Max Loss Calc (Last)"
-            ]
-            display_df = puts_table.copy()
-            # The "Copy" column holds the same contract text; the ButtonColumn uses the cell value.
-            display_df.insert(1, "Copy", display_df["Contract"])
+            # ----- Render table with inline Copy button in col 1 (if supported) -----
+            if can_inline_copy:
+                display_cols = [
+                    "Contract", "Copy", "Strike", "Last Price", "Bid", "Ask",
+                    "Volume", "Open Interest", "Implied Volatility",
+                    "Expiration Date", "Cost of Put (Ask)", "Max Loss (Ask)", "Max Loss Calc (Ask)",
+                    "Cost of Put (Last)", "Max Loss (Last)", "Max Loss Calc (Last)"
+                ]
+                display_df = puts_table.copy()
+                # Duplicate contract into a column that will host the button
+                display_df.insert(1, "Copy", display_df["Contract"])
 
-            edited = st.data_editor(
-                display_df[display_cols],
-                hide_index=True,
-                disabled=True,  # keep read-only look/behavior
-                use_container_width=True,
-                column_config={
-                    "Copy": st.column_config.ButtonColumn(
-                        "Copy",
-                        help="Copy contract symbol",
-                        width="small",
-                        on_click=_queue_copy,   # server-side callback
-                        args=None,              # value from the cell is passed automatically
-                    ),
-                },
-            )
-            # If any copy button was pressed during this run, push text to clipboard once:
-            _flush_copy_js()
-            # ---------- MINIMAL CHANGE END ----------
+                st.data_editor(
+                    display_df[display_cols],
+                    hide_index=True,
+                    disabled=True,               # keeps it read-only like dataframe
+                    use_container_width=True,
+                    column_config={
+                        "Copy": st.column_config.ButtonColumn(
+                            "Copy",
+                            help="Copy contract symbol",
+                            width="small",
+                            on_click=_queue_copy,   # cell value passed automatically
+                        ),
+                    },
+                    key=f"editor_{chosen_date}",
+                )
+                _flush_copy_js()
+            else:
+                # Keep your original st.dataframe look, then add a tiny copy panel under it
+                styled_table = puts_table.style.highlight_max(
+                    subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow"
+                )
+                st.dataframe(styled_table, use_container_width=True)
+                render_contract_copy_panel(puts_table, exp_key=chosen_date)
 
         if not all_data.empty:
-            # Allow downloading the complete table as a CSV file
             csv = all_data.to_csv(index=False)
             st.download_button(
                 label="Download All Expiration Data as CSV",
@@ -158,10 +173,8 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 def main():
     st.title("Options Analysis with Max Loss Calculation")
 
-    # Input for ticker symbol
     ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
 
-    # Display the long name of the ticker symbol
     if ticker_symbol:
         try:
             ticker = yf.Ticker(ticker_symbol)
@@ -174,7 +187,7 @@ def main():
         st.warning("Please enter a valid ticker symbol.")
         return
 
-    # Automatically fetch the current stock price
+    # Current price default
     try:
         ticker = yf.Ticker(ticker_symbol)
         stock_info = ticker.history(period="1d")
@@ -182,7 +195,6 @@ def main():
     except Exception:
         current_price = 0.0
 
-    # Input for purchase price per share with default value
     stock_price = st.number_input(
         "Enter the purchase price per share of the stock:",
         min_value=0.0,
@@ -193,7 +205,6 @@ def main():
         st.warning("Please enter a valid stock price.")
         return
 
-    # Fetch and display options data
     if st.button("Fetch Options Data"):
         display_put_options_all_dates(ticker_symbol, stock_price)
 
