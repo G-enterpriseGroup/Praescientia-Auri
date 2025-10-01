@@ -36,26 +36,6 @@ def calculate_trading_days_left(expiration_date):
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
-def contract_with_copy_button(contract_id: str, btn_id: str) -> str:
-    return f"""
-    <div style='display:flex; align-items:center; gap:6px;'>
-      <span>{contract_id}</span>
-      <button id='{btn_id}' title='Copy' style='
-        background:#eee;
-        border:1px solid #ccc;
-        border-radius:4px;
-        font-size:11px;
-        padding:2px 5px;
-        cursor:pointer;'>📋</button>
-      <script>
-        const btn = document.getElementById('{btn_id}');
-        if (btn) {{
-            btn.onclick = () => navigator.clipboard.writeText("{contract_id}");
-        }}
-      </script>
-    </div>
-    """
-
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
         ticker = yf.Ticker(ticker_symbol)
@@ -77,33 +57,32 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 st.warning(f"No puts available for expiration date {chosen_date}.")
                 continue
 
-            puts_table = puts[
-                ["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]
-            ].copy()
-
-            puts_table.columns = [
-                "Contract",
-                "Strike",
-                "Last Price",
-                "Bid",
-                "Ask",
-                "Volume",
-                "Open Interest",
-                "Implied Volatility"
-            ]
+            puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]].copy()
+            puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
             puts_table["Expiration Date"] = chosen_date
+
             puts_table = calculate_max_loss(stock_price, puts_table)
+
+            # ✅ MINIMAL FIX: Add copy button inside Contract cell
+            def add_copy_button(contract):
+                btn_id = f"btn_{contract}"
+                return f'''
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span>{contract}</span>
+                        <button id="{btn_id}" style="font-size:12px;padding:2px 5px;border:1px solid #ccc;border-radius:4px;cursor:pointer">📋</button>
+                        <script>
+                            const btn = document.getElementById("{btn_id}");
+                            if (btn) btn.onclick = () => navigator.clipboard.writeText("{contract}");
+                        </script>
+                    </div>
+                '''
+
+            puts_table["Contract"] = puts_table["Contract"].apply(lambda c: add_copy_button(c))
+
+            # 🔒 Use HTML-safe display to embed buttons inline
+            st.write(puts_table.to_html(escape=False, index=False), unsafe_allow_html=True)
+
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
-
-            # ---- Replace "Contract" column values with HTML buttons inside ----
-            puts_table["Contract"] = puts_table["Contract"].apply(
-                lambda val: contract_with_copy_button(val, f"btn_{val}")
-            )
-
-            st.write(
-                puts_table.to_html(escape=False, index=False),
-                unsafe_allow_html=True
-            )
 
         if not all_data.empty:
             csv = all_data.to_csv(index=False)
@@ -111,11 +90,10 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 label="Download All Expiration Data as CSV",
                 data=csv,
                 file_name=f"{ticker_symbol}_put_options.csv",
-                mime="text/csv"
+                mime="text/csv",
             )
         else:
             st.info("No data to download.")
-
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
@@ -124,20 +102,14 @@ def main():
 
     ticker_symbol = st.text_input("Enter Ticker Symbol", value="SPOK").strip().upper()
     if not ticker_symbol:
-        st.stop()
+        return
 
     try:
         current_price = yf.Ticker(ticker_symbol).history(period="1d")["Close"].iloc[-1]
     except Exception:
         current_price = 0.0
 
-    stock_price = st.number_input(
-        "Enter Current Stock Price",
-        min_value=0.0,
-        value=float(current_price),
-        step=0.01
-    )
-
+    stock_price = st.number_input("Enter Current Stock Price", min_value=0.0, value=float(current_price), step=0.01)
     if stock_price <= 0:
         st.warning("Please enter a valid stock price.")
         return
