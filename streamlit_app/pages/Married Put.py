@@ -28,7 +28,7 @@ def calculate_max_loss(stock_price, options_table):
         - (stock_price * number_of_shares + options_table["Cost of Put (Last)"])
     ).round(6)
 
-    # Keep your original column order
+    # Preserve your column order
     options_table = options_table[
         [
             "Contract",
@@ -53,32 +53,57 @@ def calculate_trading_days_left(expiration_date):
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
-# === Minimal, compact copy-button rail (reverted + tighter spacing) ===
-def copy_button_col(contracts):
+# ------- NEW: compact, perfectly aligned “Copy” table (one column) ----------
+def copy_table_html(contracts, row_px=30, header_px=34, border_radius=12):
     """
-    Render one compact clipboard button per option row, left-aligned.
-    Tight spacing to better match dataframe row height.
+    Returns HTML for a single-column table with one row per contract,
+    each row containing a clipboard button that copies that contract.
+    Heights are fixed so rows align visually with the options table.
     """
-    # very small vertical footprint per button
-    BTN_H = 26  # reduced height
+    # Build rows
+    rows_html = []
     for i, c in enumerate(contracts):
-        btn_id = f"copy_btn_{i}"
-        components.html(
-            f"""
-            <div style="height:{BTN_H}px; display:flex; align-items:center;">
-              <button id="{btn_id}" title="Copy contract"
-                style="cursor:pointer; border:1px solid #d0d0d0; background:#f2f2f2;
-                       padding:2px 6px; border-radius:6px; font-size:12px; line-height:1;">
-                📋
-              </button>
-              <script>
-                const el = document.getElementById("{btn_id}");
-                if (el) el.onclick = () => navigator.clipboard.writeText("{c}");
-              </script>
-            </div>
-            """,
-            height=BTN_H,
-        )
+        btn_id = f"cp_{i}"
+        rows_html.append(f"""
+        <tr style="height:{row_px}px">
+          <td style="padding:0 6px;">
+            <button id="{btn_id}" title="Copy"
+              style="cursor:pointer; border:1px solid #3a3a3a; background:#222;
+                     padding:2px 6px; border-radius:8px; font-size:12px;">
+              📋
+            </button>
+            <script>
+              (function(){{
+                const b=document.getElementById("{btn_id}");
+                if (b) b.onclick = () => navigator.clipboard.writeText("{c}");
+              }})();
+            </script>
+          </td>
+        </tr>
+        """)
+
+    table_html = f"""
+    <div style="display:inline-block;">
+      <table style="
+          border-collapse:separate;
+          border-spacing:0;
+          background:#0f1116;
+          color:#e6e6e6;
+          border:1px solid #2a2a2a;
+          border-radius:{border_radius}px;
+          overflow:hidden;">
+        <thead>
+          <tr style="height:{header_px}px; background:#171a21; border-bottom:1px solid #2a2a2a;">
+            <th style="font-weight:600; padding:0 8px; text-align:center;">Copy</th>
+          </tr>
+        </thead>
+        <tbody>
+          {''.join(rows_html)}
+        </tbody>
+      </table>
+    </div>
+    """
+    return table_html
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
@@ -119,11 +144,9 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
             # Calculate max loss for each option
             puts_table = calculate_max_loss(stock_price, puts_table)
-
-            # Append to full dataset
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
-            # Keep your styling the same
+            # Your existing styling
             styled_table = (
                 puts_table.style
                 .format({
@@ -145,12 +168,16 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 .highlight_between(subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow")
             )
 
-            # Two-column layout: left = compact buttons, right = your table
-            left, right = st.columns([0.05, 0.95])
+            # --------- Layout: left = new one-column "Copy" table, right = your table ----------
+            left, right = st.columns([0.08, 0.92])
             with left:
-                copy_button_col(puts_table["Contract"].tolist())
+                # Row/ header heights tuned to match Streamlit table defaults; tweak if needed.
+                components.html(copy_table_html(puts_table["Contract"].tolist(),
+                                                row_px=30, header_px=34, border_radius=12),
+                                height=34 + 30*len(puts_table), scrolling=False)
             with right:
                 st.dataframe(styled_table, use_container_width=True)
+            # ------------------------------------------------------------------------------------
 
         if not all_data.empty:
             csv = all_data.to_csv(index=False)
