@@ -45,22 +45,9 @@ def calculate_trading_days_left(expiration_date):
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
-# Build a copy-button table aligned with contracts
-def build_copy_table(contracts):
-    copy_table = pd.DataFrame({
-        "Copy": [
-            f"""<button onclick="navigator.clipboard.writeText('{c}')">Copy</button>"""
-            for c in contracts
-        ]
-    })
-    return copy_table
-
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
-        # Fetch Ticker object
         ticker = yf.Ticker(ticker_symbol)
-
-        # Fetch available expiration dates
         expiration_dates = ticker.options
         if not expiration_dates:
             st.error(f"No options data available for ticker {ticker_symbol}.")
@@ -72,7 +59,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             trading_days_left = calculate_trading_days_left(chosen_date)
             st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
 
-            # Fetch put options for the current expiration date
+            # Fetch put options
             options_chain = ticker.option_chain(chosen_date)
             puts = options_chain.puts
 
@@ -80,35 +67,45 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 st.warning(f"No puts available for expiration date {chosen_date}.")
                 continue
 
-            # Prepare put options table
+            # Prepare full put options table (for calculations)
             puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
             puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
             puts_table["Expiration Date"] = chosen_date
 
-            # Calculate max loss for each option
+            # Run max loss calculation
             puts_table = calculate_max_loss(stock_price, puts_table)
 
-            # Build copy button table aligned with contracts
-            copy_table = build_copy_table(puts_table["Contract"])
+            # Create a "display" version that hides unwanted columns
+            display_table = puts_table.drop(
+                columns=["Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility", "Expiration Date"]
+            )
 
-            # Display side by side
-            col1, col2 = st.columns([5,1])
-            with col1:
-                st.dataframe(puts_table, use_container_width=True)
-            with col2:
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.write(copy_table.to_html(escape=False, index=False), unsafe_allow_html=True)
-
+            # Append to full dataset (keep all for CSV)
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
-        return all_data
+            # Highlight only the Max Loss columns
+            styled_table = display_table.style.highlight_max(
+                subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow"
+            )
+            st.dataframe(styled_table)
+
+        if not all_data.empty:
+            # Download button still includes everything
+            csv = all_data.to_csv(index=False)
+            st.download_button(
+                label="Download All Expiration Data as CSV",
+                data=csv,
+                file_name=f"{ticker_symbol}_put_options.csv",
+                mime="text/csv",
+            )
+        else:
+            st.warning(f"No put options data to display or download for {ticker_symbol}.")
 
     except Exception as e:
-        st.error(f"Error fetching data for {ticker_symbol}: {e}")
-        return pd.DataFrame()
+        st.error(f"An error occurred: {e}")
 
 def main():
-    st.title("Married Put Strategy Calculator")
+    st.title("Options Analysis with Max Loss Calculation")
 
     ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
 
