@@ -6,6 +6,12 @@ from datetime import datetime, timedelta
 # Set Streamlit page configuration
 st.set_page_config(page_title="Married Put", layout="wide")
 
+def format_number(x):
+    """Format numbers to remove unnecessary trailing zeros while keeping up to 2 decimals."""
+    if isinstance(x, (int, float)):
+        return f"{x:.2f}".rstrip('0').rstrip('.')  # Remove trailing zeros and dot
+    return x
+
 def calculate_max_loss(stock_price, options_table):
     """
     Calculate Max Loss for each option using both Ask Price and Last Price:
@@ -13,33 +19,31 @@ def calculate_max_loss(stock_price, options_table):
     """
     number_of_shares = 100  # Standard contract size
 
-    # Round all numeric columns first for cleaner output
-    numeric_cols = ["Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
-    for col in numeric_cols:
-        if col in options_table.columns:
-            options_table[col] = options_table[col].round(2)
-
     # Perform calculations using the Ask Price
-    options_table['Cost of Put (Ask)'] = (options_table['Ask'] * number_of_shares).round(2)
+    options_table['Cost of Put (Ask)'] = options_table['Ask'] * number_of_shares
     options_table['Max Loss (Ask)'] = (
         (options_table['Strike'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['Cost of Put (Ask)'])
-    ).round(2)
+    )
     options_table['Max Loss Calc (Ask)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Ask)']:.2f})",
+        lambda row: f"({format_number(row['Strike'])} × {number_of_shares}) - ({format_number(stock_price * number_of_shares)} + {format_number(row['Cost of Put (Ask)'])})",
         axis=1
     )
 
     # Perform calculations using the Last Price
-    options_table['Cost of Put (Last)'] = (options_table['Last Price'] * number_of_shares).round(2)
+    options_table['Cost of Put (Last)'] = options_table['Last Price'] * number_of_shares
     options_table['Max Loss (Last)'] = (
         (options_table['Strike'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['Cost of Put (Last)'])
-    ).round(2)
+    )
     options_table['Max Loss Calc (Last)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Last)']:.2f})",
+        lambda row: f"({format_number(row['Strike'])} × {number_of_shares}) - ({format_number(stock_price * number_of_shares)} + {format_number(row['Cost of Put (Last)'])})",
         axis=1
     )
+
+    # Apply rounding and formatting to 2 decimals (no trailing zeros)
+    for col in options_table.select_dtypes(include=['float', 'int']).columns:
+        options_table[col] = options_table[col].round(2)
 
     return options_table
 
@@ -87,8 +91,8 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                          "Expiration Date", "Contract", "Max Loss Calc (Ask)", "Max Loss Calc (Last)"]
             )
 
-            # Round all remaining numeric columns for display
-            display_table = display_table.round(2)
+            # Apply clean formatting (remove trailing zeros)
+            display_table = display_table.map(format_number)
 
             # Append to full dataset (keep all for CSV)
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
