@@ -77,7 +77,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
             # Create a "display" version that hides unwanted columns
             display_table = puts_table.drop(
-                columns=["Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility", "Expiration Date"]
+                columns=["Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility", "Expiration Date", "Contract","Max Loss Calc (Ask)","Max Loss Calc (Last)"]
             )
 
             # Append to full dataset (keep all for CSV)
