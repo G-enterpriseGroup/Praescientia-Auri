@@ -14,24 +14,26 @@ def calculate_max_loss(stock_price, options_table):
     number_of_shares = 100  # Standard contract size
 
     # Perform calculations using the Ask Price
-    options_table['CPA'] = (options_table['ASK'] * number_of_shares).round(2)
+    options_table['CPA'] = (options_table['ASK'] * number_of_shares)
     options_table['MLA'] = (
         (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPA'])
-    ).round(2)
+    )
+    # Show NO decimals in the calc text
     options_table['MLC-A'] = options_table.apply(
-        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
+        lambda row: f"({row['STK']:.0f} × {number_of_shares}) - ({stock_price * number_of_shares:.0f} + {row['CPA']:.0f})",
         axis=1
     )
 
     # Perform calculations using the Last Price
-    options_table['CPL'] = (options_table['LP'] * number_of_shares).round(2)
+    options_table['CPL'] = (options_table['LP'] * number_of_shares)
     options_table['MLL'] = (
         (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPL'])
-    ).round(2)
+    )
+    # Show NO decimals in the calc text
     options_table['MLC-L'] = options_table.apply(
-        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
+        lambda row: f"({row['STK']:.0f} × {number_of_shares}) - ({stock_price * number_of_shares:.0f} + {row['CPL']:.0f})",
         axis=1
     )
 
@@ -83,14 +85,19 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             # Append to full dataset (keep all for CSV)
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
-            # Highlight only the Max Loss columns
-            styled_table = display_table.style.highlight_max(
-                subset=["MLA", "MLL"], color="yellow"
+            # Format displayed numeric columns with NO decimals
+            num_cols = [c for c in ["STK", "CPA", "MLA", "CPL", "MLL"] if c in display_table.columns]
+            styled_table = (
+                display_table
+                .style
+                .format({col: "{:,.0f}".format for col in num_cols})  # no decimals
+                .highlight_max(subset=["MLA", "MLL"], color="yellow")
             )
+
             st.dataframe(styled_table)
 
         if not all_data.empty:
-            # Download button still includes everything
+            # Download button still includes everything (raw values)
             csv = all_data.to_csv(index=False)
             st.download_button(
                 label="Download All Expiration Data as CSV",
