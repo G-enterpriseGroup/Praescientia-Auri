@@ -14,22 +14,22 @@ def calculate_max_loss(stock_price, options_table):
     number_of_shares = 100  # Standard contract size
 
     # Perform calculations using the Ask Price
-    options_table['CPA'] = options_table['ASK'] * number_of_shares
+    options_table['CPA'] = (options_table['ASK'] * number_of_shares).round(2)
     options_table['MLA'] = (
         (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPA'])
-    )
+    ).round(2)
     options_table['MLC-A'] = options_table.apply(
         lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
         axis=1
     )
 
     # Perform calculations using the Last Price
-    options_table['CPL'] = options_table['LP'] * number_of_shares
+    options_table['CPL'] = (options_table['LP'] * number_of_shares).round(2)
     options_table['MLL'] = (
         (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPL'])
-    )
+    ).round(2)
     options_table['MLC-L'] = options_table.apply(
         lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
         axis=1
@@ -75,7 +75,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             # Run max loss calculation
             puts_table = calculate_max_loss(stock_price, puts_table)
 
-            # Create a "display" version that hides unwanted columns
+            # Create a "display" version that hides unwanted columns (Contract hidden)
             display_table = puts_table.drop(
                 columns=["CN", "LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
             )
@@ -143,3 +143,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
