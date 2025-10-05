@@ -19,7 +19,7 @@ def calculate_max_loss(stock_price, options_table):
         (options_table['Strike'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPA'])
     )
-    options_table['MLC-A'] = options_table.apply(
+    options_table['MLC (Ask)'] = options_table.apply(
         lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
         axis=1
     )
@@ -30,7 +30,7 @@ def calculate_max_loss(stock_price, options_table):
         (options_table['Strike'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPL'])
     )
-    options_table['MLC-L'] = options_table.apply(
+    options_table['MLC (Last)'] = options_table.apply(
         lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
         axis=1
     )
@@ -38,6 +38,9 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 def calculate_trading_days_left(expiration_date):
+    """
+    Calculate the total number of days left until the expiration date.
+    """
     today = datetime.today()
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
@@ -56,6 +59,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             trading_days_left = calculate_trading_days_left(chosen_date)
             st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
 
+            # Fetch put options
             options_chain = ticker.option_chain(chosen_date)
             puts = options_chain.puts
 
@@ -63,24 +67,30 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
                 st.warning(f"No puts available for expiration date {chosen_date}.")
                 continue
 
+            # Prepare full put options table (for calculations)
             puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
             puts_table.columns = ["CN", "STK", "LP", "BID", "ASK", "VOL", "OI", "IV"]
             puts_table["EXP"] = chosen_date
 
+            # Run max loss calculation
             puts_table = calculate_max_loss(stock_price, puts_table)
 
+            # Create a "display" version that hides unwanted columns
             display_table = puts_table.drop(
                 columns=["LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
             )
 
+            # Append to full dataset (keep all for CSV)
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
+            # Highlight only the Max Loss columns
             styled_table = display_table.style.highlight_max(
                 subset=["MLA", "MLL"], color="yellow"
             )
             st.dataframe(styled_table)
 
         if not all_data.empty:
+            # Download button still includes everything
             csv = all_data.to_csv(index=False)
             st.download_button(
                 label="Download All Expiration Data as CSV",
