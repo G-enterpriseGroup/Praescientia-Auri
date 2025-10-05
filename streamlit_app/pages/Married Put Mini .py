@@ -30,9 +30,7 @@ def calculate_max_loss(stock_price, options_table):
     return options_table
 
 def calculate_trading_days_left(expiration_date):
-    """
-    Calculate the total number of days left until the expiration date.
-    """
+    """Calculate the total number of days left until the expiration date."""
     today = datetime.today()
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
@@ -71,6 +69,8 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             display_table = puts_table.drop(
                 columns=["CN", "LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
             )
+            # ---- ONLY ADDITION: remove the index so no extra first column ----
+            display_table = display_table.reset_index(drop=True)
 
             # Append to full dataset (keep all for CSV)
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
