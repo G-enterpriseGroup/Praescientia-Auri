@@ -9,29 +9,29 @@ st.set_page_config(page_title="Married Put", layout="wide")
 def calculate_max_loss(stock_price, options_table):
     """
     Calculate Max Loss for each option using both Ask Price and Last Price:
-    Max Loss = (Strike × 100) - (Cost of Stock + Cost of Put)
+    Max Loss = (Strike Price × 100) - (Cost of Stock + Cost of Put)
     """
     number_of_shares = 100  # Standard contract size
 
     # Perform calculations using the Ask Price
-    options_table['CPA'] = options_table['ASK'] * number_of_shares
+    options_table['CPA'] = options_table['Ask'] * number_of_shares
     options_table['MLA'] = (
-        (options_table['STK'] * number_of_shares) -
+        (options_table['Strike'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPA'])
     )
     options_table['MLC-A'] = options_table.apply(
-        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
+        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
         axis=1
     )
 
     # Perform calculations using the Last Price
-    options_table['CPL'] = options_table['LP'] * number_of_shares
+    options_table['CPL'] = options_table['Last Price'] * number_of_shares
     options_table['MLL'] = (
-        (options_table['STK'] * number_of_shares) -
+        (options_table['Strike'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPL'])
     )
     options_table['MLC-L'] = options_table.apply(
-        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
+        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
         axis=1
     )
 
@@ -54,27 +54,25 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
         for chosen_date in expiration_dates:
             trading_days_left = calculate_trading_days_left(chosen_date)
-            st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} days left)")
+            st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
 
             options_chain = ticker.option_chain(chosen_date)
             puts = options_chain.puts
 
             if puts.empty:
-                st.warning(f"No puts available for {chosen_date}.")
+                st.warning(f"No puts available for expiration date {chosen_date}.")
                 continue
 
-            # Prepare the table with acronyms
             puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
             puts_table.columns = ["CN", "STK", "LP", "BID", "ASK", "VOL", "OI", "IV"]
             puts_table["EXP"] = chosen_date
 
-            # Run max loss calculation
             puts_table = calculate_max_loss(stock_price, puts_table)
 
-            # Drop unwanted columns for cleaner display
-            display_table = puts_table.drop(columns=["LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"])
+            display_table = puts_table.drop(
+                columns=["LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
+            )
 
-            # Append all data for CSV export
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
             styled_table = display_table.style.highlight_max(
@@ -121,7 +119,7 @@ def main():
         current_price = 0.0
 
     stock_price = st.number_input(
-        "Enter the purchase price per share:",
+        "Enter the purchase price per share of the stock:",
         min_value=0.0,
         value=float(current_price),
         step=0.01
