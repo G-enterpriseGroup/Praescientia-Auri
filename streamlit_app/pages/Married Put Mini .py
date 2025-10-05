@@ -14,24 +14,24 @@ def calculate_max_loss(stock_price, options_table):
     number_of_shares = 100  # Standard contract size
 
     # Perform calculations using the Ask Price
-    options_table['CPA'] = options_table['Ask'] * number_of_shares
+    options_table['CPA'] = options_table['ASK'] * number_of_shares
     options_table['MLA'] = (
-        (options_table['Strike'] * number_of_shares) -
+        (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPA'])
     )
     options_table['MLC-A'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
+        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
         axis=1
     )
 
     # Perform calculations using the Last Price
-    options_table['CPL'] = options_table['Last Price'] * number_of_shares
+    options_table['CPL'] = options_table['LP'] * number_of_shares
     options_table['MLL'] = (
-        (options_table['Strike'] * number_of_shares) -
+        (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPL'])
     )
     options_table['MLC-L'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
+        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
         axis=1
     )
 
@@ -77,7 +77,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
             # Create a "display" version that hides unwanted columns
             display_table = puts_table.drop(
-                columns=["LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
+                columns=["CN", "LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
             )
 
             # Append to full dataset (keep all for CSV)
