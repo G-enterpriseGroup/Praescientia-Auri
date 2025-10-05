@@ -3,116 +3,91 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
-# --- Page Configuration ---
+# Set Streamlit page configuration
 st.set_page_config(page_title="Married Put", layout="wide")
 
-# --- Core Calculations ---
 def calculate_max_loss(stock_price, options_table):
-    """Calculate Max Loss for each option using both Ask Price and Last Price."""
+    """
+    Calculate Max Loss for each option using both Ask Price and Last Price:
+    Max Loss = (Strike × 100) - (Cost of Stock + Cost of Put)
+    """
     number_of_shares = 100  # Standard contract size
 
-    # Ask Price Calculations
-    options_table['Cost of Put (Ask)'] = options_table['Ask'] * number_of_shares
-    options_table['Max Loss (Ask)'] = (
-        (options_table['Strike'] * number_of_shares)
-        - (stock_price * number_of_shares + options_table['Cost of Put (Ask)'])
+    # Perform calculations using the Ask Price
+    options_table['CPA'] = options_table['ASK'] * number_of_shares
+    options_table['MLA'] = (
+        (options_table['STK'] * number_of_shares) -
+        (stock_price * number_of_shares + options_table['CPA'])
     )
-    options_table['Max Loss Calc (Ask)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f}×{number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Ask)']:.2f})",
+    options_table['MLC-A'] = options_table.apply(
+        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
         axis=1
     )
 
-    # Last Price Calculations
-    options_table['Cost of Put (Last)'] = options_table['Last Price'] * number_of_shares
-    options_table['Max Loss (Last)'] = (
-        (options_table['Strike'] * number_of_shares)
-        - (stock_price * number_of_shares + options_table['Cost of Put (Last)'])
+    # Perform calculations using the Last Price
+    options_table['CPL'] = options_table['LP'] * number_of_shares
+    options_table['MLL'] = (
+        (options_table['STK'] * number_of_shares) -
+        (stock_price * number_of_shares + options_table['CPL'])
     )
-    options_table['Max Loss Calc (Last)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f}×{number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Last)']:.2f})",
+    options_table['MLC-L'] = options_table.apply(
+        lambda row: f"({row['STK']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
         axis=1
     )
 
     return options_table
 
 def calculate_trading_days_left(expiration_date):
-    """Calculate the total number of days left until expiration."""
     today = datetime.today()
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
-# --- Display Function ---
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
         ticker = yf.Ticker(ticker_symbol)
         expiration_dates = ticker.options
         if not expiration_dates:
-            st.error(f"No options data available for {ticker_symbol}.")
+            st.error(f"No options data available for ticker {ticker_symbol}.")
             return
 
         all_data = pd.DataFrame()
 
         for chosen_date in expiration_dates:
             trading_days_left = calculate_trading_days_left(chosen_date)
-            st.subheader(f"Expiration: {chosen_date} ({trading_days_left} days left)")
+            st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} days left)")
 
-            # Fetch put options
             options_chain = ticker.option_chain(chosen_date)
             puts = options_chain.puts
+
             if puts.empty:
                 st.warning(f"No puts available for {chosen_date}.")
                 continue
 
-            # Prepare core columns
-            puts_table = puts[[
-                "contractSymbol", "strike", "lastPrice", "bid", "ask",
-                "volume", "openInterest", "impliedVolatility"
-            ]]
-            puts_table.columns = [
-                "CN", "STK", "LP", "BID", "ASK", "VOL", "OI", "IV"
-            ]
+            # Prepare the table with acronyms
+            puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
+            puts_table.columns = ["CN", "STK", "LP", "BID", "ASK", "VOL", "OI", "IV"]
             puts_table["EXP"] = chosen_date
 
-            # Calculate Max Loss Columns
+            # Run max loss calculation
             puts_table = calculate_max_loss(stock_price, puts_table)
 
-            # --- Rename all columns with short acronyms ---
-            column_renames = {
-                "Cost of Put (Ask)": "PUT$A",
-                "Max Loss (Ask)": "MLA",
-                "Max Loss Calc (Ask)": "MLC-A",
-                "Cost of Put (Last)": "PUT$L",
-                "Max Loss (Last)": "MLL",
-                "Max Loss Calc (Last)": "MLC-L"
-            }
-            puts_table.rename(columns=column_renames, inplace=True)
+            # Drop unwanted columns for cleaner display
+            display_table = puts_table.drop(columns=["LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"])
 
-            # Prepare condensed view
-            display_table = puts_table.drop(
-                columns=["LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
-            )
-
+            # Append all data for CSV export
             all_data = pd.concat([all_data, puts_table], ignore_index=True)
 
-            # Apply simple highlighting and mobile-optimized display
-            styled_table = (
-                display_table.style
-                .highlight_max(subset=["MLA", "MLL"], color="#fffa99")
-                .set_table_styles([
-                    {"selector": "th", "props": [("font-size", "12px"), ("text-align", "center")]},
-                    {"selector": "td", "props": [("font-size", "12px"), ("text-align", "center"), ("white-space", "nowrap")]}
-                ])
+            styled_table = display_table.style.highlight_max(
+                subset=["MLA", "MLL"], color="yellow"
             )
+            st.dataframe(styled_table)
 
-            st.dataframe(styled_table, use_container_width=True, height=400)
-
-        # CSV download
         if not all_data.empty:
             csv = all_data.to_csv(index=False)
             st.download_button(
-                label="⬇️ Download All Expirations (CSV)",
+                label="Download All Expiration Data as CSV",
                 data=csv,
-                file_name=f"{ticker_symbol}_puts.csv",
+                file_name=f"{ticker_symbol}_put_options.csv",
                 mime="text/csv",
             )
         else:
@@ -121,27 +96,23 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
-# --- Main App ---
 def main():
-    st.title("📊 Married Put Analyzer (Compact View)")
+    st.title("Options Analysis with Max Loss Calculation")
 
-    ticker_symbol = st.text_input("Enter Ticker:", "").upper().strip()
+    ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
 
     if ticker_symbol:
         try:
             ticker = yf.Ticker(ticker_symbol)
             long_name = ticker.info.get("longName", "N/A")
-            dividend_yield = ticker.info.get("dividendYield", 0)
-            dividend_display = f"{dividend_yield*100:.2f}%" if dividend_yield else "N/A"
-            st.markdown(f"**{long_name}**  |  🏦 Dividend Yield: **{dividend_display}**")
+            st.write(f"**Company Name:** {long_name}")
         except Exception as e:
-            st.warning(f"Unable to fetch company info: {e}")
+            st.warning(f"Unable to fetch company name: {e}")
 
     if not ticker_symbol:
         st.warning("Please enter a valid ticker symbol.")
         return
 
-    # Fetch stock price
     try:
         ticker = yf.Ticker(ticker_symbol)
         stock_info = ticker.history(period="1d")
@@ -150,12 +121,11 @@ def main():
         current_price = 0.0
 
     stock_price = st.number_input(
-        "Enter your stock purchase price:",
+        "Enter the purchase price per share:",
         min_value=0.0,
         value=float(current_price),
         step=0.01
     )
-
     if stock_price <= 0:
         st.warning("Please enter a valid stock price.")
         return
