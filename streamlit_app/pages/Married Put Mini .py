@@ -1,3 +1,4 @@
+You said:
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -14,24 +15,24 @@ def calculate_max_loss(stock_price, options_table):
     number_of_shares = 100  # Standard contract size
 
     # Perform calculations using the Ask Price
-    options_table['CPA'] = options_table['Ask'] * number_of_shares
-    options_table['MLA'] = (
+    options_table['Cost of Put (Ask)'] = options_table['Ask'] * number_of_shares
+    options_table['Max Loss (Ask)'] = (
         (options_table['Strike'] * number_of_shares) -
-        (stock_price * number_of_shares + options_table['CPA'])
+        (stock_price * number_of_shares + options_table['Cost of Put (Ask)'])
     )
-    options_table['MLC (Ask)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPA']:.2f})",
+    options_table['Max Loss Calc (Ask)'] = options_table.apply(
+        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Ask)']:.2f})",
         axis=1
     )
 
     # Perform calculations using the Last Price
-    options_table['CPL'] = options_table['Last Price'] * number_of_shares
-    options_table['MLL'] = (
+    options_table['Cost of Put (Last)'] = options_table['Last Price'] * number_of_shares
+    options_table['Max Loss (Last)'] = (
         (options_table['Strike'] * number_of_shares) -
-        (stock_price * number_of_shares + options_table['CPL'])
+        (stock_price * number_of_shares + options_table['Cost of Put (Last)'])
     )
-    options_table['MLC (Last)'] = options_table.apply(
-        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['CPL']:.2f})",
+    options_table['Max Loss Calc (Last)'] = options_table.apply(
+        lambda row: f"({row['Strike']:.2f} × {number_of_shares}) - ({stock_price * number_of_shares:.2f} + {row['Cost of Put (Last)']:.2f})",
         axis=1
     )
 
@@ -69,15 +70,15 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
             # Prepare full put options table (for calculations)
             puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
-            puts_table.columns = ["CN", "STK", "LP", "BID", "ASK", "VOL", "OI", "IV"]
-            puts_table["EXP"] = chosen_date
+            puts_table.columns = ["Contract", "Strike", "Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility"]
+            puts_table["Expiration Date"] = chosen_date
 
             # Run max loss calculation
             puts_table = calculate_max_loss(stock_price, puts_table)
 
             # Create a "display" version that hides unwanted columns
             display_table = puts_table.drop(
-                columns=["LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
+                columns=["Last Price", "Bid", "Ask", "Volume", "Open Interest", "Implied Volatility", "Expiration Date"]
             )
 
             # Append to full dataset (keep all for CSV)
@@ -85,7 +86,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
             # Highlight only the Max Loss columns
             styled_table = display_table.style.highlight_max(
-                subset=["MLA", "MLL"], color="yellow"
+                subset=["Max Loss (Ask)", "Max Loss (Last)"], color="yellow"
             )
             st.dataframe(styled_table)
 
