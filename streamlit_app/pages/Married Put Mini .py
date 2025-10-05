@@ -19,22 +19,12 @@ def calculate_max_loss(stock_price, options_table):
         (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPA'])
     )
-    # Show NO decimals in the calc text
-    options_table['MLC-A'] = options_table.apply(
-        lambda row: f"({row['STK']:.0f} × {number_of_shares}) - ({stock_price * number_of_shares:.0f} + {row['CPA']:.0f})",
-        axis=1
-    )
 
     # Perform calculations using the Last Price
     options_table['CPL'] = (options_table['LP'] * number_of_shares)
     options_table['MLL'] = (
         (options_table['STK'] * number_of_shares) -
         (stock_price * number_of_shares + options_table['CPL'])
-    )
-    # Show NO decimals in the calc text
-    options_table['MLC-L'] = options_table.apply(
-        lambda row: f"({row['STK']:.0f} × {number_of_shares}) - ({stock_price * number_of_shares:.0f} + {row['CPL']:.0f})",
-        axis=1
     )
 
     return options_table
@@ -97,7 +87,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
             st.dataframe(styled_table)
 
         if not all_data.empty:
-            # Download button still includes everything (raw values)
+            # Download button still includes everything (without MLC columns)
             csv = all_data.to_csv(index=False)
             st.download_button(
                 label="Download All Expiration Data as CSV",
