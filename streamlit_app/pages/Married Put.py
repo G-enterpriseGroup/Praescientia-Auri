@@ -133,4 +133,39 @@ with row[1]:
     )
 
 # Dynamic tab title
-tab_title = f"{ticker_symbol} · Married Put" if ticker_symbol else "
+tab_title = f"{ticker_symbol} · Married Put" if ticker_symbol else "Married Put"
+set_tab_title(tab_title)
+
+# Company name
+if ticker_symbol:
+    try:
+        tkr = yf.Ticker(ticker_symbol)
+        long_name = tkr.info.get("longName", "N/A")
+        st.write(f"**Company Name:** {long_name}")
+    except Exception as e:
+        st.warning(f"Unable to fetch company name: {e}")
+else:
+    st.warning("Enter a valid ticker.")
+    st.stop()
+
+# Current price default
+try:
+    tkr = yf.Ticker(ticker_symbol)
+    hist = tkr.history(period="1d")
+    current_price = float(hist["Close"].iloc[-1]) if not hist.empty else 0.0
+except Exception:
+    current_price = 0.0
+
+stock_price = st.number_input(
+    "Purchase price per share",
+    min_value=0.0,
+    value=float(current_price),
+    step=0.01,
+    help="Default = latest close."
+)
+if stock_price <= 0:
+    st.warning("Enter a valid stock price.")
+    st.stop()
+
+if st.button("Fetch Options Data"):
+    display_put_options_all_dates(ticker_symbol, stock_price)
