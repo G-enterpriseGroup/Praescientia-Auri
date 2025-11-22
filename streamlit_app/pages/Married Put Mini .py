@@ -154,4 +154,153 @@ def calculate_days_left(expiration_date):
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
-        ticker = yf.Ticker(ticker
+        ticker = yf.Ticker(ticker_symbol)
+        expiration_dates = ticker.options
+        if not expiration_dates:
+            st.error(f"No options data available for ticker {ticker_symbol}.")
+            return
+
+        all_data = pd.DataFrame()
+
+        for chosen_date in expiration_dates:
+            days_left = calculate_days_left(chosen_date)
+            st.markdown(
+                f"### EXPIRATION: {chosen_date}  ·  {days_left} days left",
+            )
+
+            # Fetch put options
+            options_chain = ticker.option_chain(chosen_date)
+            puts = options_chain.puts
+
+            if puts.empty:
+                st.warning(f"No puts available for expiration date {chosen_date}.")
+                continue
+
+            # Prepare full put options table (for calculations)
+            puts_table = puts[[
+                "contractSymbol",
+                "strike",
+                "lastPrice",
+                "bid",
+                "ask",
+                "volume",
+                "openInterest",
+                "impliedVolatility"
+            ]]
+            puts_table.columns = ["CN", "STK", "LP", "BID", "ASK", "VOL", "OI", "IV"]
+            puts_table["EXP"] = chosen_date
+
+            # Run max loss calculation
+            puts_table = calculate_max_loss(stock_price, puts_table)
+
+            # Display version (hide contract + quote details)
+            display_table = puts_table.drop(
+                columns=["CN", "LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
+            )
+            display_table = display_table.reset_index(drop=True)
+
+            # Collect everything for CSV
+            all_data = pd.concat([all_data, puts_table], ignore_index=True)
+
+            # Format numeric columns with no decimals
+            num_cols = [c for c in ["STK", "CPA", "MLA", "CPL", "MLL"] if c in display_table.columns]
+            styled_table = (
+                display_table
+                .style
+                .format({col: "{:,.0f}".format for col in num_cols})  # no decimals
+                .highlight_max(subset=["MLA", "MLL"], color="#ff9f1c55")
+            )
+
+            st.dataframe(styled_table, use_container_width=True, height=280)
+
+        if not all_data.empty:
+            csv = all_data.to_csv(index=False)
+            st.download_button(
+                label="Download All Expiration Data as CSV",
+                data=csv,
+                file_name=f"{ticker_symbol}_put_options.csv",
+                mime="text/csv",
+            )
+        else:
+            st.warning(f"No put options data to display or download for {ticker_symbol}.")
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+
+def main():
+    st.title("MARRIED PUT · OPTIONS TERMINAL")
+
+    # Top row: Ticker + company + last price
+    col_ticker, col_info = st.columns([1, 3])
+
+    with col_ticker:
+        ticker_symbol = st.text_input(
+            "TICKER",
+            "",
+            placeholder="e.g. SPY",
+        ).upper().strip()
+
+    long_name = "N/A"
+    current_price = 0.0
+
+    if ticker_symbol:
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            long_name = ticker.info.get("longName", "N/A")
+            stock_info = ticker.history(period="1d")
+            current_price = stock_info["Close"].iloc[-1] if not stock_info.empty else 0.0
+        except Exception:
+            long_name = "N/A"
+            current_price = 0.0
+
+    with col_info:
+        st.markdown('<div class="metric-title">UNDERLYING</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-value">{ticker_symbol or "--"}  ·  {long_name}</div>',
+            unsafe_allow_html=True,
+        )
+
+    if not ticker_symbol:
+        st.warning("Enter a valid ticker symbol to begin.")
+        return
+
+    # Row for current price & user-defined purchase price
+    col_price1, col_price2 = st.columns(2)
+    with col_price1:
+        st.markdown('<div class="metric-title">LAST CLOSE</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-value">{current_price:,.2f}</div>',
+            unsafe_allow_html=True,
+        )
+
+    with col_price2:
+        stock_price = st.number_input(
+            "PURCHASE PRICE / SHARE",
+            min_value=0.0,
+            value=float(current_price),
+            step=0.01,
+            help="This is the stock price you actually paid (or plan to pay) for the married put.",
+        )
+
+    if stock_price <= 0:
+        st.warning("Please enter a valid stock price.")
+        return
+
+    st.markdown("---")
+
+    # Action row
+    col_btn, col_note = st.columns([1, 3])
+    with col_btn:
+        fetch = st.button("FETCH PUT CHAINS")
+
+    with col_note:
+        st.caption(
+            "Max Loss (MLA/MLL) = (Strike × 100) − (Stock Cost + Put Premium). "
+            "MLA uses ASK, MLL uses LAST."
+        )
+
+    if fetch:
+        display_put_options_all_dates(ticker_symbol, stock_price)
+
+if __name__ == "__main__":
+    main()
