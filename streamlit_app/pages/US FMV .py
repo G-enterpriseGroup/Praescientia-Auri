@@ -2,6 +2,7 @@
 
 """
 Streamlit Fair Value Dashboard for SPY & SPYM (SPY as Base)
+Bloomberg-style dark theme with orange accents.
 
 Features
 --------
@@ -55,38 +56,101 @@ BANK_NAMES = ["JPM", "GS", "BofA", "MS", "Citi"]
 
 
 # -------------------------------
-# PAGE CONFIG & THEME TWEAK
+# PAGE CONFIG
 # -------------------------------
 st.set_page_config(
     page_title="Fair Value Dashboard | SPY & SPYM",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Simple dark / market-style tweaks
+# -------------------------------
+# BLOOMBERG-LIKE THEME (CSS)
+# -------------------------------
 st.markdown(
     """
     <style>
-    body {
+    /* Global background + font */
+    html, body, [class*="stApp"] {
         background-color: #050608;
+        color: #f4f4f4;
+        font-family: "Menlo", "Consolas", "Roboto Mono", monospace;
     }
+
+    /* Main container */
     .main {
         background-color: #050608;
     }
-    .stApp {
-        background-color: #050608;
+
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        background: #101317;
+        border-right: 1px solid #ff9f1c33;
     }
-    h1, h2, h3, h4, h5, h6 {
-        color: #e5e5e5;
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #ffb347;
     }
+
+    /* Headers */
+    h1, h2, h3 {
+        color: #ffb347;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* Top metrics cards: use Streamlit columns + custom text classes */
     .metric-title {
-        font-size: 0.9rem;
-        color: #bbbbbb;
+        font-size: 0.8rem;
+        color: #ff9f1c;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
     }
     .metric-value {
         font-size: 1.4rem;
-        font-weight: 600;
-        color: #f5f5f5;
+        font-weight: 700;
+        color: #fefefe;
+    }
+
+    /* Dataframe tweaks */
+    .blank[data-testid="stTable"] {
+        background-color: #050608;
+    }
+    table {
+        border-collapse: collapse !important;
+    }
+    thead tr {
+        background-color: #15191f !important;
+        border-bottom: 1px solid #ff9f1c66 !important;
+    }
+    thead th {
+        color: #ffb347 !important;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        font-size: 0.8rem !important;
+    }
+    tbody tr {
+        background-color: #050608 !important;
+    }
+    tbody tr:nth-child(even) {
+        background-color: #090c12 !important;
+    }
+    td {
+        color: #f4f4f4 !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* Slider, radio, etc. accent colors */
+    div[data-baseweb="slider"] > div {
+        color: #ffb347;
+    }
+    div[role="radiogroup"] > label > div:first-child {
+        border-color: #ff9f1c !important;
+    }
+    div[role="radiogroup"] label span {
+        color: #f4f4f4 !important;
     }
     </style>
     """,
@@ -97,7 +161,6 @@ st.markdown(
 # -------------------------------
 # HELPERS
 # -------------------------------
-
 @st.cache_data(ttl=60)
 def get_last_price(ticker: str) -> float:
     """Fetch latest close from Yahoo Finance (cached briefly)."""
@@ -150,10 +213,25 @@ def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets:
     return fv_by_bank
 
 
+def color_upsides(val):
+    """Bloomberg-style: green for positive, red for negative, dim grey for near flat."""
+    if pd.isna(val):
+        return ""
+    try:
+        v = float(val)
+    except ValueError:
+        return ""
+    if v > 0.5:
+        return "color: #08ff7e; font-weight: 600;"   # bright green
+    elif v < -0.5:
+        return "color: #ff4d4d; font-weight: 600;"   # red
+    else:
+        return "color: #aaaaaa;"                     # muted grey
+
+
 # -------------------------------
 # SIDEBAR: CONTROLS
 # -------------------------------
-
 st.sidebar.title("Market Inputs")
 
 market_state = st.sidebar.radio(
@@ -198,7 +276,6 @@ if use_banks:
             except ValueError:
                 st.sidebar.warning(f"Invalid number for {name}; ignoring.")
 
-    # Blend weights: choose W_MARKET, W_BANKS = 1 - W_MARKET
     st.sidebar.markdown("---")
     W_MARKET = st.sidebar.slider(
         "Weight on Market Fair Value",
@@ -206,6 +283,7 @@ if use_banks:
         max_value=1.0,
         value=0.7,
         step=0.05,
+        help="1.0 = trust your market valuation only. 0.0 = banks only."
     )
     W_BANKS = 1.0 - W_MARKET
 else:
@@ -217,22 +295,18 @@ show_banks = bool(bank_targets)
 
 
 # -------------------------------
-# MAIN: TITLE
+# MAIN: TITLE + CAPTION
 # -------------------------------
-
-st.title("Fair Value Dashboard • SPY (Base) & SPYM")
-
+st.title("FAIR VALUE DASHBOARD · SPY (BASE) & SPYM")
 st.caption(
     "SPY fair value is derived directly from your market valuation input. "
-    "SPYM fair value is scaled from SPY via the SPYM/SPY price ratio. "
+    "SPYM fair value is scaled off SPY via the live SPYM/SPY price ratio. "
     "Bank SPX targets (if entered) are treated as benchmarks."
 )
-
 
 # -------------------------------
 # LIVE DATA FETCH
 # -------------------------------
-
 try:
     spx_price = get_last_price(SPX_TICKER)
     spy_price = get_last_price(SPY_TICKER)
@@ -249,9 +323,8 @@ fv_spym_market = fv_spy_market * (spym_price / spy_price)
 
 
 # -------------------------------
-# TOP METRICS
+# TOP METRICS ROW
 # -------------------------------
-
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -262,7 +335,7 @@ with col1:
     )
 
 with col2:
-    st.markdown('<div class="metric-title">SPX (Live)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="metric-title">SPX (LIVE)</div>', unsafe_allow_html=True)
     st.markdown(
         f'<div class="metric-value">{spx_price:,.2f}</div>',
         unsafe_allow_html=True,
@@ -278,18 +351,15 @@ with col3:
     else:
         st.markdown('<div class="metric-title">Bank Benchmarks</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="metric-value">Not Used</div>',
+            '<div class="metric-value">OFF</div>',
             unsafe_allow_html=True,
         )
 
-
 st.markdown("---")
-
 
 # -------------------------------
 # BUILD TABLE FOR SPY & SPYM
 # -------------------------------
-
 rows = []
 
 for ticker, price, fv_mkt in [
@@ -320,7 +390,6 @@ for ticker, price, fv_mkt in [
 
 df = pd.DataFrame(rows)
 
-# Order columns nicely
 if show_banks:
     df = df[
         [
@@ -345,23 +414,7 @@ else:
     ]
 
 
-def color_upsides(val):
-    """Green for positive, red for negative, grey for ~0."""
-    if pd.isna(val):
-        return ""
-    try:
-        v = float(val)
-    except ValueError:
-        return ""
-    if v > 0.5:
-        return "color: #00ff99; font-weight: 600;"
-    elif v < -0.5:
-        return "color: #ff4d4d; font-weight: 600;"
-    else:
-        return "color: #cccccc;"
-
-
-# Format + style
+# Format + Bloomberg-style color on upsides
 if show_banks:
     styled = (
         df.style
@@ -391,8 +444,7 @@ else:
         .applymap(color_upsides, subset=["Ups_M%"])
     )
 
-st.subheader("Fair Value Snapshot (Live)")
-
+st.subheader("FAIR VALUE SNAPSHOT (LIVE)")
 st.dataframe(
     styled,
     use_container_width=True,
