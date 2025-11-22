@@ -89,32 +89,6 @@ st.markdown(
         font-weight: 800 !important;
     }
 
-    /* Dataframe styling */
-    table {
-        border-collapse: collapse !important;
-    }
-    thead tr {
-        background-color: #15191f !important;
-        border-bottom: 1px solid #ff9f1ccc !important;
-    }
-    thead th {
-        color: #ffb347 !important;
-        font-weight: 900 !important;
-        text-transform: uppercase;
-        font-size: 0.8rem !important;
-    }
-    tbody tr {
-        background-color: #050608 !important;
-    }
-    tbody tr:nth-child(even) {
-        background-color: #090c12 !important;
-    }
-    td {
-        color: #ffb347 !important;
-        font-size: 0.85rem !important;
-        font-weight: 700 !important;
-    }
-
     /* Download button */
     .stDownloadButton > button {
         background-color: #101317 !important;
@@ -224,10 +198,48 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
             # Format numeric columns with no decimals
             num_cols = [c for c in ["STK", "CPA", "MLA", "CPL", "MLL"] if c in display_table.columns]
+
+            # >>>>> KEY PART: make table itself black + orange + bold
             styled_table = (
                 display_table
                 .style
                 .format({col: "{:,.0f}".format for col in num_cols})  # no decimals
+                .set_table_styles(
+                    [
+                        {
+                            "selector": "th",
+                            "props": [
+                                ("background-color", "#15191f"),
+                                ("color", "#ffb347"),
+                                ("font-weight", "900"),
+                                ("text-transform", "uppercase"),
+                                ("font-size", "0.8rem"),
+                            ],
+                        },
+                        {
+                            "selector": "td",
+                            "props": [
+                                ("background-color", "#050608"),
+                                ("color", "#ffb347"),
+                                ("font-weight", "700"),
+                                ("border", "1px solid #222"),
+                            ],
+                        },
+                        {
+                            "selector": "tr:nth-child(even)",
+                            "props": [
+                                ("background-color", "#090c12"),
+                            ],
+                        },
+                    ]
+                )
+                .set_properties(
+                    **{
+                        "background-color": "#050608",
+                        "color": "#ffb347",
+                        "font-weight": "700",
+                    }
+                )
                 .highlight_max(subset=["MLA", "MLL"], color="#ff9f1c55")
             )
 
