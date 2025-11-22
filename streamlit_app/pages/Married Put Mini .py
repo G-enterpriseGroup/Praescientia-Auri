@@ -4,7 +4,124 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # Set Streamlit page configuration
-st.set_page_config(page_title="Married Put", layout="wide")
+st.set_page_config(page_title="Married Put Terminal", layout="wide", page_icon="📉")
+
+# =========================
+# BLOOMBERG-STYLE THEME (CSS)
+# =========================
+st.markdown(
+    """
+    <style>
+    /* Global background + font */
+    html, body, [class*="stApp"] {
+        background-color: #050608;
+        color: #f4f4f4;
+        font-family: "Menlo", "Consolas", "Roboto Mono", monospace;
+    }
+
+    .main {
+        background-color: #050608;
+    }
+
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        background: #101317;
+        border-right: 1px solid #ff9f1c33;
+    }
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #ffb347;
+    }
+
+    /* Titles */
+    h1, h2, h3, h4 {
+        color: #ffb347;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    /* Metrics-like labels */
+    .metric-title {
+        font-size: 0.8rem;
+        color: #ff9f1c;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+    .metric-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #fefefe;
+    }
+
+    /* Buttons */
+    button[kind="primary"], button[data-baseweb="button"] {
+        background-color: #ff9f1c !important;
+        color: #050608 !important;
+        border: 1px solid #ffb347 !important;
+        border-radius: 2px !important;
+        font-weight: 700 !important;
+    }
+    button[kind="primary"]:hover, button[data-baseweb="button"]:hover {
+        background-color: #ffb347 !important;
+        color: #050608 !important;
+    }
+
+    /* Inputs */
+    .stTextInput > div > div > input,
+    .stNumberInput input {
+        background-color: #050608 !important;
+        color: #f4f4f4 !important;
+        border-radius: 0px !important;
+        border: 1px solid #444 !important;
+    }
+
+    /* Dataframe styling */
+    table {
+        border-collapse: collapse !important;
+    }
+    thead tr {
+        background-color: #15191f !important;
+        border-bottom: 1px solid #ff9f1c66 !important;
+    }
+    thead th {
+        color: #ffb347 !important;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        font-size: 0.8rem !important;
+    }
+    tbody tr {
+        background-color: #050608 !important;
+    }
+    tbody tr:nth-child(even) {
+        background-color: #090c12 !important;
+    }
+    td {
+        color: #f4f4f4 !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* Download button */
+    .stDownloadButton > button {
+        background-color: #22252b !important;
+        color: #ffb347 !important;
+        border: 1px solid #ff9f1c88 !important;
+        border-radius: 2px !important;
+        font-weight: 600 !important;
+    }
+    .stDownloadButton > button:hover {
+        background-color: #2c3139 !important;
+        color: #ffffff !important;
+    }
+
+    /* Warnings / errors tweaks */
+    .stAlert {
+        border-radius: 0px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 def calculate_max_loss(stock_price, options_table):
     """
@@ -29,114 +146,12 @@ def calculate_max_loss(stock_price, options_table):
 
     return options_table
 
-def calculate_trading_days_left(expiration_date):
-    """Calculate the total number of days left until the expiration date."""
+def calculate_days_left(expiration_date):
+    """Calculate the total number of calendar days left until the expiration date."""
     today = datetime.today()
     expiration_date = datetime.strptime(expiration_date, "%Y-%m-%d")
     return (expiration_date - today).days
 
 def display_put_options_all_dates(ticker_symbol, stock_price):
     try:
-        ticker = yf.Ticker(ticker_symbol)
-        expiration_dates = ticker.options
-        if not expiration_dates:
-            st.error(f"No options data available for ticker {ticker_symbol}.")
-            return
-
-        all_data = pd.DataFrame()
-
-        for chosen_date in expiration_dates:
-            trading_days_left = calculate_trading_days_left(chosen_date)
-            st.subheader(f"Expiration Date: {chosen_date} ({trading_days_left} trading days left)")
-
-            # Fetch put options
-            options_chain = ticker.option_chain(chosen_date)
-            puts = options_chain.puts
-
-            if puts.empty:
-                st.warning(f"No puts available for expiration date {chosen_date}.")
-                continue
-
-            # Prepare full put options table (for calculations)
-            puts_table = puts[["contractSymbol", "strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]]
-            puts_table.columns = ["CN", "STK", "LP", "BID", "ASK", "VOL", "OI", "IV"]
-            puts_table["EXP"] = chosen_date
-
-            # Run max loss calculation
-            puts_table = calculate_max_loss(stock_price, puts_table)
-
-            # Create a "display" version that hides unwanted columns (Contract hidden)
-            display_table = puts_table.drop(
-                columns=["CN", "LP", "BID", "ASK", "VOL", "OI", "IV", "EXP"]
-            )
-            # ---- ONLY ADDITION: remove the index so no extra first column ----
-            display_table = display_table.reset_index(drop=True)
-
-            # Append to full dataset (keep all for CSV)
-            all_data = pd.concat([all_data, puts_table], ignore_index=True)
-
-            # Format displayed numeric columns with NO decimals
-            num_cols = [c for c in ["STK", "CPA", "MLA", "CPL", "MLL"] if c in display_table.columns]
-            styled_table = (
-                display_table
-                .style
-                .format({col: "{:,.0f}".format for col in num_cols})  # no decimals
-                .highlight_max(subset=["MLA", "MLL"], color="yellow")
-            )
-
-            st.dataframe(styled_table)
-
-        if not all_data.empty:
-            # Download button still includes everything (without MLC columns)
-            csv = all_data.to_csv(index=False)
-            st.download_button(
-                label="Download All Expiration Data as CSV",
-                data=csv,
-                file_name=f"{ticker_symbol}_put_options.csv",
-                mime="text/csv",
-            )
-        else:
-            st.warning(f"No put options data to display or download for {ticker_symbol}.")
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-
-def main():
-    st.title("Options Analysis with Max Loss Calculation")
-
-    ticker_symbol = st.text_input("Enter the ticker symbol:", "").upper().strip()
-
-    if ticker_symbol:
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            long_name = ticker.info.get("longName", "N/A")
-            st.write(f"**Company Name:** {long_name}")
-        except Exception as e:
-            st.warning(f"Unable to fetch company name: {e}")
-
-    if not ticker_symbol:
-        st.warning("Please enter a valid ticker symbol.")
-        return
-
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        stock_info = ticker.history(period="1d")
-        current_price = stock_info["Close"].iloc[-1] if not stock_info.empty else 0.0
-    except Exception:
-        current_price = 0.0
-
-    stock_price = st.number_input(
-        "Enter the purchase price per share of the stock:",
-        min_value=0.0,
-        value=float(current_price),
-        step=0.01
-    )
-    if stock_price <= 0:
-        st.warning("Please enter a valid stock price.")
-        return
-
-    if st.button("Fetch Options Data"):
-        display_put_options_all_dates(ticker_symbol, stock_price)
-
-if __name__ == "__main__":
-    main()
+        ticker = yf.Ticker(ticker
