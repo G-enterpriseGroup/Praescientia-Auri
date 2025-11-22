@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="Married Put Terminal", layout="wide", page_icon="📉")
 
 # =========================
-# BLOOMBERG-STYLE THEME (CSS)
+# EXTREME BLOOMBERG / ORANGE THEME (CSS)
 # =========================
 st.markdown(
     """
@@ -15,8 +15,9 @@ st.markdown(
     /* Global background + font */
     html, body, [class*="stApp"] {
         background-color: #050608;
-        color: #f4f4f4;
+        color: #ffb347;
         font-family: "Menlo", "Consolas", "Roboto Mono", monospace;
+        font-weight: 700;
     }
 
     .main {
@@ -25,33 +26,38 @@ st.markdown(
 
     /* Sidebar styling */
     section[data-testid="stSidebar"] {
-        background: #101317;
-        border-right: 1px solid #ff9f1c33;
+        background: #050608;
+        border-right: 1px solid #ff9f1c66;
     }
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] p {
         color: #ffb347;
+        font-weight: 700;
     }
 
     /* Titles */
     h1, h2, h3, h4 {
         color: #ffb347;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.08em;
+        font-weight: 800;
     }
 
-    /* Metrics-like labels */
+    /* Metric labels + values */
     .metric-title {
         font-size: 0.8rem;
         color: #ff9f1c;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.12em;
+        font-weight: 800;
     }
     .metric-value {
         font-size: 1.4rem;
-        font-weight: 700;
-        color: #fefefe;
+        font-weight: 900;
+        color: #ffb347;
     }
 
     /* Buttons */
@@ -60,20 +66,27 @@ st.markdown(
         color: #050608 !important;
         border: 1px solid #ffb347 !important;
         border-radius: 2px !important;
-        font-weight: 700 !important;
+        font-weight: 900 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
     }
     button[kind="primary"]:hover, button[data-baseweb="button"]:hover {
         background-color: #ffb347 !important;
         color: #050608 !important;
     }
 
-    /* Inputs */
+    /* Text & number inputs */
     .stTextInput > div > div > input,
     .stNumberInput input {
         background-color: #050608 !important;
-        color: #f4f4f4 !important;
+        color: #ffb347 !important;
         border-radius: 0px !important;
-        border: 1px solid #444 !important;
+        border: 1px solid #ff9f1caa !important;
+        font-weight: 700 !important;
+    }
+    .stTextInput label, .stNumberInput label {
+        color: #ffb347 !important;
+        font-weight: 800 !important;
     }
 
     /* Dataframe styling */
@@ -82,11 +95,11 @@ st.markdown(
     }
     thead tr {
         background-color: #15191f !important;
-        border-bottom: 1px solid #ff9f1c66 !important;
+        border-bottom: 1px solid #ff9f1ccc !important;
     }
     thead th {
         color: #ffb347 !important;
-        font-weight: 700 !important;
+        font-weight: 900 !important;
         text-transform: uppercase;
         font-size: 0.8rem !important;
     }
@@ -97,26 +110,35 @@ st.markdown(
         background-color: #090c12 !important;
     }
     td {
-        color: #f4f4f4 !important;
+        color: #ffb347 !important;
         font-size: 0.85rem !important;
+        font-weight: 700 !important;
     }
 
     /* Download button */
     .stDownloadButton > button {
-        background-color: #22252b !important;
+        background-color: #101317 !important;
         color: #ffb347 !important;
-        border: 1px solid #ff9f1c88 !important;
+        border: 1px solid #ff9f1caa !important;
         border-radius: 2px !important;
-        font-weight: 600 !important;
+        font-weight: 800 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
     }
     .stDownloadButton > button:hover {
-        background-color: #2c3139 !important;
+        background-color: #15191f !important;
         color: #ffffff !important;
     }
 
-    /* Warnings / errors tweaks */
+    /* Alerts */
     .stAlert {
         border-radius: 0px !important;
+        border: 1px solid #ff9f1caa !important;
+        font-weight: 700 !important;
+    }
+    .stAlert p {
+        color: #ffb347 !important;
+        font-weight: 700 !important;
     }
     </style>
     """,
@@ -164,9 +186,7 @@ def display_put_options_all_dates(ticker_symbol, stock_price):
 
         for chosen_date in expiration_dates:
             days_left = calculate_days_left(chosen_date)
-            st.markdown(
-                f"### EXPIRATION: {chosen_date}  ·  {days_left} days left",
-            )
+            st.markdown(f"### EXPIRATION: {chosen_date}  ·  {days_left} DAYS LEFT")
 
             # Fetch put options
             options_chain = ticker.option_chain(chosen_date)
@@ -261,7 +281,7 @@ def main():
         )
 
     if not ticker_symbol:
-        st.warning("Enter a valid ticker symbol to begin.")
+        st.warning("ENTER A VALID TICKER SYMBOL TO BEGIN.")
         return
 
     # Row for current price & user-defined purchase price
@@ -279,11 +299,11 @@ def main():
             min_value=0.0,
             value=float(current_price),
             step=0.01,
-            help="This is the stock price you actually paid (or plan to pay) for the married put.",
+            help="Stock price you paid (or plan to pay) for the married put.",
         )
 
     if stock_price <= 0:
-        st.warning("Please enter a valid stock price.")
+        st.warning("PLEASE ENTER A VALID STOCK PRICE.")
         return
 
     st.markdown("---")
