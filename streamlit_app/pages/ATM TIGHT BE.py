@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import altair as alt
 
 # =========================
 # PAGE SETUP + THEME (BLOOMBERG STYLE)
@@ -35,7 +36,6 @@ st.markdown(
         padding-top: 1.5rem;
         padding-bottom: 1.5rem;
     }}
-    /* Make table headers orange-ish */
     thead tr th {{
         background-color: #11141a !important;
         color: {BLOOM_ORANGE} !important;
@@ -51,7 +51,7 @@ st.markdown(
 )
 
 st.title("📊 ATM Breakeven Finder")
-st.caption("Bloomberg-style view: paired calls & puts near the money, sorted by tightest breakevens.")
+st.caption("Bloomberg-style: paired call/put strangles near the money with visual breakeven bands.")
 
 
 # =========================
@@ -150,7 +150,7 @@ def compute_paired_strangles(
     - Get calls & puts
     - Filter near-the-money
     - Compute breakeven & distance for each
-    - Pair by strike (outer join)
+    - Pair by strike
     - Return one row per strike with Call+Put metrics
     """
     spot = _get_spot(ticker)
@@ -178,6 +178,7 @@ def compute_paired_strangles(
                 "openInterest": "OI_C",
                 "impliedVolatility": "IV_C",
             })[["STK", "MC", "BC", "DC", "VOL_C", "OI_C", "IV_C"]]
+
     # ---- Puts ----
     if not puts_df.empty:
         puts_df["mid"] = (puts_df["bid"].fillna(0) + puts_df["ask"].fillna(0)) / 2
@@ -202,13 +203,11 @@ def compute_paired_strangles(
     if 'puts_df' not in locals() or puts_df.empty:
         puts_df = pd.DataFrame(columns=["STK", "MP", "BP", "DP", "VOL_P", "OI_P", "IV_P"])
 
-    # Outer join on strike to pair
     merged = pd.merge(calls_df, puts_df, on="STK", how="outer")
 
     if merged.empty:
         raise ValueError("No ATM call/put pairs found with current filters.")
 
-    # Combined distance (call + put): CD
     merged["DC"] = merged["DC"].fillna(0.0)
     merged["DP"] = merged["DP"].fillna(0.0)
     merged["CD"] = merged["DC"] + merged["DP"]
@@ -218,7 +217,6 @@ def compute_paired_strangles(
     merged["TCK"] = ticker
     merged["SPOT"] = spot
 
-    # Column order
     merged = merged[[
         "TCK", "EXP", "DTE", "STK",
         "MC", "BC", "DC",
@@ -257,6 +255,7 @@ top_n = st.sidebar.slider(
     step=5,
 )
 
+
 # =========================
 # MAIN LOGIC
 # =========================
@@ -277,7 +276,6 @@ else:
                 key="exp_select",
             )
 
-            # Compute both views
             paired_df = compute_paired_strangles(
                 ticker=ticker,
                 expiration=exp,
@@ -313,7 +311,48 @@ else:
 
             # ---- TAB 1: STRANGLE (PAIRED) ----
             with tab1:
-                st.subheader("Paired Calls & Puts by Strike (Strangle-style)")
+                st.subheader("Paired Calls & Puts by Strike (Strangle Bands)")
+
+                # VISUAL: horizontal bands from BP to BC with vertical SPOT line
+                viz_df = paired_df.copy()
+
+                band = (
+                    alt.Chart(viz_df)
+                    .mark_rule(stroke=BLOOM_ORANGE, strokeWidth=3, opacity=0.9)
+                    .encode(
+                        x=alt.X("BP:Q", title="Price"),
+                        x2="BC:Q",
+                        y=alt.Y("STK:O", title="Strike"),
+                        tooltip=[
+                            alt.Tooltip("STK:Q", title="Strike"),
+                            alt.Tooltip("BP:Q", title="Put BE"),
+                            alt.Tooltip("BC:Q", title="Call BE"),
+                            alt.Tooltip("CD:Q", title="CD (DC+DP)"),
+                            alt.Tooltip("MC:Q", title="Call mid (MC)"),
+                            alt.Tooltip("MP:Q", title="Put mid (MP)"),
+                        ],
+                    )
+                )
+
+                spot_line = (
+                    alt.Chart(pd.DataFrame({"SPOT": [spot_val]}))
+                    .mark_rule(stroke="#ffffff", strokeWidth=2, strokeDash=[4, 4])
+                    .encode(x="SPOT:Q")
+                )
+
+                chart = (band + spot_line).properties(
+                    height=400,
+                    title="Strangle Breakeven Bands vs Spot",
+                )
+
+                st.altair_chart(chart, use_container_width=True)
+
+                st.caption(
+                    "Each orange band = one strike's strangle: BP (left) to BC (right). "
+                    "White dashed line = current spot. Narrower bands & smaller CD = tighter strangles."
+                )
+
+                # Table under the visual
                 disp = paired_df[[
                     "STK",
                     "MC", "BC", "DC",
@@ -374,3 +413,4 @@ else:
 
     except Exception as e:
         st.error(f"Error: {e}")
+
