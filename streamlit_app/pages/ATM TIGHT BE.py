@@ -290,4 +290,11 @@ else:
                             "BE": "{:,.2f}",
                             "DIST": "{:,.2f}",
                             "VOL": "{:,.0f}",
-                            "
+                            "OI": "{:,.0f}",
+                            "IV": "{:.2%}",
+                        })
+                    )
+                    st.dataframe(styled, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error: {e}")
