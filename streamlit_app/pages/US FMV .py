@@ -4,35 +4,6 @@
 Streamlit Fair Value Dashboard for SPY & SPYM (SPY as Base)
 Bloomberg-style dark theme with orange accents.
 
-Features
---------
-- Live prices from Yahoo Finance:
-    - SPX (^GSPC)
-    - SPY
-    - SPYM
-
-- You choose:
-    - Market condition: UNDERVALUE / OVERVALUED
-    - Magnitude in % (positive number, e.g. 5.6)
-
-Logic (for SPY):
-    If UNDERVALUE X%:
-        Price = FV * (1 - X/100)
-        FV    = Price / (1 - X/100)
-
-    If OVERVALUED X%:
-        Price = FV * (1 + X/100)
-        FV    = Price / (1 + X/100)
-
-SPYM fair value:
-    FV_SPYM = FV_SPY * ( SPYM_price / SPY_price )
-
-Optional:
-- Bank SPX targets (JPM, GS, BofA, MS, Citi) as manual benchmarks.
-  If provided, we compute:
-    - FV_Street (from bank targets)
-    - FV_Blend  (mix of Market FV and Street FV)
-
 Run:
     streamlit run spy_spym_fair_value_spy_base_app.py
 """
@@ -53,16 +24,17 @@ SPYM_TICKER = "SPYM"
 BANK_NAMES = ["JPM", "GS", "BofA", "MS", "Citi"]
 
 # Major global benchmarks to show on the globe
+# Coordinates spaced so labels don't overlap as much
 GLOBAL_MARKETS = [
-    {"name": "US · SPX", "ticker": "^GSPC", "lat": 40.7128, "lng": -74.0060},      # New York
-    {"name": "UK · FTSE 100", "ticker": "^FTSE", "lat": 51.5074, "lng": -0.1278},  # London
-    {"name": "EU · Euro Stoxx 50", "ticker": "^STOXX50E", "lat": 48.8566, "lng": 2.3522},  # Paris
-    {"name": "DE · DAX", "ticker": "^GDAXI", "lat": 50.1109, "lng": 8.6821},       # Frankfurt
-    {"name": "JP · Nikkei 225", "ticker": "^N225", "lat": 35.6895, "lng": 139.6917},       # Tokyo
-    {"name": "HK · Hang Seng", "ticker": "^HSI", "lat": 22.3193, "lng": 114.1694},         # Hong Kong
-    {"name": "IN · Sensex", "ticker": "^BSESN", "lat": 19.0760, "lng": 72.8777},           # Mumbai
-    {"name": "CA · S&P/TSX", "ticker": "^GSPTSE", "lat": 43.6532, "lng": -79.3832},        # Toronto
-    {"name": "AU · ASX 200", "ticker": "^AXJO", "lat": -33.8688, "lng": 151.2093},         # Sydney
+    {"name": "US · SPX",       "ticker": "^GSPC",   "lat": 38.0,  "lng": -97.0},   # central US
+    {"name": "CA · S&P/TSX",   "ticker": "^GSPTSE", "lat": 56.0,  "lng": -106.0},  # central Canada
+    {"name": "UK · FTSE 100",  "ticker": "^FTSE",   "lat": 51.5,  "lng": -0.1},    # London
+    {"name": "EU · STOXX 50",  "ticker": "^STOXX50E","lat": 48.9, "lng": 2.35},    # Paris
+    {"name": "DE · DAX",       "ticker": "^GDAXI",  "lat": 50.1,  "lng": 8.68},    # Frankfurt
+    {"name": "JP · Nikkei 225","ticker": "^N225",   "lat": 35.7,  "lng": 139.7},   # Tokyo
+    {"name": "HK · Hang Seng", "ticker": "^HSI",    "lat": 22.3,  "lng": 114.2},   # Hong Kong
+    {"name": "IN · Sensex",    "ticker": "^BSESN",  "lat": 19.1,  "lng": 72.9},    # Mumbai
+    {"name": "AU · ASX 200",   "ticker": "^AXJO",   "lat": -33.9, "lng": 151.2},   # Sydney
 ]
 
 
@@ -112,7 +84,7 @@ st.markdown(
         letter-spacing: 0.05em;
     }
 
-    /* Top metrics cards: use Streamlit columns + custom text classes */
+    /* Top metrics cards */
     .metric-title {
         font-size: 0.8rem;
         color: #ff9f1c;
@@ -174,7 +146,6 @@ st.markdown(
 # -------------------------------
 @st.cache_data(ttl=60)
 def get_last_price(ticker: str) -> float:
-    """Fetch latest close from Yahoo Finance (cached briefly)."""
     data = yf.Ticker(ticker).history(period="1d")
     if data.empty:
         raise ValueError(f"No price data for {ticker}")
@@ -182,17 +153,6 @@ def get_last_price(ticker: str) -> float:
 
 
 def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) -> float:
-    """
-    pct is ALWAYS positive (example: 5.6 for 5.6%).
-
-    UNDERVALUE X%:
-        price = FV * (1 - X/100)
-        FV    = price / (1 - X/100)
-
-    OVERVALUED X%:
-        price = FV * (1 + X/100)
-        FV    = price / (1 + X/100)
-    """
     if pct <= 0:
         raise ValueError("Percent must be positive (e.g. 5.6).")
 
@@ -208,12 +168,6 @@ def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) 
 
 
 def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets: dict) -> dict:
-    """
-    Map each bank's SPX target into ETF fair value using ETF/SPX ratio:
-
-        k = ETF_now / SPX_now
-        FV_bank(ETF) = k * SPX_target_bank
-    """
     if spx_price <= 0:
         raise ValueError("SPX price must be positive.")
 
@@ -225,7 +179,6 @@ def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets:
 
 
 def color_upsides(val):
-    """Bloomberg-style: green for positive, red for negative, dim grey for near flat."""
     if pd.isna(val):
         return ""
     try:
@@ -233,18 +186,17 @@ def color_upsides(val):
     except ValueError:
         return ""
     if v > 0.5:
-        return "color: #08ff7e; font-weight: 600;"   # bright green
+        return "color: #08ff7e; font-weight: 600;"
     elif v < -0.5:
-        return "color: #ff4d4d; font-weight: 600;"   # red
+        return "color: #ff4d4d; font-weight: 600;"
     else:
-        return "color: #aaaaaa;"                     # muted grey
+        return "color: #aaaaaa;"
 
 
 @st.cache_data(ttl=300)
 def get_global_index_changes(markets):
     """
-    Get index level + 1-day % change for each global benchmark in GLOBAL_MARKETS.
-    Falls back to 0.0 if data is missing.
+    Get index level + 1-day % change for each global benchmark.
     """
     results = []
     for m in markets:
@@ -262,14 +214,15 @@ def get_global_index_changes(markets):
         except Exception:
             change = 0.0
             level = 0.0
-        result = {
-            "name": m["name"],
-            "lat": m["lat"],
-            "lng": m["lng"],
-            "change": float(change),
-            "level": float(level),
-        }
-        results.append(result)
+        results.append(
+            {
+                "name": m["name"],
+                "lat": m["lat"],
+                "lng": m["lng"],
+                "change": float(change),
+                "level": float(level),
+            }
+        )
     return results
 
 
@@ -283,7 +236,6 @@ market_state = st.sidebar.radio(
     options=["Undervalued", "Overvalued"],
     index=0,
 )
-
 is_undervalued = (market_state == "Undervalued")
 
 market_pct = st.sidebar.number_input(
@@ -292,8 +244,7 @@ market_pct = st.sidebar.number_input(
     max_value=100.0,
     value=5.6,
     step=0.1,
-    help="Enter as a positive number, e.g. 5.6 for 5.6%. "
-         "Use Morningstar's 'Undervalued X%' as X if you want.",
+    help="Enter as a positive number, e.g. 5.6 for 5.6%.",
 )
 
 st.sidebar.markdown("---")
@@ -327,7 +278,7 @@ if use_banks:
         max_value=1.0,
         value=0.7,
         step=0.05,
-        help="1.0 = trust your market valuation only. 0.0 = banks only."
+        help="1.0 = trust your market valuation only. 0.0 = banks only.",
     )
     W_BANKS = 1.0 - W_MARKET
 else:
@@ -359,12 +310,8 @@ except Exception as e:
     st.error(f"Error fetching data: {e}")
     st.stop()
 
-# Compute SPY fair value from market input
 fv_spy_market = calc_fair_value_from_market(spy_price, is_undervalued, market_pct)
-
-# Derive SPYM fair value via price ratio to SPY
 fv_spym_market = fv_spy_market * (spym_price / spy_price)
-
 
 # -------------------------------
 # TOP METRICS ROW
@@ -387,28 +334,27 @@ with col2:
 
 with col3:
     if show_banks:
-        st.markdown('<div class="metric-title">Blend Weights (Market / Banks)</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="metric-title">Blend Weights (Market / Banks)</div>',
+            unsafe_allow_html=True,
+        )
         st.markdown(
             f'<div class="metric-value">{W_MARKET:.2f} / {W_BANKS:.2f}</div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown('<div class="metric-title">Bank Benchmarks</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="metric-value">OFF</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="metric-value">OFF</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
 # -------------------------------
-# GLOBAL MARKETS DIGITAL GLOBE
+# GLOBAL MARKETS · DIGITAL GLOBE
 # -------------------------------
 st.subheader("GLOBAL MARKETS · DIGITAL GLOBE")
 
 try:
     globe_points = get_global_index_changes(GLOBAL_MARKETS)
-    # Round changes and levels for cleaner labels (and avoid NaN in JS)
     globe_data = [
         {
             "name": p["name"],
@@ -432,12 +378,12 @@ try:
       (document.getElementById('globeViz'))
       .backgroundColor('#050608')
       .showAtmosphere(false)
-      .globeImageUrl(null)  // solid color water via material
+      .globeImageUrl(null)
       .pointsData(data)
       .pointLat('lat')
       .pointLng('lng')
       .pointAltitude(d => 0.03 + Math.min(Math.abs(d.change) / 100 * 0.18, 0.35))
-      .pointRadius(0.35)
+      .pointRadius(0.4)
       .pointColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
       .pointLabel(d => (
         d.name + ' | ' +
@@ -447,22 +393,23 @@ try:
       .labelsData(data)
       .labelLat('lat')
       .labelLng('lng')
+      .labelAltitude(0.04)
       .labelText(d => (
-        d.name + ' ' +
+        d.name + '\\n' +
         (d.level ? d.level.toLocaleString() : 'N/A') +
         ' (' + d.change.toFixed(2) + '%)'
       ))
-      .labelSize(1.6)
-      .labelDotRadius(0.25)
-      .labelColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
+      .labelSize(1.0)
+      .labelDotRadius(0.15)
+      .labelColor(() => '#f4f4f4')
       .labelResolution(2);
 
-    // Light grey water (digital look)
+    // Light grey water
     const globeMaterial = world.globeMaterial();
-    globeMaterial.color.set('#e4e4e4');   // water
+    globeMaterial.color.set('#e5e5e5');
     globeMaterial.opacity = 1.0;
 
-    // Land polygons in solid orange
+    // Land polygons solid orange
     fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
       .then(res => res.json())
       .then(worldData => {{
@@ -476,8 +423,8 @@ try:
       }});
 
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.55;
-    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.1 }}, 4000);
+    world.controls().autoRotateSpeed = 0.35;
+    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.0 }}, 4000);
     </script>
     <style>
     #globeViz {{
@@ -545,17 +492,8 @@ if show_banks:
         ]
     ]
 else:
-    df = df[
-        [
-            "Ticker",
-            "Price",
-            "FV_Market",
-            "Ups_M%",
-        ]
-    ]
+    df = df[["Ticker", "Price", "FV_Market", "Ups_M%"]]
 
-
-# Format + Bloomberg-style color on upsides
 if show_banks:
     styled = (
         df.style
@@ -586,11 +524,7 @@ else:
     )
 
 st.subheader("FAIR VALUE SNAPSHOT (LIVE)")
-st.dataframe(
-    styled,
-    use_container_width=True,
-    height=220,
-)
+st.dataframe(styled, use_container_width=True, height=220)
 
 st.markdown(
     """
