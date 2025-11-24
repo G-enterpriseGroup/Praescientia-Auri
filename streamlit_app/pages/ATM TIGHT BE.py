@@ -120,4 +120,232 @@ def find_best_option(df: pd.DataFrame, side: str, spot: float, atm_window: float
     if side == "CALL":
         df["breakeven"] = df["strike"] + df["mid"]
     else:  # PUT
-        df["br]()
+        df["breakeven"] = df["strike"] - df["mid"]
+
+    df["distance"] = (df["breakeven"] - spot).abs()
+
+    # Pick row with smallest distance
+    best = df.loc[df["distance"].idxmin()]
+
+    return {
+        "side": side,
+        "strike": float(best["strike"]),
+        "mid": float(best["mid"]),
+        "breakeven": float(best["breakeven"]),
+        "distance": float(best["distance"]),
+        "volume": float(best.get("volume", 0)),
+        "oi": float(best.get("openInterest", 0)),
+        "iv": float(best.get("impliedVolatility", 0)),
+    }
+
+
+def find_best_call_put_for_exp(
+    ticker: str,
+    expiration: str,
+    atm_window: float = 0.05,
+):
+    """
+    For ticker + expiration:
+    - Get spot
+    - Get calls & puts
+    - Return best call + best put (tightest breakeven vs spot)
+    """
+    spot = get_spot(ticker)
+    calls_df, puts_df = get_chain(ticker, expiration)
+
+    today = pd.Timestamp.today().normalize()
+    exp_date = pd.to_datetime(expiration)
+    dte = (exp_date - today).days
+
+    best_call = find_best_option(calls_df, "CALL", spot, atm_window)
+    best_put = find_best_option(puts_df, "PUT", spot, atm_window)
+
+    return spot, dte, best_call, best_put
+
+
+# =========================
+# SIDEBAR
+# =========================
+st.sidebar.header("Settings")
+
+ticker = st.sidebar.text_input("Ticker", value="SPY").upper().strip()
+
+atm_pct = st.sidebar.slider(
+    "ATM window (±% from spot)",
+    min_value=1.0,
+    max_value=15.0,
+    value=5.0,
+    step=1.0,
+)
+atm_window = atm_pct / 100.0  # convert to decimal
+
+
+# =========================
+# MAIN
+# =========================
+if not ticker:
+    st.info("Enter a ticker on the left to begin.")
+else:
+    try:
+        tk = yf.Ticker(ticker)
+        expirations = tk.options
+
+        if not expirations:
+            st.error(f"No options listed for {ticker}.")
+        else:
+            # Nicely formatted expiration labels -> MM-DD-YY
+            exp_dates = [pd.to_datetime(e) for e in expirations]
+            exp_labels = [d.strftime("%m-%d-%y") for d in exp_dates]
+
+            selected_label = st.sidebar.selectbox(
+                "Expiration",
+                options=exp_labels,
+                index=0,
+                key="exp_select",
+            )
+
+            # Map back from label to original expiration string for yfinance
+            selected_idx = exp_labels.index(selected_label)
+            exp = expirations[selected_idx]
+
+            # Core calc: best call + best put for this expiration
+            spot, dte, best_call, best_put = find_best_call_put_for_exp(
+                ticker=ticker,
+                expiration=exp,
+                atm_window=atm_window,
+            )
+
+            # Header metrics
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown('<div class="metric-label">TICKER</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value-main">{ticker}</div>', unsafe_allow_html=True)
+            with c2:
+                st.markdown('<div class="metric-label">SPOT</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value-main">${spot:,.2f}</div>', unsafe_allow_html=True)
+            with c3:
+                st.markdown('<div class="metric-label">EXP / DTE</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="metric-value-main">{selected_label} · {dte}d</div>',
+                    unsafe_allow_html=True
+                )
+
+            st.subheader("Tightest Breakeven (Call & Put)")
+
+            if not best_call and not best_put:
+                st.warning("No ATM options found with current filters. Try widening the ATM window.")
+            else:
+                col_call, col_put = st.columns(2)
+
+                # ---- CALL BOX ----
+                with col_call:
+                    st.markdown('<div class="metric-label">BEST CALL (tightest BE)</div>', unsafe_allow_html=True)
+                    if best_call:
+                        st.markdown(
+                            f'<div class="metric-value-main">Strike {best_call["strike"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            f'<div class="metric-value-sub">Cost (mid): ${best_call["mid"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            f'<div class="metric-value-sub">Breakeven: ${best_call["breakeven"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            f'<div class="metric-value-sub">Distance to spot: ${best_call["distance"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown('<div class="metric-value-sub">No call found in ATM range.</div>', unsafe_allow_html=True)
+
+                # ---- PUT BOX ----
+                with col_put:
+                    st.markdown('<div class="metric-label">BEST PUT (tightest BE)</div>', unsafe_allow_html=True)
+                    if best_put:
+                        st.markdown(
+                            f'<div class="metric-value-main">Strike {best_put["strike"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            f'<div class="metric-value-sub">Cost (mid): ${best_put["mid"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            f'<div class="metric-value-sub">Breakeven: ${best_put["breakeven"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            f'<div class="metric-value-sub">Distance to spot: ${best_put["distance"]:,.2f}</div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown('<div class="metric-value-sub">No put found in ATM range.</div>', unsafe_allow_html=True)
+
+                # ===== TOTAL COST OF THE STRANGLE =====
+                if best_call and best_put:
+                    total_debit_per_share = best_call["mid"] + best_put["mid"]
+                    total_cost_per_contract = total_debit_per_share * 100
+
+                    st.markdown("---")
+                    st.markdown(
+                        f'<div class="metric-label">COMBINED STRANGLE COST (1 CALL + 1 PUT)</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f'<div class="metric-value-main">Debit per share: ${total_debit_per_share:,.2f}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f'<div class="metric-value-sub">Total cost for 1× strangle (100-shr): '
+                        f'${total_cost_per_contract:,.2f}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                # Small summary table for both
+                summary_rows = []
+                if best_call:
+                    summary_rows.append({
+                        "SIDE": "CALL",
+                        "STK": best_call["strike"],
+                        "MID": best_call["mid"],
+                        "BE": best_call["breakeven"],
+                        "DIST": best_call["distance"],
+                        "VOL": best_call["volume"],
+                        "OI": best_call["oi"],
+                        "IV": best_call["iv"],
+                    })
+                if best_put:
+                    summary_rows.append({
+                        "SIDE": "PUT",
+                        "STK": best_put["strike"],
+                        "MID": best_put["mid"],
+                        "BE": best_put["breakeven"],
+                        "DIST": best_put["distance"],
+                        "VOL": best_put["volume"],
+                        "OI": best_put["oi"],
+                        "IV": best_put["iv"],
+                    })
+
+                if summary_rows:
+                    st.markdown("---")
+                    st.markdown("**Summary (Best Call & Put for this Expiration)**")
+                    df_summary = pd.DataFrame(summary_rows)
+                    styled = (
+                        df_summary.style
+                        .format({
+                            "STK": "{:,.2f}",
+                            "MID": "{:,.2f}",
+                            "BE": "{:,.2f}",
+                            "DIST": "{:,.2f}",
+                            "VOL": "{:,.0f}",
+                            "OI": "{:,.0f}",
+                            "IV": "{:.2%}",
+                        })
+                        .set_properties(**{"color": BLOOM_ORANGE})
+                    )
+                    st.dataframe(styled, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error: {e}")
