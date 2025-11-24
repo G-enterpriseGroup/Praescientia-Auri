@@ -4,38 +4,6 @@
 Streamlit Fair Value Dashboard for SPY & SPYM (SPY as Base)
 Bloomberg-style dark theme with orange accents.
 
-Features
---------
-- Live prices from Yahoo Finance:
-    - SPX (^GSPC)
-    - SPY
-    - SPYM
-
-- You choose:
-    - Market condition: UNDERVALUE / OVERVALUED
-    - Magnitude in % (positive number, e.g. 5.6)
-
-  TIP: When using Morningstar, type their
-       US Market "Undervalued X%" number as X here.
-
-Logic (for SPY):
-    If UNDERVALUE X%:
-        Price = FV * (1 - X/100)
-        FV    = Price / (1 - X/100)
-
-    If OVERVALUED X%:
-        Price = FV * (1 + X/100)
-        FV    = Price / (1 + X/100)
-
-SPYM fair value:
-    FV_SPYM = FV_SPY * ( SPYM_price / SPY_price )
-
-Optional:
-- Bank SPX targets (JPM, GS, BofA, MS, Citi) as manual benchmarks.
-  If provided, we compute:
-    - FV_Street (from bank targets)
-    - FV_Blend  (mix of Market FV and Street FV)
-
 Run:
     streamlit run spy_spym_fair_value_spy_base_app.py
 """
@@ -232,10 +200,7 @@ def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) 
 
 def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets: dict) -> dict:
     """
-    Map each bank's SPX target into ETF fair value using ETF/SPX ratio:
-
-        k = ETF_now / SPX_now
-        FV_bank(ETF) = k * SPX_target_bank
+    Map each bank's SPX target into ETF fair value using ETF/SPX ratio.
     """
     if spx_price <= 0:
         raise ValueError("SPX price must be positive.")
@@ -281,13 +246,14 @@ def get_global_index_changes(markets):
                     change = (last_close - prev_close) / prev_close * 100.0
         except Exception:
             change = 0.0
-        result = {
-            "name": m["name"],
-            "lat": m["lat"],
-            "lng": m["lng"],
-            "change": float(change),
-        }
-        results.append(result)
+        results.append(
+            {
+                "name": m["name"],
+                "lat": m["lat"],
+                "lng": m["lng"],
+                "change": float(change),
+            }
+        )
     return results
 
 
@@ -301,7 +267,6 @@ market_state = st.sidebar.radio(
     options=["Undervalued", "Overvalued"],
     index=0,
 )
-
 is_undervalued = (market_state == "Undervalued")
 
 market_pct = st.sidebar.number_input(
@@ -323,7 +288,6 @@ use_banks = st.sidebar.checkbox(
 )
 
 bank_targets = {}
-
 if use_banks:
     st.sidebar.subheader("Bank SPX Targets")
     for name in BANK_NAMES:
@@ -345,7 +309,7 @@ if use_banks:
         max_value=1.0,
         value=0.7,
         step=0.05,
-        help="1.0 = trust your market valuation only. 0.0 = banks only."
+        help="1.0 = trust your market valuation only. 0.0 = banks only.",
     )
     W_BANKS = 1.0 - W_MARKET
 else:
@@ -379,7 +343,6 @@ except Exception as e:
 
 # Compute SPY fair value from market input
 fv_spy_market = calc_fair_value_from_market(spy_price, is_undervalued, market_pct)
-
 # Derive SPYM fair value via price ratio to SPY
 fv_spym_market = fv_spy_market * (spym_price / spy_price)
 
@@ -426,7 +389,6 @@ st.subheader("GLOBAL MARKETS · ROTATING GLOBE (BETA)")
 
 try:
     globe_points = get_global_index_changes(GLOBAL_MARKETS)
-    # Round changes for cleaner labels and avoid NaN in JS
     globe_data = [
         {
             "name": p["name"],
@@ -441,23 +403,40 @@ try:
     globe_html = f"""
     <div id="globeViz"></div>
     <script src="https://unpkg.com/globe.gl"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
     <script>
     const data = {data_json};
 
     const world = Globe()
       (document.getElementById('globeViz'))
-      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
       .backgroundColor('#050608')
-      .showAtmosphere(true)
-      .atmosphereColor('#ffffff')
-      .atmosphereAltitude(0.25)
+      .globeImageUrl(null)           // use solid color, not a photo texture
+      .showAtmosphere(false)
       .pointsData(data)
       .pointLat('lat')
       .pointLng('lng')
-      .pointAltitude(d => 0.03 + Math.min(Math.abs(d.change) / 100 * 0.15, 0.3))
-      .pointRadius(0.6)
-      .pointColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
+      .pointAltitude(d => 0.06 + Math.min(Math.abs(d.change) / 100 * 0.2, 0.4))
+      .pointRadius(0.9)              // bigger markers
+      .pointColor(d => d.change >= 0 ? '#4dff4d' : '#ff4d4d')  // brighter green/red
       .pointLabel(d => `${{d.name}}: ${{d.change.toFixed(2)}}%`);
+
+    // Solid blue water
+    const globeMaterial = world.globeMaterial();
+    globeMaterial.color.set('#0066ff');   // water blue
+    globeMaterial.opacity = 1.0;
+
+    // Solid green land (country polygons)
+    fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
+      .then(res => res.json())
+      .then(worldData => {{
+        const countries = topojson.feature(worldData, worldData.objects.countries).features;
+        world
+          .polygonsData(countries)
+          .polygonCapColor(() => '#00aa55')     // land green
+          .polygonSideColor(() => '#00994d')
+          .polygonStrokeColor(() => '#003300')
+          .polygonAltitude(0.003);
+      }});
 
     world.controls().autoRotate = true;
     world.controls().autoRotateSpeed = 0.4;
@@ -466,7 +445,7 @@ try:
     <style>
     #globeViz {{
       width: 100%;
-      height: 420px;
+      height: 440px;
       margin-top: 8px;
       border-radius: 18px;
       border: 1px solid #ff9f1c33;
@@ -474,7 +453,7 @@ try:
     </style>
     """
 
-    components.html(globe_html, height=460)
+    components.html(globe_html, height=480)
 except Exception as e:
     st.info(f"Global globe view unavailable right now: {e}")
 
@@ -484,7 +463,6 @@ st.markdown("---")
 # BUILD TABLE FOR SPY & SPYM
 # -------------------------------
 rows = []
-
 for ticker, price, fv_mkt in [
     (SPY_TICKER, spy_price, fv_spy_market),
     (SPYM_TICKER, spym_price, fv_spym_market),
@@ -527,15 +505,7 @@ if show_banks:
         ]
     ]
 else:
-    df = df[
-        [
-            "Ticker",
-            "Price",
-            "FV_Market",
-            "Ups_M%",
-        ]
-    ]
-
+    df = df[["Ticker", "Price", "FV_Market", "Ups_M%"]]
 
 # Format + Bloomberg-style color on upsides
 if show_banks:
@@ -568,11 +538,7 @@ else:
     )
 
 st.subheader("FAIR VALUE SNAPSHOT (LIVE)")
-st.dataframe(
-    styled,
-    use_container_width=True,
-    height=220,
-)
+st.dataframe(styled, use_container_width=True, height=220)
 
 st.markdown(
     """
