@@ -26,34 +26,34 @@ BANK_NAMES = ["JPM", "GS", "BofA", "MS", "Citi"]
 # Major global benchmarks to show on the globe (expanded list)
 GLOBAL_MARKETS = [
     # Americas
-    {"name": "US · SPX",        "ticker": "^GSPC",    "lat": 40.7128,  "lng": -74.0060},   # New York
-    {"name": "CA · S&P/TSX",    "ticker": "^GSPTSE",  "lat": 43.6532,  "lng": -79.3832},   # Toronto
-    {"name": "MX · IPC",        "ticker": "^MXX",     "lat": 19.4326,  "lng": -99.1332},   # Mexico City
-    {"name": "BR · Bovespa",    "ticker": "^BVSP",    "lat": -23.5505, "lng": -46.6333},   # São Paulo
+    {"name": "US · SPX",        "ticker": "^GSPC",    "lat": 40.7128,  "lng": -74.0060},
+    {"name": "CA · S&P/TSX",    "ticker": "^GSPTSE",  "lat": 43.6532,  "lng": -79.3832},
+    {"name": "MX · IPC",        "ticker": "^MXX",     "lat": 19.4326,  "lng": -99.1332},
+    {"name": "BR · Bovespa",    "ticker": "^BVSP",    "lat": -23.5505, "lng": -46.6333},
 
     # Europe
-    {"name": "UK · FTSE 100",   "ticker": "^FTSE",    "lat": 51.5074,  "lng": -0.1278},    # London
-    {"name": "EU · STOXX 50",   "ticker": "^STOXX50E","lat": 48.8566,  "lng": 2.3522},     # Paris
-    {"name": "DE · DAX",        "ticker": "^GDAXI",   "lat": 50.1109,  "lng": 8.6821},     # Frankfurt
-    {"name": "FR · CAC 40",     "ticker": "^FCHI",    "lat": 48.8566,  "lng": 2.3522},     # Paris
-    {"name": "CH · SMI",        "ticker": "^SSMI",    "lat": 47.3769,  "lng": 8.5417},     # Zurich
-    {"name": "ES · IBEX 35",    "ticker": "^IBEX",    "lat": 40.4168,  "lng": -3.7038},    # Madrid
-    {"name": "IT · FTSE MIB",   "ticker": "FTSEMIB.MI","lat": 45.4642, "lng": 9.1900},     # Milan
+    {"name": "UK · FTSE 100",   "ticker": "^FTSE",    "lat": 51.5074,  "lng": -0.1278},
+    {"name": "EU · STOXX 50",   "ticker": "^STOXX50E","lat": 48.8566,  "lng": 2.3522},
+    {"name": "DE · DAX",        "ticker": "^GDAXI",   "lat": 50.1109,  "lng": 8.6821},
+    {"name": "FR · CAC 40",     "ticker": "^FCHI",    "lat": 48.8566,  "lng": 2.3522},
+    {"name": "CH · SMI",        "ticker": "^SSMI",    "lat": 47.3769,  "lng": 8.5417},
+    {"name": "ES · IBEX 35",    "ticker": "^IBEX",    "lat": 40.4168,  "lng": -3.7038},
+    {"name": "IT · FTSE MIB",   "ticker": "FTSEMIB.MI","lat": 45.4642, "lng": 9.1900},
 
     # Asia-Pacific
-    {"name": "JP · Nikkei 225", "ticker": "^N225",    "lat": 35.6895,  "lng": 139.6917},   # Tokyo
-    {"name": "HK · Hang Seng",  "ticker": "^HSI",     "lat": 22.3193,  "lng": 114.1694},   # Hong Kong
-    {"name": "CN · SSE Comp",   "ticker": "000001.SS","lat": 31.2304,  "lng": 121.4737},   # Shanghai
-    {"name": "TW · TAIEX",      "ticker": "^TWII",    "lat": 25.0330,  "lng": 121.5654},   # Taipei
-    {"name": "KR · KOSPI",      "ticker": "^KS11",    "lat": 37.5665,  "lng": 126.9780},   # Seoul
-    {"name": "IN · Sensex",     "ticker": "^BSESN",   "lat": 19.0760,  "lng": 72.8777},    # Mumbai
-    {"name": "SG · STI",        "ticker": "^STI",     "lat": 1.3521,   "lng": 103.8198},   # Singapore
-    {"name": "AU · ASX 200",    "ticker": "^AXJO",    "lat": -33.8688, "lng": 151.2093},   # Sydney
-    {"name": "NZ · NZX 50",     "ticker": "^NZ50",    "lat": -41.2865, "lng": 174.7762},   # Wellington
+    {"name": "JP · Nikkei 225", "ticker": "^N225",    "lat": 35.6895,  "lng": 139.6917},
+    {"name": "HK · Hang Seng",  "ticker": "^HSI",     "lat": 22.3193,  "lng": 114.1694},
+    {"name": "CN · SSE Comp",   "ticker": "000001.SS","lat": 31.2304,  "lng": 121.4737},
+    {"name": "TW · TAIEX",      "ticker": "^TWII",    "lat": 25.0330,  "lng": 121.5654},
+    {"name": "KR · KOSPI",      "ticker": "^KS11",    "lat": 37.5665,  "lng": 126.9780},
+    {"name": "IN · Sensex",     "ticker": "^BSESN",   "lat": 19.0760,  "lng": 72.8777},
+    {"name": "SG · STI",        "ticker": "^STI",     "lat": 1.3521,   "lng": 103.8198},
+    {"name": "AU · ASX 200",    "ticker": "^AXJO",    "lat": -33.8688, "lng": 151.2093},
+    {"name": "NZ · NZX 50",     "ticker": "^NZ50",    "lat": -41.2865, "lng": 174.7762},
 
     # Middle East & Africa
-    {"name": "ZA · Top 40",     "ticker": "^JTOPI",   "lat": -26.2041, "lng": 28.0473},    # Johannesburg
-    {"name": "SA · TASI",       "ticker": "^TASI",    "lat": 24.7136,  "lng": 46.6753},    # Riyadh
+    {"name": "ZA · Top 40",     "ticker": "^JTOPI",   "lat": -26.2041, "lng": 28.0473},
+    {"name": "SA · TASI",       "ticker": "^TASI",    "lat": 24.7136,  "lng": 46.6753},
 ]
 
 
@@ -80,12 +80,10 @@ st.markdown(
         font-family: "Menlo", "Consolas", "Roboto Mono", monospace;
     }
 
-    /* Main container */
     .main {
         background-color: #050608;
     }
 
-    /* Sidebar styling */
     section[data-testid="stSidebar"] {
         background: #101317;
         border-right: 1px solid #ff9f1c33;
@@ -96,14 +94,12 @@ st.markdown(
         color: #ffb347;
     }
 
-    /* Headers */
     h1, h2, h3 {
         color: #ffb347;
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
 
-    /* Top metrics cards */
     .metric-title {
         font-size: 0.8rem;
         color: #ff9f1c;
@@ -116,7 +112,6 @@ st.markdown(
         color: #fefefe;
     }
 
-    /* Dataframe tweaks */
     .blank[data-testid="stTable"] {
         background-color: #050608;
     }
@@ -144,7 +139,6 @@ st.markdown(
         font-size: 0.85rem !important;
     }
 
-    /* Slider, radio, etc. accent colors */
     div[data-baseweb="slider"] > div {
         color: #ffb347;
     }
@@ -153,6 +147,50 @@ st.markdown(
     }
     div[role="radiogroup"] label span {
         color: #f4f4f4 !important;
+    }
+
+    /* Global markets board (padded background behind text) */
+    .global-board {
+        margin-top: 12px;
+        padding: 10px 16px;
+        border-radius: 14px;
+        background: rgba(5, 6, 8, 0.82);
+        border: 1px solid #ff9f1c55;
+        font-size: 0.84rem;
+    }
+    .global-board-title {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.72rem;
+        color: #ffb347;
+        margin-bottom: 4px;
+    }
+    .global-board-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+    }
+    .global-board-name {
+        color: #f4f4f4;
+    }
+    .global-board-level {
+        color: #cccccc;
+        margin-left: 8px;
+    }
+    .global-board-change-pos {
+        color: #08ff7e;
+        font-weight: 600;
+        margin-left: 6px;
+    }
+    .global-board-change-neg {
+        color: #ff4d4d;
+        font-weight: 600;
+        margin-left: 6px;
+    }
+    .global-board-high {
+        color: #aaaaaa;
+        margin-left: 6px;
+        font-size: 0.76rem;
     }
     </style>
     """,
@@ -165,7 +203,6 @@ st.markdown(
 # -------------------------------
 @st.cache_data(ttl=60)
 def get_last_price(ticker: str) -> float:
-    """Fetch latest close from Yahoo Finance (cached briefly)."""
     data = yf.Ticker(ticker).history(period="1d")
     if data.empty:
         raise ValueError(f"No price data for {ticker}")
@@ -173,20 +210,8 @@ def get_last_price(ticker: str) -> float:
 
 
 def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) -> float:
-    """
-    pct is ALWAYS positive (example: 5.6 for 5.6%).
-
-    UNDERVALUE X%:
-        price = FV * (1 - X/100)
-        FV    = price / (1 - X/100)
-
-    OVERVALUED X%:
-        price = FV * (1 + X/100)
-        FV    = price / (1 + X/100)
-    """
     if pct <= 0:
         raise ValueError("Percent must be positive (e.g. 5.6).")
-
     factor = 1.0 - pct / 100.0 if is_undervalued else 1.0 + pct / 100.0
     if factor == 0:
         raise ValueError("Factor became zero; check your inputs.")
@@ -194,18 +219,13 @@ def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) 
 
 
 def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets: dict) -> dict:
-    """
-    Map each bank's SPX target into ETF fair value using ETF/SPX ratio.
-    """
     if spx_price <= 0:
         raise ValueError("SPX price must be positive.")
-
     k = etf_price / spx_price
     return {bank: k * float(target) for bank, target in bank_targets.items()}
 
 
 def color_upsides(val):
-    """Bloomberg-style: green for positive, red for negative, dim grey for near flat."""
     if pd.isna(val):
         return ""
     try:
@@ -213,11 +233,11 @@ def color_upsides(val):
     except ValueError:
         return ""
     if v > 0.5:
-        return "color: #08ff7e; font-weight: 600;"   # bright green
+        return "color: #08ff7e; font-weight: 600;"
     elif v < -0.5:
-        return "color: #ff4d4d; font-weight: 600;"   # red
+        return "color: #ff4d4d; font-weight: 600;"
     else:
-        return "color: #aaaaaa;"                     # muted grey
+        return "color: #aaaaaa;"
 
 
 @st.cache_data(ttl=600)
@@ -225,10 +245,9 @@ def get_global_index_changes(markets):
     """
     For each index:
       - Last close
-      - 1D % change (vs previous close)
-      - 5D % change (vs ~5 trading days ago)
-      - % from 52-week high (approx using last 1y)
-    Using Yahoo Finance daily history.
+      - 1D % change
+      - 5D % change
+      - % from 52-week high (using ~1y history)
     """
     results = []
     for m in markets:
@@ -273,7 +292,7 @@ def get_global_index_changes(markets):
 
 
 # -------------------------------
-# SIDEBAR: CONTROLS
+# SIDEBAR
 # -------------------------------
 st.sidebar.title("Market Inputs")
 
@@ -290,8 +309,7 @@ market_pct = st.sidebar.number_input(
     max_value=100.0,
     value=5.6,
     step=0.1,
-    help="Enter as a positive number, e.g. 5.6 for 5.6%. "
-         "Use Morningstar's 'Undervalued X%' as X if you want.",
+    help="Enter as a positive number, e.g. 5.6 for 5.6%.",
 )
 
 st.sidebar.markdown("---")
@@ -324,7 +342,7 @@ if use_banks:
         max_value=1.0,
         value=0.7,
         step=0.05,
-        help="1.0 = trust your market valuation only. 0.0 = banks only.",
+        help="1.0 = market FV only, 0.0 = banks only.",
     )
     W_BANKS = 1.0 - W_MARKET
 else:
@@ -336,7 +354,7 @@ show_banks = bool(bank_targets)
 
 
 # -------------------------------
-# MAIN: TITLE + CAPTION
+# MAIN TITLE
 # -------------------------------
 st.title("FAIR VALUE DASHBOARD · SPY (BASE) & SPYM")
 st.caption(
@@ -356,14 +374,11 @@ except Exception as e:
     st.error(f"Error fetching data: {e}")
     st.stop()
 
-# Compute SPY fair value from market input
 fv_spy_market = calc_fair_value_from_market(spy_price, is_undervalued, market_pct)
-# Derive SPYM fair value via price ratio to SPY
 fv_spym_market = fv_spy_market * (spym_price / spy_price)
 
-
 # -------------------------------
-# TOP METRICS ROW
+# TOP METRICS
 # -------------------------------
 col1, col2, col3 = st.columns(3)
 
@@ -390,22 +405,18 @@ with col3:
         )
     else:
         st.markdown('<div class="metric-title">Bank Benchmarks</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="metric-value">OFF</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="metric-value">OFF</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
 # -------------------------------
-# GLOBAL MARKETS · ROTATING GLOBE
+# GLOBAL MARKETS · GLOBE
 # -------------------------------
 st.subheader("GLOBAL MARKETS · ROTATING GLOBE")
 
 try:
     globe_points = get_global_index_changes(GLOBAL_MARKETS)
 
-    # Data for JS globe (only need name/lat/lng + 1D change)
     globe_data = [
         {
             "name": p["name"],
@@ -427,16 +438,15 @@ try:
     const world = Globe()
       (document.getElementById('globeViz'))
       .backgroundColor('#050608')
-      .globeImageUrl(null)           // solid color globe, not image
+      .globeImageUrl(null)
       .showAtmosphere(false)
       .pointsData(data)
       .pointLat('lat')
       .pointLng('lng')
       .pointAltitude(d => 0.06 + Math.min(Math.abs(d.chg1d) / 100 * 0.2, 0.4))
-      .pointRadius(0.9)              // bigger markers
+      .pointRadius(0.9)
       .pointColor(d => d.chg1d >= 0 ? '#4dff4d' : '#ff4d4d');
 
-    // ALWAYS-ON LABELS (no hover needed)
     world
       .labelsData(data)
       .labelLat('lat')
@@ -448,19 +458,17 @@ try:
       .labelColor(d => '#ffffff')
       .labelResolution(2);
 
-    // Solid blue water
     const globeMaterial = world.globeMaterial();
     globeMaterial.color.set('#0066ff');   // water blue
     globeMaterial.opacity = 1.0;
 
-    // Solid green land (country polygons)
     fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
       .then(res => res.json())
       .then(worldData => {{
         const countries = topojson.feature(worldData, worldData.objects.countries).features;
         world
           .polygonsData(countries)
-          .polygonCapColor(() => '#00aa55')     // land green
+          .polygonCapColor(() => '#00aa55')   // land green
           .polygonSideColor(() => '#00994d')
           .polygonStrokeColor(() => '#003300')
           .polygonAltitude(0.003);
@@ -486,58 +494,51 @@ except Exception as e:
     st.info(f"Global globe view unavailable right now: {e}")
 
 # -------------------------------
-# GLOBAL MARKETS SNAPSHOT TABLE
+# GLOBAL INDEX BOARD (PADDED)
 # -------------------------------
-global_rows = []
+board_rows = []
 for p in globe_points:
-    global_rows.append(
-        {
-            "Index": p["name"],
-            "Last": p["last"],
-            "1D%": p["chg_1d"],
-            "5D%": p["chg_5d"],
-            "From 52W High%": p["off_high_pct"],
-        }
+    last = p["last"]
+    chg1 = p["chg_1d"]
+    chg5 = p["chg_5d"]
+    offh = p["off_high_pct"]
+
+    last_txt = f"{last:,.2f}" if last else "N/A"
+    chg1_txt = f"{chg1:+.2f}%" if chg1 or chg1 == 0 else "N/A"
+    chg5_txt = f"{chg5:+.2f}%" if chg5 or chg5 == 0 else "N/A"
+    offh_txt = f"{offh:+.2f}%" if offh or offh == 0 else "N/A"
+
+    cls1 = "global-board-change-pos" if chg1 > 0 else "global-board-change-neg" if chg1 < 0 else "global-board-high"
+    cls5 = "global-board-change-pos" if chg5 > 0 else "global-board-change-neg" if chg5 < 0 else "global-board-high"
+
+    board_rows.append(
+        f"""
+        <div class="global-board-row">
+            <div class="global-board-name">{p['name']}</div>
+            <div>
+                <span class="global-board-level">{last_txt}</span>
+                <span class="{cls1}">{chg1_txt}</span>
+                <span class="{cls5}">{chg5_txt}</span>
+                <span class="global-board-high">52W {offh_txt}</span>
+            </div>
+        </div>
+        """
     )
 
-global_df = pd.DataFrame(global_rows)
-
-def color_change(val):
-    if pd.isna(val):
-        return ""
-    try:
-        v = float(val)
-    except ValueError:
-        return ""
-    if v > 0:
-        return "color: #08ff7e; font-weight: 600;"
-    elif v < 0:
-        return "color: #ff4d4d; font-weight: 600;"
-    else:
-        return "color: #aaaaaa;"
-
-st.subheader("GLOBAL MARKETS SNAPSHOT")
-if not global_df.empty:
-    styled_global = (
-        global_df.style
-        .format(
-            {
-                "Last": "{:,.2f}",
-                "1D%": "{:+.2f}",
-                "5D%": "{:+.2f}",
-                "From 52W High%": "{:+.2f}",
-            }
-        )
-        .applymap(color_change, subset=["1D%", "5D%", "From 52W High%"])
-    )
-    st.dataframe(styled_global, use_container_width=True, height=340)
-else:
-    st.info("No global index data available right now.")
+st.markdown(
+    f"""
+    <div class="global-board">
+        <div class="global-board-title">GLOBAL INDEX SNAPSHOT</div>
+        {''.join(board_rows)}
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown("---")
 
 # -------------------------------
-# BUILD TABLE FOR SPY & SPYM
+# SPY & SPYM TABLE
 # -------------------------------
 rows = []
 for ticker, price, fv_mkt in [
@@ -621,13 +622,10 @@ st.markdown(
 **Notes**
 
 - **FV_Market**: Fair value from your UNDERVALUE / OVERVALUED input.  
-  SPY is calculated directly; SPYM is scaled from SPY via the live SPYM/SPY price ratio.
-
-- **Ups_M%**: (FV_Market − Price) / Price × 100.
-
+- **Ups_M%**: (FV_Market − Price) / Price × 100.  
+- SPYM FV is scaled off SPY via the live SPYM/SPY price ratio.  
 - If bank targets are used:
-  - **FV_Street**: Average ETF-level fair value implied by the bank SPX targets.
+  - **FV_Street**: Average ETF FV implied by bank SPX targets.
   - **FV_Blend**: W_MARKET × FV_Market + W_BANKS × FV_Street.
-  - **Ups_S% / Ups_B%**: Upside vs current price using Street and Blended fair values.
 """
 )
