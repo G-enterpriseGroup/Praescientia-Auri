@@ -57,11 +57,15 @@ BANK_NAMES = ["JPM", "GS", "BofA", "MS", "Citi"]
 
 # Major global benchmarks to show on the globe
 GLOBAL_MARKETS = [
-    {"name": "US · SPX", "ticker": "^GSPC", "lat": 40.7128, "lng": -74.0060},     # New York
-    {"name": "UK · FTSE 100", "ticker": "^FTSE", "lat": 51.5074, "lng": -0.1278}, # London
+    {"name": "US · SPX", "ticker": "^GSPC", "lat": 40.7128, "lng": -74.0060},      # New York
+    {"name": "UK · FTSE 100", "ticker": "^FTSE", "lat": 51.5074, "lng": -0.1278},  # London
     {"name": "EU · Euro Stoxx 50", "ticker": "^STOXX50E", "lat": 48.8566, "lng": 2.3522},  # Paris
+    {"name": "DE · DAX", "ticker": "^GDAXI", "lat": 50.1109, "lng": 8.6821},       # Frankfurt
     {"name": "JP · Nikkei 225", "ticker": "^N225", "lat": 35.6895, "lng": 139.6917},       # Tokyo
     {"name": "HK · Hang Seng", "ticker": "^HSI", "lat": 22.3193, "lng": 114.1694},         # Hong Kong
+    {"name": "IN · Sensex", "ticker": "^BSESN", "lat": 19.0760, "lng": 72.8777},           # Mumbai
+    {"name": "CA · S&P/TSX", "ticker": "^GSPTSE", "lat": 43.6532, "lng": -79.3832},        # Toronto
+    {"name": "AU · ASX 200", "ticker": "^AXJO", "lat": -33.8688, "lng": 151.2093},         # Sydney
 ]
 
 
@@ -242,26 +246,31 @@ def color_upsides(val):
 @st.cache_data(ttl=300)
 def get_global_index_changes(markets):
     """
-    Get 1-day % change for each global benchmark in GLOBAL_MARKETS.
+    Get index level + 1-day % change for each global benchmark in GLOBAL_MARKETS.
     Falls back to 0.0 if data is missing.
     """
     results = []
     for m in markets:
         change = 0.0
+        level = 0.0
         try:
             hist = yf.Ticker(m["ticker"]).history(period="2d")
+            if len(hist) >= 1:
+                level = float(hist["Close"].iloc[-1])
             if len(hist) >= 2:
-                prev_close = hist["Close"].iloc[-2]
-                last_close = hist["Close"].iloc[-1]
+                prev_close = float(hist["Close"].iloc[-2])
+                last_close = float(hist["Close"].iloc[-1])
                 if prev_close > 0:
                     change = (last_close - prev_close) / prev_close * 100.0
         except Exception:
             change = 0.0
+            level = 0.0
         result = {
             "name": m["name"],
             "lat": m["lat"],
             "lng": m["lng"],
             "change": float(change),
+            "level": float(level),
         }
         results.append(result)
     return results
@@ -398,17 +407,18 @@ st.markdown("---")
 # -------------------------------
 # GLOBAL MARKETS ROTATING GLOBE
 # -------------------------------
-st.subheader("GLOBAL MARKETS · ROTATING GLOBE (BETA)")
+st.subheader("GLOBAL MARKETS · ROTATING GLOBE")
 
 try:
     globe_points = get_global_index_changes(GLOBAL_MARKETS)
-    # Round changes for cleaner labels and avoid NaN in JS
+    # Round changes and levels for cleaner labels (and avoid NaN in JS)
     globe_data = [
         {
             "name": p["name"],
             "lat": p["lat"],
             "lng": p["lng"],
             "change": round(p["change"], 2),
+            "level": round(p["level"], 2),
         }
         for p in globe_points
     ]
@@ -422,146 +432,25 @@ try:
 
     const world = Globe()
       (document.getElementById('globeViz'))
-      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-      .backgroundColor('#050608')
+      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+      .backgroundColor('#02030a')
       .showAtmosphere(true)
-      .atmosphereColor('#ff9f1c')
-      .atmosphereAltitude(0.25)
+      .atmosphereColor('#4fd1ff')
+      .atmosphereAltitude(0.28)
       .pointsData(data)
       .pointLat('lat')
       .pointLng('lng')
-      .pointAltitude(d => 0.03 + Math.min(Math.abs(d.change) / 100 * 0.15, 0.3))
-      .pointRadius(0.6)
+      .pointAltitude(d => 0.03 + Math.min(Math.abs(d.change) / 100 * 0.18, 0.35))
+      .pointRadius(0.75)
       .pointColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
-      .pointLabel(d => `${{d.name}}: ${{d.change.toFixed(2)}}%`);
+      .pointLabel(d => (
+        d.name + '<br/>Index: ' +
+        (d.level ? d.level.toLocaleString() : 'N/A') +
+        '<br/>Change: ' + d.change.toFixed(2) + '%'
+      ));
 
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.4;
-    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.0 }}, 4000);
+    world.controls().autoRotateSpeed = 0.5;
+    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.1 }}, 4000);
     </script>
     <style>
-    #globeViz {{
-      width: 100%;
-      height: 420px;
-      margin-top: 8px;
-      border-radius: 18px;
-      border: 1px solid #ff9f1c33;
-    }}
-    </style>
-    """
-
-    components.html(globe_html, height=460)
-except Exception as e:
-    st.info(f"Global globe view unavailable right now: {e}")
-
-st.markdown("---")
-
-# -------------------------------
-# BUILD TABLE FOR SPY & SPYM
-# -------------------------------
-rows = []
-
-for ticker, price, fv_mkt in [
-    (SPY_TICKER, spy_price, fv_spy_market),
-    (SPYM_TICKER, spym_price, fv_spym_market),
-]:
-    row = {
-        "Ticker": ticker,
-        "Price": price,
-        "FV_Market": fv_mkt,
-        "Ups_M%": (fv_mkt - price) / price * 100.0,
-    }
-
-    if show_banks:
-        fv_by_bank = street_fair_values_for_etf(price, spx_price, bank_targets)
-        fv_street_avg = mean(fv_by_bank.values())
-        ups_street = (fv_street_avg - price) / price * 100.0
-
-        fv_blend = W_MARKET * fv_mkt + W_BANKS * fv_street_avg
-        ups_blend = (fv_blend - price) / price * 100.0
-
-        row["FV_Street"] = fv_street_avg
-        row["Ups_S%"] = ups_street
-        row["FV_Blend"] = fv_blend
-        row["Ups_B%"] = ups_blend
-
-    rows.append(row)
-
-df = pd.DataFrame(rows)
-
-if show_banks:
-    df = df[
-        [
-            "Ticker",
-            "Price",
-            "FV_Market",
-            "Ups_M%",
-            "FV_Street",
-            "Ups_S%",
-            "FV_Blend",
-            "Ups_B%",
-        ]
-    ]
-else:
-    df = df[
-        [
-            "Ticker",
-            "Price",
-            "FV_Market",
-            "Ups_M%",
-        ]
-    ]
-
-
-# Format + Bloomberg-style color on upsides
-if show_banks:
-    styled = (
-        df.style
-        .format(
-            {
-                "Price": "{:,.2f}",
-                "FV_Market": "{:,.2f}",
-                "Ups_M%": "{:,.2f}",
-                "FV_Street": "{:,.2f}",
-                "Ups_S%": "{:,.2f}",
-                "FV_Blend": "{:,.2f}",
-                "Ups_B%": "{:,.2f}",
-            }
-        )
-        .applymap(color_upsides, subset=["Ups_M%", "Ups_S%", "Ups_B%"])
-    )
-else:
-    styled = (
-        df.style
-        .format(
-            {
-                "Price": "{:,.2f}",
-                "FV_Market": "{:,.2f}",
-                "Ups_M%": "{:,.2f}",
-            }
-        )
-        .applymap(color_upsides, subset=["Ups_M%"])
-    )
-
-st.subheader("FAIR VALUE SNAPSHOT (LIVE)")
-st.dataframe(
-    styled,
-    use_container_width=True,
-    height=220,
-)
-
-st.markdown(
-    """
-**Notes**
-
-- **FV_Market**: Fair value from your UNDERVALUE / OVERVALUED input.  
-  SPY is calculated directly; SPYM is scaled from SPY via the live SPYM/SPY price ratio.
-
-- **Ups_M%**: (FV_Market − Price) / Price × 100.
-
-- If bank targets are used:
-  - **FV_Street**: Average ETF-level fair value implied by the bank SPX targets.
-  - **FV_Blend**: W_MARKET × FV_Market + W_BANKS × FV_Street.
-  - **Ups_S% / Ups_B%**: Upside vs current price using Street and Blended fair values.
-"""
-)
