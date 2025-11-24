@@ -15,9 +15,6 @@ Features
     - Market condition: UNDERVALUE / OVERVALUED
     - Magnitude in % (positive number, e.g. 5.6)
 
-  TIP: When using Morningstar, type their
-       US Market "Undervalued X%" number as X here.
-
 Logic (for SPY):
     If UNDERVALUE X%:
         Price = FV * (1 - X/100)
@@ -405,9 +402,9 @@ with col3:
 st.markdown("---")
 
 # -------------------------------
-# GLOBAL MARKETS ROTATING GLOBE
+# GLOBAL MARKETS DIGITAL GLOBE
 # -------------------------------
-st.subheader("GLOBAL MARKETS · ROTATING GLOBE")
+st.subheader("GLOBAL MARKETS · DIGITAL GLOBE")
 
 try:
     globe_points = get_global_index_changes(GLOBAL_MARKETS)
@@ -427,30 +424,59 @@ try:
     globe_html = f"""
     <div id="globeViz"></div>
     <script src="https://unpkg.com/globe.gl"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
     <script>
     const data = {data_json};
 
     const world = Globe()
       (document.getElementById('globeViz'))
-      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-      .backgroundColor('#02030a')
-      .showAtmosphere(true)
-      .atmosphereColor('#4fd1ff')
-      .atmosphereAltitude(0.28)
+      .backgroundColor('#050608')
+      .showAtmosphere(false)
+      .globeImageUrl(null)  // solid color water via material
       .pointsData(data)
       .pointLat('lat')
       .pointLng('lng')
       .pointAltitude(d => 0.03 + Math.min(Math.abs(d.change) / 100 * 0.18, 0.35))
-      .pointRadius(0.75)
+      .pointRadius(0.35)
       .pointColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
       .pointLabel(d => (
-        d.name + '<br/>Index: ' +
+        d.name + ' | ' +
         (d.level ? d.level.toLocaleString() : 'N/A') +
-        '<br/>Change: ' + d.change.toFixed(2) + '%'
-      ));
+        ' (' + d.change.toFixed(2) + '%)'
+      ))
+      .labelsData(data)
+      .labelLat('lat')
+      .labelLng('lng')
+      .labelText(d => (
+        d.name + ' ' +
+        (d.level ? d.level.toLocaleString() : 'N/A') +
+        ' (' + d.change.toFixed(2) + '%)'
+      ))
+      .labelSize(1.6)
+      .labelDotRadius(0.25)
+      .labelColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
+      .labelResolution(2);
+
+    // Light grey water (digital look)
+    const globeMaterial = world.globeMaterial();
+    globeMaterial.color.set('#e4e4e4');   // water
+    globeMaterial.opacity = 1.0;
+
+    // Land polygons in solid orange
+    fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
+      .then(res => res.json())
+      .then(worldData => {{
+        const countries = topojson.feature(worldData, worldData.objects.countries).features;
+        world
+          .polygonsData(countries)
+          .polygonCapColor(() => '#ff9f1c')
+          .polygonSideColor(() => '#ff9f1c')
+          .polygonStrokeColor(() => '#050608')
+          .polygonAltitude(0.003);
+      }});
 
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.5;
+    world.controls().autoRotateSpeed = 0.55;
     world.pointOfView({{ lat: 20, lng: 0, altitude: 2.1 }}, 4000);
     </script>
     <style>
@@ -461,6 +487,7 @@ try:
       border-radius: 18px;
       border: 1px solid #ff9f1c55;
       box-shadow: 0 0 22px rgba(255, 159, 28, 0.25);
+      background: radial-gradient(circle at top, #20242c 0, #050608 55%, #000000 100%);
     }}
     </style>
     """
