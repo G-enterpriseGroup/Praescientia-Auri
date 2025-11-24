@@ -24,17 +24,17 @@ SPYM_TICKER = "SPYM"
 BANK_NAMES = ["JPM", "GS", "BofA", "MS", "Citi"]
 
 # Major global benchmarks to show on the globe
-# Coordinates spaced so labels don't overlap as much
+# Coordinates spaced to reduce overlap
 GLOBAL_MARKETS = [
-    {"name": "US · SPX",       "ticker": "^GSPC",   "lat": 38.0,  "lng": -97.0},   # central US
-    {"name": "CA · S&P/TSX",   "ticker": "^GSPTSE", "lat": 56.0,  "lng": -106.0},  # central Canada
-    {"name": "UK · FTSE 100",  "ticker": "^FTSE",   "lat": 51.5,  "lng": -0.1},    # London
-    {"name": "EU · STOXX 50",  "ticker": "^STOXX50E","lat": 48.9, "lng": 2.35},    # Paris
-    {"name": "DE · DAX",       "ticker": "^GDAXI",  "lat": 50.1,  "lng": 8.68},    # Frankfurt
-    {"name": "JP · Nikkei 225","ticker": "^N225",   "lat": 35.7,  "lng": 139.7},   # Tokyo
-    {"name": "HK · Hang Seng", "ticker": "^HSI",    "lat": 22.3,  "lng": 114.2},   # Hong Kong
-    {"name": "IN · Sensex",    "ticker": "^BSESN",  "lat": 19.1,  "lng": 72.9},    # Mumbai
-    {"name": "AU · ASX 200",   "ticker": "^AXJO",   "lat": -33.9, "lng": 151.2},   # Sydney
+    {"name": "US · SPX",       "ticker": "^GSPC",    "lat": 38.0,  "lng": -97.0},
+    {"name": "CA · S&P/TSX",   "ticker": "^GSPTSE",  "lat": 56.0,  "lng": -106.0},
+    {"name": "UK · FTSE 100",  "ticker": "^FTSE",    "lat": 51.5,  "lng": -0.1},
+    {"name": "EU · STOXX 50",  "ticker": "^STOXX50E","lat": 48.9,  "lng": 2.35},
+    {"name": "DE · DAX",       "ticker": "^GDAXI",   "lat": 50.1,  "lng": 8.68},
+    {"name": "JP · Nikkei",    "ticker": "^N225",    "lat": 35.7,  "lng": 139.7},
+    {"name": "HK · Hang Seng", "ticker": "^HSI",     "lat": 22.3,  "lng": 114.2},
+    {"name": "IN · Sensex",    "ticker": "^BSESN",   "lat": 19.1,  "lng": 72.9},
+    {"name": "AU · ASX 200",   "ticker": "^AXJO",    "lat": -33.9, "lng": 151.2},
 ]
 
 
@@ -135,6 +135,45 @@ st.markdown(
     div[role="radiogroup"] label span {
         color: #f4f4f4 !important;
     }
+
+    /* Global markets board under globe */
+    .global-board {
+        margin-top: 10px;
+        padding: 10px 16px;
+        border-radius: 14px;
+        background: rgba(5, 6, 8, 0.8);
+        border: 1px solid #ff9f1c55;
+        font-size: 0.82rem;
+    }
+    .global-board-title {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.72rem;
+        color: #ffb347;
+        margin-bottom: 4px;
+    }
+    .global-board-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+    }
+    .global-board-name {
+        color: #f4f4f4;
+    }
+    .global-board-level {
+        color: #cccccc;
+        margin-left: 8px;
+    }
+    .global-board-change-pos {
+        color: #08ff7e;
+        font-weight: 600;
+        margin-left: 8px;
+    }
+    .global-board-change-neg {
+        color: #ff4d4d;
+        font-weight: 600;
+        margin-left: 8px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -156,26 +195,17 @@ def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) 
     if pct <= 0:
         raise ValueError("Percent must be positive (e.g. 5.6).")
 
-    if is_undervalued:
-        factor = 1.0 - pct / 100.0
-    else:
-        factor = 1.0 + pct / 100.0
-
+    factor = 1.0 - pct / 100.0 if is_undervalued else 1.0 + pct / 100.0
     if factor == 0:
         raise ValueError("Factor became zero; check your inputs.")
-
     return price / factor
 
 
 def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets: dict) -> dict:
     if spx_price <= 0:
         raise ValueError("SPX price must be positive.")
-
     k = etf_price / spx_price
-    fv_by_bank = {}
-    for bank, target in bank_targets.items():
-        fv_by_bank[bank] = k * float(target)
-    return fv_by_bank
+    return {bank: k * float(target) for bank, target in bank_targets.items()}
 
 
 def color_upsides(val):
@@ -256,7 +286,6 @@ use_banks = st.sidebar.checkbox(
 )
 
 bank_targets = {}
-
 if use_banks:
     st.sidebar.subheader("Bank SPX Targets")
     for name in BANK_NAMES:
@@ -290,7 +319,7 @@ show_banks = bool(bank_targets)
 
 
 # -------------------------------
-# MAIN: TITLE + CAPTION
+# MAIN TITLE
 # -------------------------------
 st.title("FAIR VALUE DASHBOARD · SPY (BASE) & SPYM")
 st.caption(
@@ -383,25 +412,17 @@ try:
       .pointLat('lat')
       .pointLng('lng')
       .pointAltitude(d => 0.03 + Math.min(Math.abs(d.change) / 100 * 0.18, 0.35))
-      .pointRadius(0.4)
+      .pointRadius(0.45)
       .pointColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
-      .pointLabel(d => (
-        d.name + ' | ' +
-        (d.level ? d.level.toLocaleString() : 'N/A') +
-        ' (' + d.change.toFixed(2) + '%)'
-      ))
+      // short labels only (name), numbers go to the board below
       .labelsData(data)
       .labelLat('lat')
       .labelLng('lng')
-      .labelAltitude(0.04)
-      .labelText(d => (
-        d.name + '\\n' +
-        (d.level ? d.level.toLocaleString() : 'N/A') +
-        ' (' + d.change.toFixed(2) + '%)'
-      ))
-      .labelSize(1.0)
-      .labelDotRadius(0.15)
-      .labelColor(() => '#f4f4f4')
+      .labelAltitude(0.05)
+      .labelText(d => d.name)
+      .labelSize(1.4)
+      .labelDotRadius(0.16)
+      .labelColor(() => '#fdfdfd')
       .labelResolution(2);
 
     // Light grey water
@@ -423,13 +444,13 @@ try:
       }});
 
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.35;
-    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.0 }}, 4000);
+    world.controls().autoRotateSpeed = 0.32;
+    world.pointOfView({{ lat: 20, lng: 0, altitude: 1.9 }}, 4000);
     </script>
     <style>
     #globeViz {{
       width: 100%;
-      height: 420px;
+      height: 520px;   /* bigger globe */
       margin-top: 8px;
       border-radius: 18px;
       border: 1px solid #ff9f1c55;
@@ -439,9 +460,41 @@ try:
     </style>
     """
 
-    components.html(globe_html, height=460)
+    components.html(globe_html, height=560)
 except Exception as e:
     st.info(f"Global globe view unavailable right now: {e}")
+
+# -------------------------------
+# GLOBAL MARKETS BOARD (READABLE NUMBERS)
+# -------------------------------
+# This is the "transparent padding behind it" area with all the data clean and big
+board_html_rows = []
+for row in globe_data:
+    lvl = f"{row['level']:,.2f}" if row["level"] > 0 else "N/A"
+    chg = row["change"]
+    chg_cls = "global-board-change-pos" if chg >= 0 else "global-board-change-neg"
+    chg_txt = f"{chg:+.2f}%"
+    board_html_rows.append(
+        f"""
+        <div class="global-board-row">
+            <div class="global-board-name">{row['name']}</div>
+            <div>
+                <span class="global-board-level">{lvl}</span>
+                <span class="{chg_cls}">{chg_txt}</span>
+            </div>
+        </div>
+        """
+    )
+
+st.markdown(
+    f"""
+    <div class="global-board">
+        <div class="global-board-title">GLOBAL INDEX SNAPSHOT</div>
+        {''.join(board_html_rows)}
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown("---")
 
@@ -449,7 +502,6 @@ st.markdown("---")
 # BUILD TABLE FOR SPY & SPYM
 # -------------------------------
 rows = []
-
 for ticker, price, fv_mkt in [
     (SPY_TICKER, spy_price, fv_spy_market),
     (SPYM_TICKER, spym_price, fv_spym_market),
