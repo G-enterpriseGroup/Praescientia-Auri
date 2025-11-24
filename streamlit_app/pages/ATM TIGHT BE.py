@@ -313,9 +313,9 @@ else:
             with tab1:
                 st.subheader("Paired Calls & Puts by Strike (Strangle Bands)")
 
-                # VISUAL: horizontal bands from BP to BC with vertical SPOT line
                 viz_df = paired_df.copy()
 
+                # Band: BP → BC
                 band = (
                     alt.Chart(viz_df)
                     .mark_rule(stroke=BLOOM_ORANGE, strokeWidth=3, opacity=0.9)
@@ -334,13 +334,39 @@ else:
                     )
                 )
 
+                # Spot line
                 spot_line = (
                     alt.Chart(pd.DataFrame({"SPOT": [spot_val]}))
                     .mark_rule(stroke="#ffffff", strokeWidth=2, strokeDash=[4, 4])
                     .encode(x="SPOT:Q")
                 )
 
-                chart = (band + spot_line).properties(
+                # Label endpoints: Put BE (left) and Call BE (right)
+                end_points = pd.concat(
+                    [
+                        viz_df.assign(Price=viz_df["BP"], Type="Put BE"),
+                        viz_df.assign(Price=viz_df["BC"], Type="Call BE"),
+                    ],
+                    ignore_index=True,
+                )
+
+                points = (
+                    alt.Chart(end_points)
+                    .mark_point(size=70)
+                    .encode(
+                        x="Price:Q",
+                        y="STK:O",
+                        color=alt.Color("Type:N", title="", scale=alt.Scale(range=["#00d1ff", "#ff4b4b"])),
+                        shape="Type:N",
+                        tooltip=[
+                            alt.Tooltip("STK:Q", title="Strike"),
+                            alt.Tooltip("Type:N", title="Side"),
+                            alt.Tooltip("Price:Q", title="Breakeven"),
+                        ],
+                    )
+                )
+
+                chart = (band + spot_line + points).properties(
                     height=400,
                     title="Strangle Breakeven Bands vs Spot",
                 )
@@ -348,7 +374,8 @@ else:
                 st.altair_chart(chart, use_container_width=True)
 
                 st.caption(
-                    "Each orange band = one strike's strangle: BP (left) to BC (right). "
+                    "Orange band = strangle range from BP (Put breakeven) to BC (Call breakeven). "
+                    "Blue point = Put BE, red point = Call BE. "
                     "White dashed line = current spot. Narrower bands & smaller CD = tighter strangles."
                 )
 
@@ -413,4 +440,3 @@ else:
 
     except Exception as e:
         st.error(f"Error: {e}")
-
