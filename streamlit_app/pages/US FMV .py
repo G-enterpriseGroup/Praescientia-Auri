@@ -103,7 +103,7 @@ st.markdown(
         letter-spacing: 0.05em;
     }
 
-    /* Top metrics cards: use Streamlit columns + custom text classes */
+    /* Top metrics cards */
     .metric-title {
         font-size: 0.8rem;
         color: #ff9f1c;
@@ -187,14 +187,9 @@ def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) 
     if pct <= 0:
         raise ValueError("Percent must be positive (e.g. 5.6).")
 
-    if is_undervalued:
-        factor = 1.0 - pct / 100.0
-    else:
-        factor = 1.0 + pct / 100.0
-
+    factor = 1.0 - pct / 100.0 if is_undervalued else 1.0 + pct / 100.0
     if factor == 0:
         raise ValueError("Factor became zero; check your inputs.")
-
     return price / factor
 
 
@@ -206,10 +201,7 @@ def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets:
         raise ValueError("SPX price must be positive.")
 
     k = etf_price / spx_price
-    fv_by_bank = {}
-    for bank, target in bank_targets.items():
-        fv_by_bank[bank] = k * float(target)
-    return fv_by_bank
+    return {bank: k * float(target) for bank, target in bank_targets.items()}
 
 
 def color_upsides(val):
@@ -228,30 +220,53 @@ def color_upsides(val):
         return "color: #aaaaaa;"                     # muted grey
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def get_global_index_changes(markets):
     """
-    Get 1-day % change for each global benchmark in GLOBAL_MARKETS.
-    Falls back to 0.0 if data is missing.
+    For each index:
+      - Last close
+      - 1D % change (vs previous close)
+      - 5D % change (vs ~5 trading days ago)
+      - % from 52-week high (approx using last 1y)
+    Using Yahoo Finance daily history.
     """
     results = []
     for m in markets:
-        change = 0.0
+        last = 0.0
+        chg_1d = 0.0
+        chg_5d = 0.0
+        off_high_pct = 0.0
         try:
-            hist = yf.Ticker(m["ticker"]).history(period="2d")
-            if len(hist) >= 2:
-                prev_close = hist["Close"].iloc[-2]
-                last_close = hist["Close"].iloc[-1]
-                if prev_close > 0:
-                    change = (last_close - prev_close) / prev_close * 100.0
+            hist = yf.Ticker(m["ticker"]).history(period="1y")
+            close = hist["Close"].dropna()
+            if not close.empty:
+                last = float(close.iloc[-1])
+
+                if close.size >= 2:
+                    prev1 = float(close.iloc[-2])
+                    if prev1 > 0:
+                        chg_1d = (last - prev1) / prev1 * 100.0
+
+                if close.size >= 6:
+                    prev5 = float(close.iloc[-6])
+                    if prev5 > 0:
+                        chg_5d = (last - prev5) / prev5 * 100.0
+
+                high_52w = float(close.max())
+                if high_52w > 0:
+                    off_high_pct = (last - high_52w) / high_52w * 100.0
         except Exception:
-            change = 0.0
+            pass
+
         results.append(
             {
                 "name": m["name"],
                 "lat": m["lat"],
                 "lng": m["lng"],
-                "change": float(change),
+                "last": float(last),
+                "chg_1d": float(chg_1d),
+                "chg_5d": float(chg_5d),
+                "off_high_pct": float(off_high_pct),
             }
         )
     return results
@@ -383,18 +398,20 @@ with col3:
 st.markdown("---")
 
 # -------------------------------
-# GLOBAL MARKETS ROTATING GLOBE
+# GLOBAL MARKETS · ROTATING GLOBE
 # -------------------------------
-st.subheader("GLOBAL MARKETS · ROTATING GLOBE (BETA)")
+st.subheader("GLOBAL MARKETS · ROTATING GLOBE")
 
 try:
     globe_points = get_global_index_changes(GLOBAL_MARKETS)
+
+    # Data for JS globe (only need name/lat/lng + 1D change)
     globe_data = [
         {
             "name": p["name"],
             "lat": p["lat"],
             "lng": p["lng"],
-            "change": round(p["change"], 2),
+            "chg1d": round(p["chg_1d"], 2),
         }
         for p in globe_points
     ]
@@ -410,15 +427,26 @@ try:
     const world = Globe()
       (document.getElementById('globeViz'))
       .backgroundColor('#050608')
-      .globeImageUrl(null)           // use solid color, not a photo texture
+      .globeImageUrl(null)           // solid color globe, not image
       .showAtmosphere(false)
       .pointsData(data)
       .pointLat('lat')
       .pointLng('lng')
-      .pointAltitude(d => 0.06 + Math.min(Math.abs(d.change) / 100 * 0.2, 0.4))
+      .pointAltitude(d => 0.06 + Math.min(Math.abs(d.chg1d) / 100 * 0.2, 0.4))
       .pointRadius(0.9)              // bigger markers
-      .pointColor(d => d.change >= 0 ? '#4dff4d' : '#ff4d4d')  // brighter green/red
-      .pointLabel(d => `${{d.name}}: ${{d.change.toFixed(2)}}%`);
+      .pointColor(d => d.chg1d >= 0 ? '#4dff4d' : '#ff4d4d');
+
+    // ALWAYS-ON LABELS (no hover needed)
+    world
+      .labelsData(data)
+      .labelLat('lat')
+      .labelLng('lng')
+      .labelAltitude(0.09)
+      .labelText(d => d.name + " " + d.chg1d.toFixed(2) + "%")
+      .labelSize(1.2)
+      .labelDotRadius(0.18)
+      .labelColor(d => '#ffffff')
+      .labelResolution(2);
 
     // Solid blue water
     const globeMaterial = world.globeMaterial();
@@ -445,7 +473,7 @@ try:
     <style>
     #globeViz {{
       width: 100%;
-      height: 440px;
+      height: 460px;
       margin-top: 8px;
       border-radius: 18px;
       border: 1px solid #ff9f1c33;
@@ -453,9 +481,58 @@ try:
     </style>
     """
 
-    components.html(globe_html, height=480)
+    components.html(globe_html, height=500)
 except Exception as e:
     st.info(f"Global globe view unavailable right now: {e}")
+
+# -------------------------------
+# GLOBAL MARKETS SNAPSHOT TABLE
+# -------------------------------
+global_rows = []
+for p in globe_points:
+    global_rows.append(
+        {
+            "Index": p["name"],
+            "Last": p["last"],
+            "1D%": p["chg_1d"],
+            "5D%": p["chg_5d"],
+            "From 52W High%": p["off_high_pct"],
+        }
+    )
+
+global_df = pd.DataFrame(global_rows)
+
+def color_change(val):
+    if pd.isna(val):
+        return ""
+    try:
+        v = float(val)
+    except ValueError:
+        return ""
+    if v > 0:
+        return "color: #08ff7e; font-weight: 600;"
+    elif v < 0:
+        return "color: #ff4d4d; font-weight: 600;"
+    else:
+        return "color: #aaaaaa;"
+
+st.subheader("GLOBAL MARKETS SNAPSHOT")
+if not global_df.empty:
+    styled_global = (
+        global_df.style
+        .format(
+            {
+                "Last": "{:,.2f}",
+                "1D%": "{:+.2f}",
+                "5D%": "{:+.2f}",
+                "From 52W High%": "{:+.2f}",
+            }
+        )
+        .applymap(color_change, subset=["1D%", "5D%", "From 52W High%"])
+    )
+    st.dataframe(styled_global, use_container_width=True, height=340)
+else:
+    st.info("No global index data available right now.")
 
 st.markdown("---")
 
@@ -507,7 +584,6 @@ if show_banks:
 else:
     df = df[["Ticker", "Price", "FV_Market", "Ups_M%"]]
 
-# Format + Bloomberg-style color on upsides
 if show_banks:
     styled = (
         df.style
