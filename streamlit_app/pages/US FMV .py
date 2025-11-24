@@ -103,7 +103,7 @@ st.markdown(
         letter-spacing: 0.05em;
     }
 
-    /* Top metrics cards: use Streamlit columns + custom text classes */
+    /* Top metrics cards */
     .metric-title {
         font-size: 0.8rem;
         color: #ff9f1c;
@@ -187,14 +187,9 @@ def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) 
     if pct <= 0:
         raise ValueError("Percent must be positive (e.g. 5.6).")
 
-    if is_undervalued:
-        factor = 1.0 - pct / 100.0
-    else:
-        factor = 1.0 + pct / 100.0
-
+    factor = 1.0 - pct / 100.0 if is_undervalued else 1.0 + pct / 100.0
     if factor == 0:
         raise ValueError("Factor became zero; check your inputs.")
-
     return price / factor
 
 
@@ -206,10 +201,7 @@ def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets:
         raise ValueError("SPX price must be positive.")
 
     k = etf_price / spx_price
-    fv_by_bank = {}
-    for bank, target in bank_targets.items():
-        fv_by_bank[bank] = k * float(target)
-    return fv_by_bank
+    return {bank: k * float(target) for bank, target in bank_targets.items()}
 
 
 def color_upsides(val):
@@ -228,30 +220,53 @@ def color_upsides(val):
         return "color: #aaaaaa;"                     # muted grey
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def get_global_index_changes(markets):
     """
-    Get 1-day % change for each global benchmark in GLOBAL_MARKETS.
-    Falls back to 0.0 if data is missing.
+    For each index:
+      - Last close
+      - 1D % change (vs previous close)
+      - 5D % change (vs ~5 trading days ago)
+      - % from 52-week high (approx using last 1y)
+    Using Yahoo Finance daily history.
     """
     results = []
     for m in markets:
-        change = 0.0
+        last = 0.0
+        chg_1d = 0.0
+        chg_5d = 0.0
+        off_high_pct = 0.0
         try:
-            hist = yf.Ticker(m["ticker"]).history(period="2d")
-            if len(hist) >= 2:
-                prev_close = hist["Close"].iloc[-2]
-                last_close = hist["Close"].iloc[-1]
-                if prev_close > 0:
-                    change = (last_close - prev_close) / prev_close * 100.0
+            hist = yf.Ticker(m["ticker"]).history(period="1y")
+            close = hist["Close"].dropna()
+            if not close.empty:
+                last = float(close.iloc[-1])
+
+                if close.size >= 2:
+                    prev1 = float(close.iloc[-2])
+                    if prev1 > 0:
+                        chg_1d = (last - prev1) / prev1 * 100.0
+
+                if close.size >= 6:
+                    prev5 = float(close.iloc[-6])
+                    if prev5 > 0:
+                        chg_5d = (last - prev5) / prev5 * 100.0
+
+                high_52w = float(close.max())
+                if high_52w > 0:
+                    off_high_pct = (last - high_52w) / high_52w * 100.0
         except Exception:
-            change = 0.0
+            pass
+
         results.append(
             {
                 "name": m["name"],
                 "lat": m["lat"],
                 "lng": m["lng"],
-                "change": float(change),
+                "last": float(last),
+                "chg_1d": float(chg_1d),
+                "chg_5d": float(chg_5d),
+                "off_high_pct": float(off_high_pct),
             }
         )
     return results
@@ -289,269 +304,4 @@ use_banks = st.sidebar.checkbox(
 
 bank_targets = {}
 if use_banks:
-    st.sidebar.subheader("Bank SPX Targets")
-    for name in BANK_NAMES:
-        val = st.sidebar.text_input(
-            f"{name} Target",
-            value="",
-            help="Leave blank to ignore this bank.",
-        )
-        if val.strip():
-            try:
-                bank_targets[name] = float(val.strip())
-            except ValueError:
-                st.sidebar.warning(f"Invalid number for {name}; ignoring.")
-
-    st.sidebar.markdown("---")
-    W_MARKET = st.sidebar.slider(
-        "Weight on Market Fair Value",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.7,
-        step=0.05,
-        help="1.0 = trust your market valuation only. 0.0 = banks only.",
-    )
-    W_BANKS = 1.0 - W_MARKET
-else:
-    bank_targets = {}
-    W_MARKET = 1.0
-    W_BANKS = 0.0
-
-show_banks = bool(bank_targets)
-
-
-# -------------------------------
-# MAIN: TITLE + CAPTION
-# -------------------------------
-st.title("FAIR VALUE DASHBOARD · SPY (BASE) & SPYM")
-st.caption(
-    "SPY fair value is derived directly from your market valuation input. "
-    "SPYM fair value is scaled off SPY via the live SPYM/SPY price ratio. "
-    "Bank SPX targets (if entered) are treated as benchmarks."
-)
-
-# -------------------------------
-# LIVE DATA FETCH
-# -------------------------------
-try:
-    spx_price = get_last_price(SPX_TICKER)
-    spy_price = get_last_price(SPY_TICKER)
-    spym_price = get_last_price(SPYM_TICKER)
-except Exception as e:
-    st.error(f"Error fetching data: {e}")
-    st.stop()
-
-# Compute SPY fair value from market input
-fv_spy_market = calc_fair_value_from_market(spy_price, is_undervalued, market_pct)
-# Derive SPYM fair value via price ratio to SPY
-fv_spym_market = fv_spy_market * (spym_price / spy_price)
-
-
-# -------------------------------
-# TOP METRICS ROW
-# -------------------------------
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown('<div class="metric-title">Market Condition</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="metric-value">{market_state.upper()} {market_pct:.2f}%</div>',
-        unsafe_allow_html=True,
-    )
-
-with col2:
-    st.markdown('<div class="metric-title">SPX (LIVE)</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="metric-value">{spx_price:,.2f}</div>',
-        unsafe_allow_html=True,
-    )
-
-with col3:
-    if show_banks:
-        st.markdown('<div class="metric-title">Blend Weights (Market / Banks)</div>', unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="metric-value">{W_MARKET:.2f} / {W_BANKS:.2f}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown('<div class="metric-title">Bank Benchmarks</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="metric-value">OFF</div>',
-            unsafe_allow_html=True,
-        )
-
-st.markdown("---")
-
-# -------------------------------
-# GLOBAL MARKETS ROTATING GLOBE
-# -------------------------------
-st.subheader("GLOBAL MARKETS · ROTATING GLOBE (BETA)")
-
-try:
-    globe_points = get_global_index_changes(GLOBAL_MARKETS)
-    globe_data = [
-        {
-            "name": p["name"],
-            "lat": p["lat"],
-            "lng": p["lng"],
-            "change": round(p["change"], 2),
-        }
-        for p in globe_points
-    ]
-    data_json = json.dumps(globe_data)
-
-    globe_html = f"""
-    <div id="globeViz"></div>
-    <script src="https://unpkg.com/globe.gl"></script>
-    <script src="https://unpkg.com/topojson-client@3"></script>
-    <script>
-    const data = {data_json};
-
-    const world = Globe()
-      (document.getElementById('globeViz'))
-      .backgroundColor('#050608')
-      .globeImageUrl(null)           // use solid color, not a photo texture
-      .showAtmosphere(false)
-      .pointsData(data)
-      .pointLat('lat')
-      .pointLng('lng')
-      .pointAltitude(d => 0.06 + Math.min(Math.abs(d.change) / 100 * 0.2, 0.4))
-      .pointRadius(0.9)              // bigger markers
-      .pointColor(d => d.change >= 0 ? '#4dff4d' : '#ff4d4d')  // brighter green/red
-      .pointLabel(d => `${{d.name}}: ${{d.change.toFixed(2)}}%`);
-
-    // Solid blue water
-    const globeMaterial = world.globeMaterial();
-    globeMaterial.color.set('#0066ff');   // water blue
-    globeMaterial.opacity = 1.0;
-
-    // Solid green land (country polygons)
-    fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
-      .then(res => res.json())
-      .then(worldData => {{
-        const countries = topojson.feature(worldData, worldData.objects.countries).features;
-        world
-          .polygonsData(countries)
-          .polygonCapColor(() => '#00aa55')     // land green
-          .polygonSideColor(() => '#00994d')
-          .polygonStrokeColor(() => '#003300')
-          .polygonAltitude(0.003);
-      }});
-
-    world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.4;
-    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.0 }}, 4000);
-    </script>
-    <style>
-    #globeViz {{
-      width: 100%;
-      height: 440px;
-      margin-top: 8px;
-      border-radius: 18px;
-      border: 1px solid #ff9f1c33;
-    }}
-    </style>
-    """
-
-    components.html(globe_html, height=480)
-except Exception as e:
-    st.info(f"Global globe view unavailable right now: {e}")
-
-st.markdown("---")
-
-# -------------------------------
-# BUILD TABLE FOR SPY & SPYM
-# -------------------------------
-rows = []
-for ticker, price, fv_mkt in [
-    (SPY_TICKER, spy_price, fv_spy_market),
-    (SPYM_TICKER, spym_price, fv_spym_market),
-]:
-    row = {
-        "Ticker": ticker,
-        "Price": price,
-        "FV_Market": fv_mkt,
-        "Ups_M%": (fv_mkt - price) / price * 100.0,
-    }
-
-    if show_banks:
-        fv_by_bank = street_fair_values_for_etf(price, spx_price, bank_targets)
-        fv_street_avg = mean(fv_by_bank.values())
-        ups_street = (fv_street_avg - price) / price * 100.0
-
-        fv_blend = W_MARKET * fv_mkt + W_BANKS * fv_street_avg
-        ups_blend = (fv_blend - price) / price * 100.0
-
-        row["FV_Street"] = fv_street_avg
-        row["Ups_S%"] = ups_street
-        row["FV_Blend"] = fv_blend
-        row["Ups_B%"] = ups_blend
-
-    rows.append(row)
-
-df = pd.DataFrame(rows)
-
-if show_banks:
-    df = df[
-        [
-            "Ticker",
-            "Price",
-            "FV_Market",
-            "Ups_M%",
-            "FV_Street",
-            "Ups_S%",
-            "FV_Blend",
-            "Ups_B%",
-        ]
-    ]
-else:
-    df = df[["Ticker", "Price", "FV_Market", "Ups_M%"]]
-
-# Format + Bloomberg-style color on upsides
-if show_banks:
-    styled = (
-        df.style
-        .format(
-            {
-                "Price": "{:,.2f}",
-                "FV_Market": "{:,.2f}",
-                "Ups_M%": "{:,.2f}",
-                "FV_Street": "{:,.2f}",
-                "Ups_S%": "{:,.2f}",
-                "FV_Blend": "{:,.2f}",
-                "Ups_B%": "{:,.2f}",
-            }
-        )
-        .applymap(color_upsides, subset=["Ups_M%", "Ups_S%", "Ups_B%"])
-    )
-else:
-    styled = (
-        df.style
-        .format(
-            {
-                "Price": "{:,.2f}",
-                "FV_Market": "{:,.2f}",
-                "Ups_M%": "{:,.2f}",
-            }
-        )
-        .applymap(color_upsides, subset=["Ups_M%"])
-    )
-
-st.subheader("FAIR VALUE SNAPSHOT (LIVE)")
-st.dataframe(styled, use_container_width=True, height=220)
-
-st.markdown(
-    """
-**Notes**
-
-- **FV_Market**: Fair value from your UNDERVALUE / OVERVALUED input.  
-  SPY is calculated directly; SPYM is scaled from SPY via the live SPYM/SPY price ratio.
-
-- **Ups_M%**: (FV_Market − Price) / Price × 100.
-
-- If bank targets are used:
-  - **FV_Street**: Average ETF-level fair value implied by the bank SPX targets.
-  - **FV_Blend**: W_MARKET × FV_Market + W_BANKS × FV_Street.
-  - **Ups_S% / Ups_B%**: Upside vs current price using Street and Blended fair values.
-"""
-)
+    st.sidebar.subheader
