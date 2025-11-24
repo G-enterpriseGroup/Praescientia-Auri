@@ -304,4 +304,330 @@ use_banks = st.sidebar.checkbox(
 
 bank_targets = {}
 if use_banks:
-    st.sidebar.subheader
+    st.sidebar.subheader("Bank SPX Targets")
+    for name in BANK_NAMES:
+        val = st.sidebar.text_input(
+            f"{name} Target",
+            value="",
+            help="Leave blank to ignore this bank.",
+        )
+        if val.strip():
+            try:
+                bank_targets[name] = float(val.strip())
+            except ValueError:
+                st.sidebar.warning(f"Invalid number for {name}; ignoring.")
+
+    st.sidebar.markdown("---")
+    W_MARKET = st.sidebar.slider(
+        "Weight on Market Fair Value",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.7,
+        step=0.05,
+        help="1.0 = trust your market valuation only. 0.0 = banks only.",
+    )
+    W_BANKS = 1.0 - W_MARKET
+else:
+    bank_targets = {}
+    W_MARKET = 1.0
+    W_BANKS = 0.0
+
+show_banks = bool(bank_targets)
+
+
+# -------------------------------
+# MAIN: TITLE + CAPTION
+# -------------------------------
+st.title("FAIR VALUE DASHBOARD · SPY (BASE) & SPYM")
+st.caption(
+    "SPY fair value is derived directly from your market valuation input. "
+    "SPYM fair value is scaled off SPY via the live SPYM/SPY price ratio. "
+    "Bank SPX targets (if entered) are treated as benchmarks."
+)
+
+# -------------------------------
+# LIVE DATA FETCH
+# -------------------------------
+try:
+    spx_price = get_last_price(SPX_TICKER)
+    spy_price = get_last_price(SPY_TICKER)
+    spym_price = get_last_price(SPYM_TICKER)
+except Exception as e:
+    st.error(f"Error fetching data: {e}")
+    st.stop()
+
+# Compute SPY fair value from market input
+fv_spy_market = calc_fair_value_from_market(spy_price, is_undervalued, market_pct)
+# Derive SPYM fair value via price ratio to SPY
+fv_spym_market = fv_spy_market * (spym_price / spy_price)
+
+
+# -------------------------------
+# TOP METRICS ROW
+# -------------------------------
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown('<div class="metric-title">Market Condition</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="metric-value">{market_state.upper()} {market_pct:.2f}%</div>',
+        unsafe_allow_html=True,
+    )
+
+with col2:
+    st.markdown('<div class="metric-title">SPX (LIVE)</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="metric-value">{spx_price:,.2f}</div>',
+        unsafe_allow_html=True,
+    )
+
+with col3:
+    if show_banks:
+        st.markdown('<div class="metric-title">Blend Weights (Market / Banks)</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-value">{W_MARKET:.2f} / {W_BANKS:.2f}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown('<div class="metric-title">Bank Benchmarks</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="metric-value">OFF</div>',
+            unsafe_allow_html=True,
+        )
+
+st.markdown("---")
+
+# -------------------------------
+# GLOBAL MARKETS · ROTATING GLOBE
+# -------------------------------
+st.subheader("GLOBAL MARKETS · ROTATING GLOBE")
+
+try:
+    globe_points = get_global_index_changes(GLOBAL_MARKETS)
+
+    # Data for JS globe (only need name/lat/lng + 1D change)
+    globe_data = [
+        {
+            "name": p["name"],
+            "lat": p["lat"],
+            "lng": p["lng"],
+            "chg1d": round(p["chg_1d"], 2),
+        }
+        for p in globe_points
+    ]
+    data_json = json.dumps(globe_data)
+
+    globe_html = f"""
+    <div id="globeViz"></div>
+    <script src="https://unpkg.com/globe.gl"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <script>
+    const data = {data_json};
+
+    const world = Globe()
+      (document.getElementById('globeViz'))
+      .backgroundColor('#050608')
+      .globeImageUrl(null)           // solid color globe, not image
+      .showAtmosphere(false)
+      .pointsData(data)
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointAltitude(d => 0.06 + Math.min(Math.abs(d.chg1d) / 100 * 0.2, 0.4))
+      .pointRadius(0.9)              // bigger markers
+      .pointColor(d => d.chg1d >= 0 ? '#4dff4d' : '#ff4d4d');
+
+    // ALWAYS-ON LABELS (no hover needed)
+    world
+      .labelsData(data)
+      .labelLat('lat')
+      .labelLng('lng')
+      .labelAltitude(0.09)
+      .labelText(d => d.name + " " + d.chg1d.toFixed(2) + "%")
+      .labelSize(1.2)
+      .labelDotRadius(0.18)
+      .labelColor(d => '#ffffff')
+      .labelResolution(2);
+
+    // Solid blue water
+    const globeMaterial = world.globeMaterial();
+    globeMaterial.color.set('#0066ff');   // water blue
+    globeMaterial.opacity = 1.0;
+
+    // Solid green land (country polygons)
+    fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
+      .then(res => res.json())
+      .then(worldData => {{
+        const countries = topojson.feature(worldData, worldData.objects.countries).features;
+        world
+          .polygonsData(countries)
+          .polygonCapColor(() => '#00aa55')     // land green
+          .polygonSideColor(() => '#00994d')
+          .polygonStrokeColor(() => '#003300')
+          .polygonAltitude(0.003);
+      }});
+
+    world.controls().autoRotate = true;
+    world.controls().autoRotateSpeed = 0.4;
+    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.0 }}, 4000);
+    </script>
+    <style>
+    #globeViz {{
+      width: 100%;
+      height: 460px;
+      margin-top: 8px;
+      border-radius: 18px;
+      border: 1px solid #ff9f1c33;
+    }}
+    </style>
+    """
+
+    components.html(globe_html, height=500)
+except Exception as e:
+    st.info(f"Global globe view unavailable right now: {e}")
+
+# -------------------------------
+# GLOBAL MARKETS SNAPSHOT TABLE
+# -------------------------------
+global_rows = []
+for p in globe_points:
+    global_rows.append(
+        {
+            "Index": p["name"],
+            "Last": p["last"],
+            "1D%": p["chg_1d"],
+            "5D%": p["chg_5d"],
+            "From 52W High%": p["off_high_pct"],
+        }
+    )
+
+global_df = pd.DataFrame(global_rows)
+
+def color_change(val):
+    if pd.isna(val):
+        return ""
+    try:
+        v = float(val)
+    except ValueError:
+        return ""
+    if v > 0:
+        return "color: #08ff7e; font-weight: 600;"
+    elif v < 0:
+        return "color: #ff4d4d; font-weight: 600;"
+    else:
+        return "color: #aaaaaa;"
+
+st.subheader("GLOBAL MARKETS SNAPSHOT")
+if not global_df.empty:
+    styled_global = (
+        global_df.style
+        .format(
+            {
+                "Last": "{:,.2f}",
+                "1D%": "{:+.2f}",
+                "5D%": "{:+.2f}",
+                "From 52W High%": "{:+.2f}",
+            }
+        )
+        .applymap(color_change, subset=["1D%", "5D%", "From 52W High%"])
+    )
+    st.dataframe(styled_global, use_container_width=True, height=340)
+else:
+    st.info("No global index data available right now.")
+
+st.markdown("---")
+
+# -------------------------------
+# BUILD TABLE FOR SPY & SPYM
+# -------------------------------
+rows = []
+for ticker, price, fv_mkt in [
+    (SPY_TICKER, spy_price, fv_spy_market),
+    (SPYM_TICKER, spym_price, fv_spym_market),
+]:
+    row = {
+        "Ticker": ticker,
+        "Price": price,
+        "FV_Market": fv_mkt,
+        "Ups_M%": (fv_mkt - price) / price * 100.0,
+    }
+
+    if show_banks:
+        fv_by_bank = street_fair_values_for_etf(price, spx_price, bank_targets)
+        fv_street_avg = mean(fv_by_bank.values())
+        ups_street = (fv_street_avg - price) / price * 100.0
+
+        fv_blend = W_MARKET * fv_mkt + W_BANKS * fv_street_avg
+        ups_blend = (fv_blend - price) / price * 100.0
+
+        row["FV_Street"] = fv_street_avg
+        row["Ups_S%"] = ups_street
+        row["FV_Blend"] = fv_blend
+        row["Ups_B%"] = ups_blend
+
+    rows.append(row)
+
+df = pd.DataFrame(rows)
+
+if show_banks:
+    df = df[
+        [
+            "Ticker",
+            "Price",
+            "FV_Market",
+            "Ups_M%",
+            "FV_Street",
+            "Ups_S%",
+            "FV_Blend",
+            "Ups_B%",
+        ]
+    ]
+else:
+    df = df[["Ticker", "Price", "FV_Market", "Ups_M%"]]
+
+if show_banks:
+    styled = (
+        df.style
+        .format(
+            {
+                "Price": "{:,.2f}",
+                "FV_Market": "{:,.2f}",
+                "Ups_M%": "{:,.2f}",
+                "FV_Street": "{:,.2f}",
+                "Ups_S%": "{:,.2f}",
+                "FV_Blend": "{:,.2f}",
+                "Ups_B%": "{:,.2f}",
+            }
+        )
+        .applymap(color_upsides, subset=["Ups_M%", "Ups_S%", "Ups_B%"])
+    )
+else:
+    styled = (
+        df.style
+        .format(
+            {
+                "Price": "{:,.2f}",
+                "FV_Market": "{:,.2f}",
+                "Ups_M%": "{:,.2f}",
+            }
+        )
+        .applymap(color_upsides, subset=["Ups_M%"])
+    )
+
+st.subheader("FAIR VALUE SNAPSHOT (LIVE)")
+st.dataframe(styled, use_container_width=True, height=220)
+
+st.markdown(
+    """
+**Notes**
+
+- **FV_Market**: Fair value from your UNDERVALUE / OVERVALUED input.  
+  SPY is calculated directly; SPYM is scaled from SPY via the live SPYM/SPY price ratio.
+
+- **Ups_M%**: (FV_Market − Price) / Price × 100.
+
+- If bank targets are used:
+  - **FV_Street**: Average ETF-level fair value implied by the bank SPX targets.
+  - **FV_Blend**: W_MARKET × FV_Market + W_BANKS × FV_Street.
+  - **Ups_S% / Ups_B%**: Upside vs current price using Street and Blended fair values.
+"""
+)
