@@ -40,14 +40,36 @@ st.markdown(
         padding-top: 1.5rem;
         padding-bottom: 1.5rem;
     }}
-    thead tr th {{
+
+    /* Dataframe / table styling – make it VERY Bloomberg */
+    [data-testid="stDataFrame"] {{
+        border: 1px solid #333333;
+        border-radius: 4px;
+        background-color: #050608;
+    }}
+
+    [data-testid="stDataFrame"] thead tr th {{
         background-color: #11141a !important;
         color: {BLOOM_ORANGE} !important;
         border-bottom: 1px solid #333 !important;
+        font-weight: 700 !important;
+        font-size: 0.78rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
     }}
-    tbody tr td {{
-        color: #f4f4f4 !important;
+
+    [data-testid="stDataFrame"] tbody tr td {{
+        color: {BLOOM_ORANGE} !important;
         border-color: #222 !important;
+        font-size: 0.82rem !important;
+    }}
+
+    [data-testid="stDataFrame"] tbody tr:nth-child(even) td {{
+        background-color: #080a0f !important;
+    }}
+
+    [data-testid="stDataFrame"] tbody tr:nth-child(odd) td {{
+        background-color: #050608 !important;
     }}
     </style>
     """,
@@ -171,12 +193,20 @@ else:
         if not expirations:
             st.error(f"No options listed for {ticker}.")
         else:
-            exp = st.sidebar.selectbox(
+            # Nicely formatted expiration labels -> MM-DD-YY
+            exp_dates = [pd.to_datetime(e) for e in expirations]
+            exp_labels = [d.strftime("%m-%d-%y") for d in exp_dates]
+
+            selected_label = st.sidebar.selectbox(
                 "Expiration",
-                options=expirations,
+                options=exp_labels,
                 index=0,
                 key="exp_select",
             )
+
+            # Map back from label to original expiration string for yfinance
+            selected_idx = exp_labels.index(selected_label)
+            exp = expirations[selected_idx]
 
             # Core calc: best call + best put for this expiration
             spot, dte, best_call, best_put = find_best_call_put_for_exp(
@@ -196,7 +226,7 @@ else:
             with c3:
                 st.markdown('<div class="metric-label">EXP / DTE</div>', unsafe_allow_html=True)
                 st.markdown(
-                    f'<div class="metric-value-main">{exp} · {dte}d</div>',
+                    f'<div class="metric-value-main">{selected_label} · {dte}d</div>',
                     unsafe_allow_html=True
                 )
 
@@ -253,7 +283,7 @@ else:
                     else:
                         st.markdown('<div class="metric-value-sub">No put found in ATM range.</div>', unsafe_allow_html=True)
 
-                # Small summary table for both (nice to see side-by-side data)
+                # Small summary table for both
                 summary_rows = []
                 if best_call:
                     summary_rows.append({
@@ -293,6 +323,8 @@ else:
                             "OI": "{:,.0f}",
                             "IV": "{:.2%}",
                         })
+                        # Just in case, force orange text at cell level too
+                        .set_properties(**{"color": BLOOM_ORANGE})
                     )
                     st.dataframe(styled, use_container_width=True)
 
