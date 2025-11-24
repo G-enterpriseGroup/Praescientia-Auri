@@ -73,19 +73,16 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Global background + font */
     html, body, [class*="stApp"] {
         background-color: #050608;
         color: #f4f4f4;
         font-family: "Menlo", "Consolas", "Roboto Mono", monospace;
     }
 
-    /* Main container */
     .main {
         background-color: #050608;
     }
 
-    /* Sidebar styling */
     section[data-testid="stSidebar"] {
         background: #101317;
         border-right: 1px solid #ff9f1c33;
@@ -96,14 +93,12 @@ st.markdown(
         color: #ffb347;
     }
 
-    /* Headers */
     h1, h2, h3 {
         color: #ffb347;
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
 
-    /* Top metrics cards */
     .metric-title {
         font-size: 0.8rem;
         color: #ff9f1c;
@@ -116,7 +111,6 @@ st.markdown(
         color: #fefefe;
     }
 
-    /* Dataframe tweaks */
     .blank[data-testid="stTable"] {
         background-color: #050608;
     }
@@ -144,7 +138,6 @@ st.markdown(
         font-size: 0.85rem !important;
     }
 
-    /* Slider, radio, etc. accent colors */
     div[data-baseweb="slider"] > div {
         color: #ffb347;
     }
@@ -165,7 +158,6 @@ st.markdown(
 # -------------------------------
 @st.cache_data(ttl=60)
 def get_last_price(ticker: str) -> float:
-    """Fetch latest close from Yahoo Finance (cached briefly)."""
     data = yf.Ticker(ticker).history(period="1d")
     if data.empty:
         raise ValueError(f"No price data for {ticker}")
@@ -173,20 +165,8 @@ def get_last_price(ticker: str) -> float:
 
 
 def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) -> float:
-    """
-    pct is ALWAYS positive (example: 5.6 for 5.6%).
-
-    UNDERVALUE X%:
-        price = FV * (1 - X/100)
-        FV    = price / (1 - X/100)
-
-    OVERVALUED X%:
-        price = FV * (1 + X/100)
-        FV    = price / (1 + X/100)
-    """
     if pct <= 0:
         raise ValueError("Percent must be positive (e.g. 5.6).")
-
     factor = 1.0 - pct / 100.0 if is_undervalued else 1.0 + pct / 100.0
     if factor == 0:
         raise ValueError("Factor became zero; check your inputs.")
@@ -194,18 +174,13 @@ def calc_fair_value_from_market(price: float, is_undervalued: bool, pct: float) 
 
 
 def street_fair_values_for_etf(etf_price: float, spx_price: float, bank_targets: dict) -> dict:
-    """
-    Map each bank's SPX target into ETF fair value using ETF/SPX ratio.
-    """
     if spx_price <= 0:
         raise ValueError("SPX price must be positive.")
-
     k = etf_price / spx_price
     return {bank: k * float(target) for bank, target in bank_targets.items()}
 
 
 def color_upsides(val):
-    """Bloomberg-style: green for positive, red for negative, dim grey for near flat."""
     if pd.isna(val):
         return ""
     try:
@@ -213,11 +188,11 @@ def color_upsides(val):
     except ValueError:
         return ""
     if v > 0.5:
-        return "color: #08ff7e; font-weight: 600;"   # bright green
+        return "color: #08ff7e; font-weight: 600;"
     elif v < -0.5:
-        return "color: #ff4d4d; font-weight: 600;"   # red
+        return "color: #ff4d4d; font-weight: 600;"
     else:
-        return "color: #aaaaaa;"                     # muted grey
+        return "color: #aaaaaa;"
 
 
 @st.cache_data(ttl=600)
@@ -225,10 +200,9 @@ def get_global_index_changes(markets):
     """
     For each index:
       - Last close
-      - 1D % change (vs previous close)
-      - 5D % change (vs ~5 trading days ago)
-      - % from 52-week high (approx using last 1y)
-    Using Yahoo Finance daily history.
+      - 1D % change
+      - 5D % change
+      - % from 52-week high
     """
     results = []
     for m in markets:
@@ -290,8 +264,7 @@ market_pct = st.sidebar.number_input(
     max_value=100.0,
     value=5.6,
     step=0.1,
-    help="Enter as a positive number, e.g. 5.6 for 5.6%. "
-         "Use Morningstar's 'Undervalued X%' as X if you want.",
+    help="Enter as a positive number, e.g. 5.6 for 5.6%.",
 )
 
 st.sidebar.markdown("---")
@@ -324,7 +297,7 @@ if use_banks:
         max_value=1.0,
         value=0.7,
         step=0.05,
-        help="1.0 = trust your market valuation only. 0.0 = banks only.",
+        help="1.0 = market FV only, 0.0 = banks only.",
     )
     W_BANKS = 1.0 - W_MARKET
 else:
@@ -341,7 +314,7 @@ show_banks = bool(bank_targets)
 st.title("FAIR VALUE DASHBOARD · SPY (BASE) & SPYM")
 st.caption(
     "SPY fair value is derived directly from your market valuation input. "
-    "SPYM fair value is scaled off SPY via the live SPYM/SPY price ratio. "
+    "SPYM fair value is scaled from SPY via the live SPYM/SPY price ratio. "
     "Bank SPX targets (if entered) are treated as benchmarks."
 )
 
@@ -356,11 +329,8 @@ except Exception as e:
     st.error(f"Error fetching data: {e}")
     st.stop()
 
-# Compute SPY fair value from market input
 fv_spy_market = calc_fair_value_from_market(spy_price, is_undervalued, market_pct)
-# Derive SPYM fair value via price ratio to SPY
 fv_spym_market = fv_spy_market * (spym_price / spy_price)
-
 
 # -------------------------------
 # TOP METRICS ROW
@@ -390,22 +360,19 @@ with col3:
         )
     else:
         st.markdown('<div class="metric-title">Bank Benchmarks</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="metric-value">OFF</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="metric-value">OFF</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
 # -------------------------------
-# GLOBAL MARKETS · ROTATING GLOBE
+# GLOBAL MARKETS · GLOBE + TRADINGVIEW HEATMAP
 # -------------------------------
-st.subheader("GLOBAL MARKETS · ROTATING GLOBE")
+st.subheader("GLOBAL MARKETS · ROTATING GLOBE + SPX HEATMAP")
 
+globe_points = []
 try:
     globe_points = get_global_index_changes(GLOBAL_MARKETS)
 
-    # Data for JS globe (only need name/lat/lng + 1D change)
     globe_data = [
         {
             "name": p["name"],
@@ -417,6 +384,7 @@ try:
     ]
     data_json = json.dumps(globe_data)
 
+    # Globe HTML
     globe_html = f"""
     <div id="globeViz"></div>
     <script src="https://unpkg.com/globe.gl"></script>
@@ -427,16 +395,15 @@ try:
     const world = Globe()
       (document.getElementById('globeViz'))
       .backgroundColor('#050608')
-      .globeImageUrl(null)           // solid color globe, not image
+      .globeImageUrl(null)
       .showAtmosphere(false)
       .pointsData(data)
       .pointLat('lat')
       .pointLng('lng')
       .pointAltitude(d => 0.06 + Math.min(Math.abs(d.chg1d) / 100 * 0.2, 0.4))
-      .pointRadius(0.9)              // bigger markers
+      .pointRadius(0.9)
       .pointColor(d => d.chg1d >= 0 ? '#4dff4d' : '#ff4d4d');
 
-    // ALWAYS-ON LABELS (no hover needed)
     world
       .labelsData(data)
       .labelLat('lat')
@@ -448,19 +415,17 @@ try:
       .labelColor(d => '#ffffff')
       .labelResolution(2);
 
-    // Solid blue water
     const globeMaterial = world.globeMaterial();
     globeMaterial.color.set('#0066ff');   // water blue
     globeMaterial.opacity = 1.0;
 
-    // Solid green land (country polygons)
     fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
       .then(res => res.json())
       .then(worldData => {{
         const countries = topojson.feature(worldData, worldData.objects.countries).features;
         world
           .polygonsData(countries)
-          .polygonCapColor(() => '#00aa55')     // land green
+          .polygonCapColor(() => '#00aa55')   // land green
           .polygonSideColor(() => '#00994d')
           .polygonStrokeColor(() => '#003300')
           .polygonAltitude(0.003);
@@ -481,9 +446,53 @@ try:
     </style>
     """
 
-    components.html(globe_html, height=500)
+    # TradingView Stock Heatmap widget (official embed, dark theme, YTD perf for SPX500)
+    tv_heatmap_html = """
+    <!-- TradingView Widget BEGIN -->
+    <div class="tradingview-widget-container">
+      <div class="tradingview-widget-container__widget"></div>
+      <div class="tradingview-widget-copyright">
+        <a href="https://www.tradingview.com/heatmap/stock/?utm_source=localhost&utm_medium=widget&utm_campaign=stock-heatmap"
+           rel="noopener nofollow" target="_blank">
+          <span class="blue-text">Stock Heatmap</span>
+        </a>
+        <span class="trademark"> by TradingView</span>
+      </div>
+      <script type="text/javascript"
+        src="https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js"
+        async>
+      {
+        "exchanges": [],
+        "dataSource": "SPX500",
+        "grouping": "no_group",
+        "blockSize": "market_cap_basic",
+        "blockColor": "Perf.YTD",
+        "locale": "en",
+        "symbolUrl": "",
+        "colorTheme": "dark",
+        "isTransparent": true,
+        "hasTopBar": false,
+        "isDataSetEnabled": false,
+        "isZoomEnabled": true,
+        "hasSymbolTooltip": true,
+        "width": "100%",
+        "height": "100%"
+      }
+      </script>
+    </div>
+    <!-- TradingView Widget END -->
+    """
+
+    col_globe, col_heatmap = st.columns([2.0, 1.4])
+
+    with col_globe:
+        components.html(globe_html, height=500)
+
+    with col_heatmap:
+        components.html(tv_heatmap_html, height=500)
+
 except Exception as e:
-    st.info(f"Global globe view unavailable right now: {e}")
+    st.info(f"Global globe / heatmap view unavailable right now: {e}")
 
 # -------------------------------
 # GLOBAL MARKETS SNAPSHOT TABLE
@@ -621,13 +630,12 @@ st.markdown(
 **Notes**
 
 - **FV_Market**: Fair value from your UNDERVALUE / OVERVALUED input.  
-  SPY is calculated directly; SPYM is scaled from SPY via the live SPYM/SPY price ratio.
+  SPY is calculated directly; SPYM is scaled via the live SPYM/SPY price ratio.
 
 - **Ups_M%**: (FV_Market − Price) / Price × 100.
 
 - If bank targets are used:
-  - **FV_Street**: Average ETF-level fair value implied by the bank SPX targets.
+  - **FV_Street**: Average ETF-level FV implied by bank SPX targets.
   - **FV_Blend**: W_MARKET × FV_Market + W_BANKS × FV_Street.
-  - **Ups_S% / Ups_B%**: Upside vs current price using Street and Blended fair values.
 """
 )
