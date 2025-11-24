@@ -44,7 +44,8 @@ import yfinance as yf
 import streamlit as st
 import pandas as pd
 from statistics import mean
-
+import json
+import streamlit.components.v1 as components
 
 # -------------------------------
 # CONSTANTS
@@ -53,6 +54,15 @@ SPX_TICKER = "^GSPC"
 SPY_TICKER = "SPY"
 SPYM_TICKER = "SPYM"
 BANK_NAMES = ["JPM", "GS", "BofA", "MS", "Citi"]
+
+# Major global benchmarks to show on the globe
+GLOBAL_MARKETS = [
+    {"name": "US · SPX", "ticker": "^GSPC", "lat": 40.7128, "lng": -74.0060},     # New York
+    {"name": "UK · FTSE 100", "ticker": "^FTSE", "lat": 51.5074, "lng": -0.1278}, # London
+    {"name": "EU · Euro Stoxx 50", "ticker": "^STOXX50E", "lat": 48.8566, "lng": 2.3522},  # Paris
+    {"name": "JP · Nikkei 225", "ticker": "^N225", "lat": 35.6895, "lng": 139.6917},       # Tokyo
+    {"name": "HK · Hang Seng", "ticker": "^HSI", "lat": 22.3193, "lng": 114.1694},         # Hong Kong
+]
 
 
 # -------------------------------
@@ -229,6 +239,34 @@ def color_upsides(val):
         return "color: #aaaaaa;"                     # muted grey
 
 
+@st.cache_data(ttl=300)
+def get_global_index_changes(markets):
+    """
+    Get 1-day % change for each global benchmark in GLOBAL_MARKETS.
+    Falls back to 0.0 if data is missing.
+    """
+    results = []
+    for m in markets:
+        change = 0.0
+        try:
+            hist = yf.Ticker(m["ticker"]).history(period="2d")
+            if len(hist) >= 2:
+                prev_close = hist["Close"].iloc[-2]
+                last_close = hist["Close"].iloc[-1]
+                if prev_close > 0:
+                    change = (last_close - prev_close) / prev_close * 100.0
+        except Exception:
+            change = 0.0
+        result = {
+            "name": m["name"],
+            "lat": m["lat"],
+            "lng": m["lng"],
+            "change": float(change),
+        }
+        results.append(result)
+    return results
+
+
 # -------------------------------
 # SIDEBAR: CONTROLS
 # -------------------------------
@@ -354,6 +392,67 @@ with col3:
             '<div class="metric-value">OFF</div>',
             unsafe_allow_html=True,
         )
+
+st.markdown("---")
+
+# -------------------------------
+# GLOBAL MARKETS ROTATING GLOBE
+# -------------------------------
+st.subheader("GLOBAL MARKETS · ROTATING GLOBE (BETA)")
+
+try:
+    globe_points = get_global_index_changes(GLOBAL_MARKETS)
+    # Round changes for cleaner labels and avoid NaN in JS
+    globe_data = [
+        {
+            "name": p["name"],
+            "lat": p["lat"],
+            "lng": p["lng"],
+            "change": round(p["change"], 2),
+        }
+        for p in globe_points
+    ]
+    data_json = json.dumps(globe_data)
+
+    globe_html = f"""
+    <div id="globeViz"></div>
+    <script src="https://unpkg.com/globe.gl"></script>
+    <script>
+    const data = {data_json};
+
+    const world = Globe()
+      (document.getElementById('globeViz'))
+      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
+      .backgroundColor('#050608')
+      .showAtmosphere(true)
+      .atmosphereColor('#ff9f1c')
+      .atmosphereAltitude(0.25)
+      .pointsData(data)
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointAltitude(d => 0.03 + Math.min(Math.abs(d.change) / 100 * 0.15, 0.3))
+      .pointRadius(0.6)
+      .pointColor(d => d.change >= 0 ? '#08ff7e' : '#ff4d4d')
+      .pointLabel(d => `${{d.name}}: ${{d.change.toFixed(2)}}%`);
+
+    world.controls().autoRotate = true;
+    world.controls().autoRotateSpeed = 0.4;
+    world.pointOfView({{ lat: 20, lng: 0, altitude: 2.0 }}, 4000);
+    </script>
+    <style>
+    #globeViz {{
+      width: 100%;
+      height: 420px;
+      margin-top: 8px;
+      border-radius: 18px;
+      border: 1px solid #ff9f1c33;
+    }}
+    </style>
+    """
+
+    components.html(globe_html, height=460)
+except Exception as e:
+    st.info(f"Global globe view unavailable right now: {e}")
 
 st.markdown("---")
 
