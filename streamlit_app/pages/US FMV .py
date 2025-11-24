@@ -454,3 +454,129 @@ try:
     world.pointOfView({{ lat: 20, lng: 0, altitude: 2.1 }}, 4000);
     </script>
     <style>
+    #globeViz {{
+      width: 100%;
+      height: 420px;
+      margin-top: 8px;
+      border-radius: 18px;
+      border: 1px solid #ff9f1c55;
+      box-shadow: 0 0 22px rgba(255, 159, 28, 0.25);
+    }}
+    </style>
+    """
+
+    components.html(globe_html, height=460)
+except Exception as e:
+    st.info(f"Global globe view unavailable right now: {e}")
+
+st.markdown("---")
+
+# -------------------------------
+# BUILD TABLE FOR SPY & SPYM
+# -------------------------------
+rows = []
+
+for ticker, price, fv_mkt in [
+    (SPY_TICKER, spy_price, fv_spy_market),
+    (SPYM_TICKER, spym_price, fv_spym_market),
+]:
+    row = {
+        "Ticker": ticker,
+        "Price": price,
+        "FV_Market": fv_mkt,
+        "Ups_M%": (fv_mkt - price) / price * 100.0,
+    }
+
+    if show_banks:
+        fv_by_bank = street_fair_values_for_etf(price, spx_price, bank_targets)
+        fv_street_avg = mean(fv_by_bank.values())
+        ups_street = (fv_street_avg - price) / price * 100.0
+
+        fv_blend = W_MARKET * fv_mkt + W_BANKS * fv_street_avg
+        ups_blend = (fv_blend - price) / price * 100.0
+
+        row["FV_Street"] = fv_street_avg
+        row["Ups_S%"] = ups_street
+        row["FV_Blend"] = fv_blend
+        row["Ups_B%"] = ups_blend
+
+    rows.append(row)
+
+df = pd.DataFrame(rows)
+
+if show_banks:
+    df = df[
+        [
+            "Ticker",
+            "Price",
+            "FV_Market",
+            "Ups_M%",
+            "FV_Street",
+            "Ups_S%",
+            "FV_Blend",
+            "Ups_B%",
+        ]
+    ]
+else:
+    df = df[
+        [
+            "Ticker",
+            "Price",
+            "FV_Market",
+            "Ups_M%",
+        ]
+    ]
+
+
+# Format + Bloomberg-style color on upsides
+if show_banks:
+    styled = (
+        df.style
+        .format(
+            {
+                "Price": "{:,.2f}",
+                "FV_Market": "{:,.2f}",
+                "Ups_M%": "{:,.2f}",
+                "FV_Street": "{:,.2f}",
+                "Ups_S%": "{:,.2f}",
+                "FV_Blend": "{:,.2f}",
+                "Ups_B%": "{:,.2f}",
+            }
+        )
+        .applymap(color_upsides, subset=["Ups_M%", "Ups_S%", "Ups_B%"])
+    )
+else:
+    styled = (
+        df.style
+        .format(
+            {
+                "Price": "{:,.2f}",
+                "FV_Market": "{:,.2f}",
+                "Ups_M%": "{:,.2f}",
+            }
+        )
+        .applymap(color_upsides, subset=["Ups_M%"])
+    )
+
+st.subheader("FAIR VALUE SNAPSHOT (LIVE)")
+st.dataframe(
+    styled,
+    use_container_width=True,
+    height=220,
+)
+
+st.markdown(
+    """
+**Notes**
+
+- **FV_Market**: Fair value from your UNDERVALUE / OVERVALUED input.  
+  SPY is calculated directly; SPYM is scaled from SPY via the live SPYM/SPY price ratio.
+
+- **Ups_M%**: (FV_Market − Price) / Price × 100.
+
+- If bank targets are used:
+  - **FV_Street**: Average ETF-level fair value implied by the bank SPX targets.
+  - **FV_Blend**: W_MARKET × FV_Market + W_BANKS × FV_Street.
+  - **Ups_S% / Ups_B%**: Upside vs current price using Street and Blended fair values.
+"""
+)
