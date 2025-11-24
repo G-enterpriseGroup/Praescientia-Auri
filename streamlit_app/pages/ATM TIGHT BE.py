@@ -1,10 +1,9 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
 
 # =========================
-# BASIC PAGE SETUP
+# PAGE SETUP + THEME
 # =========================
 st.set_page_config(page_title="ATM Breakeven Finder", layout="wide", page_icon="📊")
 
@@ -48,6 +47,14 @@ def compute_tight_breakevens_for_exp(
     atm_window: float = 0.05,
     top_n: int = 20,
 ) -> pd.DataFrame:
+    """
+    For one ticker + one expiration:
+    - Get spot
+    - Pull calls/puts
+    - Filter to near-the-money (± atm_window)
+    - Compute breakeven and |breakeven - spot|
+    - Return top_n rows with tightest DIST
+    """
     tk = yf.Ticker(ticker)
 
     # Spot
@@ -71,7 +78,7 @@ def compute_tight_breakevens_for_exp(
         if df.empty:
             return
 
-        # Mid price
+        # Mid price (fallback to lastPrice if bid/ask missing)
         df["mid"] = (df["bid"].fillna(0) + df["ask"].fillna(0)) / 2
         df.loc[df["mid"] <= 0, "mid"] = df["lastPrice"]
 
@@ -89,7 +96,7 @@ def compute_tight_breakevens_for_exp(
 
         df["distance"] = (df["breakeven"] - spot).abs()
 
-        # Compact column names for you
+        # Compact output columns
         out = pd.DataFrame({
             "TCK": ticker,
             "SD": side,
@@ -125,14 +132,14 @@ st.sidebar.header("Settings")
 
 ticker = st.sidebar.text_input("Ticker", value="SPY").upper().strip()
 
-atm_window = st.sidebar.slider(
+atm_pct = st.sidebar.slider(
     "ATM window (±% from spot)",
     min_value=1.0,
     max_value=15.0,
     value=5.0,
     step=1.0,
 )
-atm_window = atm_window / 100.0  # convert % to decimal
+atm_window = atm_pct / 100.0  # convert % to decimal
 
 top_n = st.sidebar.slider(
     "Rows to show (top N by tightest DIST)",
@@ -148,13 +155,13 @@ side_filter = st.sidebar.radio(
     index=0,
 )
 
-load_btn = st.sidebar.button("🔄 Load options")
-
 
 # =========================
 # MAIN LOGIC
 # =========================
-if ticker and load_btn:
+if not ticker:
+    st.info("Enter a ticker on the left to begin.")
+else:
     try:
         tk = yf.Ticker(ticker)
         expirations = tk.options
@@ -162,74 +169,72 @@ if ticker and load_btn:
         if not expirations:
             st.error(f"No options listed for {ticker}.")
         else:
-            exp = st.selectbox("Select expiration date", options=expirations, index=0)
+            # Expiration dropdown in SIDEBAR, with persistent state via key
+            default_index = 0
+            exp = st.sidebar.selectbox(
+                "Expiration",
+                options=expirations,
+                index=default_index,
+                key="exp_select",
+            )
 
-            if exp:
-                df = compute_tight_breakevens_for_exp(
-                    ticker=ticker,
-                    expiration=exp,
-                    atm_window=atm_window,
-                    top_n=top_n,
+            # Compute table for selected expiration
+            df = compute_tight_breakevens_for_exp(
+                ticker=ticker,
+                expiration=exp,
+                atm_window=atm_window,
+                top_n=top_n,
+            )
+
+            # Side filter
+            if side_filter == "Calls only":
+                df = df[df["SD"] == "CALL"]
+            elif side_filter == "Puts only":
+                df = df[df["SD"] == "PUT"]
+
+            if df.empty:
+                st.warning("No contracts match the current filters.")
+            else:
+                spot_val = df["SPOT"].iloc[0]
+                dte_val = df["DTE"].iloc[0]
+
+                # Top metrics row
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.markdown('<div class="metric-label">TICKER</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-value">{ticker}</div>', unsafe_allow_html=True)
+                with c2:
+                    st.markdown('<div class="metric-label">SPOT</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-value">${spot_val:,.2f}</div>', unsafe_allow_html=True)
+                with c3:
+                    st.markdown('<div class="metric-label">EXP / DTE</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="metric-value">{exp}  ·  {dte_val} days</div>',
+                        unsafe_allow_html=True
+                    )
+
+                st.subheader("Tightest Breakevens Near the Money")
+
+                # Display table
+                display_df = df[["SD", "EXP", "DTE", "STK", "MID", "BE", "DIST", "VOL", "OI", "IV"]].copy()
+
+                styled = (
+                    display_df.style
+                    .format({
+                        "STK": "{:,.2f}",
+                        "MID": "{:,.2f}",
+                        "BE": "{:,.2f}",
+                        "DIST": "{:,.2f}",
+                        "IV": "{:.2%}",
+                        "VOL": "{:,.0f}",
+                        "OI": "{:,.0f}",
+                    })
+                    .background_gradient(subset=["DIST"], axis=0)
                 )
 
-                # Apply side filter
-                if side_filter == "Calls only":
-                    df = df[df["SD"] == "CALL"]
-                elif side_filter == "Puts only":
-                    df = df[df["SD"] == "PUT"]
+                st.dataframe(styled, use_container_width=True)
 
-                if df.empty:
-                    st.warning("No contracts match the current filters.")
-                else:
-                    spot_val = df["SPOT"].iloc[0]
-                    dte_val = df["DTE"].iloc[0]
-
-                    # Top metrics row
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        st.markdown('<div class="metric-label">TICKER</div>', unsafe_allow_html=True)
-                        st.markdown(f'<div class="metric-value">{ticker}</div>', unsafe_allow_html=True)
-                    with c2:
-                        st.markdown('<div class="metric-label">SPOT</div>', unsafe_allow_html=True)
-                        st.markdown(f'<div class="metric-value">${spot_val:,.2f}</div>', unsafe_allow_html=True)
-                    with c3:
-                        st.markdown('<div class="metric-label">EXP / DTE</div>', unsafe_allow_html=True)
-                        st.markdown(
-                            f'<div class="metric-value">{exp}  ·  {dte_val} days</div>',
-                            unsafe_allow_html=True
-                        )
-
-                    st.subheader("Tightest Breakevens Near the Money")
-
-                    # Format + style
-                    display_df = df.copy()
-                    display_df = display_df[[
-                        "SD", "EXP", "DTE", "STK", "MID", "BE", "DIST", "VOL", "OI", "IV"
-                    ]]
-
-                    styled = (
-                        display_df.style
-                        .format({
-                            "STK": "{:,.2f}",
-                            "MID": "{:,.2f}",
-                            "BE": "{:,.2f}",
-                            "DIST": "{:,.2f}",
-                            "IV": "{:.2%}",
-                            "VOL": "{:,.0f}",
-                            "OI": "{:,.0f}",
-                        })
-                        .background_gradient(subset=["DIST"], axis=0)
-                    )
-
-                    st.dataframe(styled, use_container_width=True)
-
-                    st.caption(
-                        "DIST = |breakeven − spot|. "
-                        "Smaller DIST = tighter breakeven versus current price."
-                    )
+                st.caption("DIST = |breakeven − spot|. Smaller DIST = tighter breakeven vs current price.")
 
     except Exception as e:
         st.error(f"Error: {e}")
-
-elif not load_btn:
-    st.info("Enter a ticker on the left and click **Load options** to begin.")
