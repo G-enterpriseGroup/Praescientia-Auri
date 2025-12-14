@@ -94,6 +94,33 @@ def parse_tickers_space(raw: str) -> list[str]:
             seen.add(t)
     return out
 
+def _uppercase_ticker_input():
+    # auto-caps the ticker text input as you type (on change)
+    k = "raw_tickers"
+    v = st.session_state.get(k, "")
+    if isinstance(v, str):
+        st.session_state[k] = v.upper()
+
+def _parse_amount_with_commas(s: str):
+    if s is None:
+        return None
+    try:
+        cleaned = str(s).strip().replace(",", "").replace("$", "")
+        if cleaned == "":
+            return None
+        val = float(cleaned)
+        if val < 0:
+            return None
+        return val
+    except Exception:
+        return None
+
+def _format_amount_with_commas(s: str):
+    val = _parse_amount_with_commas(s)
+    if val is None:
+        return s
+    return f"{val:,.2f}"
+
 @st.cache_data(ttl=60 * 30, show_spinner=False)
 def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame:
     s = datetime.combine(start_dt, datetime.min.time()) - timedelta(days=10)
@@ -143,13 +170,29 @@ def safe_float(v):
 # ----------------------------
 st.subheader("INPUTS")
 
+# Initialize defaults once (so the text inputs keep value nicely)
+if "raw_tickers" not in st.session_state:
+    st.session_state["raw_tickers"] = "CLOZ SPY"
+if "amount_str" not in st.session_state:
+    st.session_state["amount_str"] = "80,000.00"
+
 with st.form("run_form", clear_on_submit=False):
     c1, c2, c3, c4 = st.columns([2.2, 1.3, 1.3, 1.2])
 
     with c1:
-        raw_tickers = st.text_input("TICKERS (space-separated)", value="CLOZ SPY")
+        raw_tickers = st.text_input(
+            "TICKERS (space-separated)",
+            key="raw_tickers",
+            on_change=_uppercase_ticker_input,
+        )
+
     with c2:
-        amount = st.number_input("AMOUNT ($)", min_value=0.0, value=80000.0, step=1000.0)
+        amount_str = st.text_input(
+            "AMOUNT ($)",
+            key="amount_str",
+            help="You can type commas like 80,000.00",
+        )
+
     with c3:
         start_date = st.date_input("START DATE", value=date(2025, 2, 24))
     with c4:
@@ -157,6 +200,11 @@ with st.form("run_form", clear_on_submit=False):
 
     st.markdown("")
     run = st.form_submit_button("RUN COMPARISON")
+
+# Parse + reformat amount (commas) AFTER the form so typing stays smooth
+amount = _parse_amount_with_commas(st.session_state.get("amount_str", ""))
+if amount is not None:
+    st.session_state["amount_str"] = _format_amount_with_commas(st.session_state.get("amount_str", ""))
 
 tickers = parse_tickers_space(raw_tickers)
 
@@ -166,6 +214,10 @@ tickers = parse_tickers_space(raw_tickers)
 if run:
     if not tickers:
         st.error("Enter at least one ticker (space-separated). Example: CLOZ SPY")
+        st.stop()
+
+    if amount is None:
+        st.error("Enter a valid AMOUNT ($). Example: 80,000 or 80,000.00")
         st.stop()
 
     if end_date < start_date:
@@ -214,6 +266,9 @@ if run:
             df_r["Series Price"] = (df_r["High"] + df_r["Low"]) / 2
             for i, r in df_r.iterrows():
                 chart_rows.append({"Date": i, "Ticker": tkr, "Series Price": r["Series Price"]})
+
+    if errors:
+        st.warning(" | ".join(errors))
 
     summary_df = pd.DataFrame(summary_rows).sort_values("Profit / Loss ($)")
 
