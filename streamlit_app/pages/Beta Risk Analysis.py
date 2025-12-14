@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -321,4 +320,3 @@ if run:
 
 else:
     st.info("Enter inputs above, then click **RUN COMPARISON**.")
-```
