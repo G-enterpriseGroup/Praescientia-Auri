@@ -32,7 +32,7 @@ input, textarea {
   box-shadow: none !important;
 }
 
-/* Make ticker typing SHOW as uppercase (visual) */
+/* ✅ CHANGE #1: ticker typing displays as uppercase (visual only) */
 input[type="text"] { text-transform: uppercase !important; }
 
 /* Date + number inputs */
@@ -97,16 +97,6 @@ def parse_tickers_space(raw: str) -> list[str]:
             seen.add(t)
     return out
 
-def parse_amount_text(raw: str):
-    try:
-        s = (raw or "").strip()
-        if not s:
-            return None
-        s = s.replace("$", "").replace(",", "").replace(" ", "")
-        return float(s)
-    except Exception:
-        return None
-
 @st.cache_data(ttl=60 * 30, show_spinner=False)
 def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame:
     s = datetime.combine(start_dt, datetime.min.time()) - timedelta(days=10)
@@ -168,17 +158,11 @@ with st.form("run_form", clear_on_submit=False):
     c1, c2, c3, c4 = st.columns([2.2, 1.3, 1.3, 1.2])
 
     with c1:
-        raw_tickers = st.text_input(
-            "TICKERS (space-separated)",
-            value=st.session_state.get("tickers_input", "CLOZ SPY"),
-            key="tickers_input",
-        )
+        raw_tickers = st.text_input("TICKERS (space-separated)", value="CLOZ SPY")
     with c2:
-        amount_text = st.text_input(
-            "AMOUNT ($)",
-            value=st.session_state.get("amount_text", "80,000"),
-            key="amount_text",
-        )
+        amount = st.number_input("AMOUNT ($)", min_value=0.0, value=80000.0, step=1000.0)
+        # ✅ CHANGE #2: show comma formatting for the amount
+        st.caption(f"Formatted: {fmt_money(float(amount))}")
     with c3:
         start_date = st.date_input("START DATE", value=date(2025, 2, 24))
     with c4:
@@ -188,29 +172,13 @@ with st.form("run_form", clear_on_submit=False):
     run = st.form_submit_button("RUN COMPARISON")
 
 tickers = parse_tickers_space(raw_tickers)
-amount = parse_amount_text(amount_text)
 
 # ----------------------------
 # Main
 # ----------------------------
 if run:
-    # persist uppercase tickers (actual value), not just visual CSS
-    if raw_tickers != (raw_tickers or "").upper():
-        st.session_state["tickers_input"] = (raw_tickers or "").upper()
-
-    # persist comma-formatted amount
-    if amount is not None:
-        formatted_amt = f"{amount:,.2f}"
-        if formatted_amt.endswith(".00"):
-            formatted_amt = formatted_amt[:-3]
-        st.session_state["amount_text"] = formatted_amt
-
     if not tickers:
         st.error("Enter at least one ticker (space-separated). Example: CLOZ SPY")
-        st.stop()
-
-    if amount is None or amount < 0:
-        st.error("Amount must be a valid non-negative number. Example: 80,000")
         st.stop()
 
     if end_date < start_date:
