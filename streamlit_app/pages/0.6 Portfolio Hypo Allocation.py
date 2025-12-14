@@ -1,6 +1,7 @@
+```python
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app (no controls in sidebar, sidebar stays visible)
-# UPDATED: "WHAT-IF SUMMARY (OLD vs NEW)" redesigned into a big, human-friendly compare panel.
+# UPDATED: Fix WHAT-IF panel rendering (was showing raw HTML as code). Now uses Streamlit columns + safe HTML blocks (no markdown code-block indentation).
 # NOTE: NO calc/logic changed.
 
 import csv
@@ -105,64 +106,59 @@ div[data-testid="metric-container"] * {
   color: #ff9900 !important;
 }
 
-/* --- WHAT-IF COMPARE PANEL --- */
-.compare-wrap{
-  border:2px solid #ff9900;
-  background:#050505;
-  padding:14px;
+/* --- WHAT-IF COMPARE PANEL (fixed) --- */
+.wf_wrap {
+  border: 2px solid #ff9900;
+  background: #050505;
+  padding: 14px;
 }
-.compare-title{
-  font-size:22px;
-  font-weight:900;
-  letter-spacing:0.7px;
-  margin-bottom:10px;
+.wf_title {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.7px;
+  margin: 0 0 8px 0;
 }
-.compare-sub{
-  font-size:13px;
-  opacity:0.9;
-  margin-bottom:14px;
+.wf_sub {
+  font-size: 13px;
+  opacity: 0.95;
+  margin: 0 0 12px 0;
 }
-.compare-grid{
-  display:grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1fr;
-  gap:10px;
-  align-items:stretch;
+.wf_hdr {
+  border: 2px solid #ff9900;
+  background: #0b0b0b;
+  padding: 10px;
+  font-weight: 900;
+  text-align: center;
 }
-.compare-h{
-  border:2px solid #ff9900;
-  background:#0b0b0b;
-  padding:10px;
-  font-weight:900;
-  text-align:center;
+.wf_cell {
+  border: 2px solid #ff9900;
+  background: #000000;
+  padding: 10px;
+  height: 100%;
 }
-.compare-kpi{
-  border:2px solid #ff9900;
-  background:#000000;
-  padding:10px;
+.wf_metric {
+  font-size: 14px;
+  font-weight: 900;
+  opacity: 0.95;
 }
-.kpi-name{
-  font-size:14px;
-  font-weight:900;
-  opacity:0.95;
-  margin-bottom:6px;
+.wf_val {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.15;
+  margin-top: 4px;
 }
-.kpi-val{
-  font-size:22px;
-  font-weight:900;
-  line-height:1.1;
+.wf_delta {
+  font-size: 16px;
+  font-weight: 900;
+  margin-top: 4px;
+  opacity: 0.95;
 }
-.kpi-delta{
-  font-size:14px;
-  font-weight:900;
-  margin-top:6px;
-  opacity:0.95;
-}
-.kpi-meta{
-  font-size:12px;
-  opacity:0.9;
-  margin-top:10px;
-  border-top:1px dashed #ff9900;
-  padding-top:10px;
+.wf_notes {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #ff9900;
+  font-size: 12px;
+  opacity: 0.95;
 }
 </style>
 """
@@ -449,7 +445,7 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     shortfall = max(0.0, buy_mv - vm_mv)
 
     df.loc[vm_idx, "MV_$"] = vm_mv - sold_mv
-    df.loc[vm_idx, "QTY"] = df.loc[vm_idx, "MV_$"]
+    df.loc[vm_idx, "QTY"] = df.loc[vm_idx, "MV_$"]   # VMFXX ~ $1 NAV
     df.loc[vm_idx, "LAST"] = 1.0
 
     eq_mask = (df["SYM"].astype(str).str.upper() == buy_ticker) & (df["SEC_TYPE"].astype(str).str.upper() == "EQUITY/ETF")
@@ -536,10 +532,21 @@ def fmt_pp(x):
     except Exception:
         return ""
 
+def fmt_money_delta(x):
+    try:
+        v = float(x)
+        if np.isnan(v):
+            return ""
+        sign = "+" if v >= 0 else "-"
+        return f"{sign}${abs(v):,.2f}"
+    except Exception:
+        return ""
+
 def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return df
     out = df.copy()
+
     front = ["DISPLAY_SYM","SEC_TYPE","WGT_PCT","MV_$","DIV_YLD_PCT","LAST","QTY"]
     cols = front + [c for c in out.columns if c not in front]
     cols = [c for c in cols if c in out.columns]
@@ -553,6 +560,13 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
         if c in out.columns:
             out[c] = out[c].apply(lambda v: fmt_money(v))
     return out
+
+# =========================
+# WHAT-IF compare panel (FIXED RENDERING)
+# =========================
+def wf_block(text: str, cls: str):
+    # IMPORTANT: string must start at column 0 to avoid markdown code-block behavior
+    st.markdown(f"<div class='{cls}'>{text}</div>", unsafe_allow_html=True)
 
 def render_whatif_compare(
     *,
@@ -568,64 +582,62 @@ def render_whatif_compare(
     old_div: float, new_div: float,
     net_val: float
 ):
-    # Build KPI rows
+    wf_block("WHAT-IF SUMMARY (OLD vs NEW)", "wf_title")
+    wf_block(
+        f"Buy: <b>{buy_ticker}</b> @ {fmt_money(buy_price)} × {buy_qty:,.4f} shares = <b>{fmt_money(buy_mv)}</b>"
+        f" &nbsp;|&nbsp; Sold VMFXX: <b>{fmt_money(sold_vmfxx_mv)}</b>"
+        f" &nbsp;|&nbsp; Shortfall: <b>{fmt_money(shortfall_mv)}</b>",
+        "wf_sub"
+    )
+
+    # Header row
+    h1, h2, h3, h4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
+    with h1: wf_block("METRIC", "wf_hdr")
+    with h2: wf_block("OLD", "wf_hdr")
+    with h3: wf_block("NEW", "wf_hdr")
+    with h4: wf_block("CHANGE", "wf_hdr")
+
+    # Rows (big + easy)
     rows = [
         ("Holdings Yield %", fmt_pct4(old_hy), fmt_pct4(new_hy), fmt_pp(new_hy - old_hy)),
-        ("Account Yield %",  fmt_pct4(old_ay), fmt_pct4(new_ay), fmt_pp(new_ay - old_ay)),
+        ("Account Yield %", fmt_pct4(old_ay), fmt_pct4(new_ay), fmt_pp(new_ay - old_ay)),
         ("E*TRADE-like Yield %", fmt_pct4(old_ey), fmt_pct4(new_ey), fmt_pp(new_ey - old_ey)),
-        ("Annual Dividend $ (est.)", fmt_money(old_div), fmt_money(new_div), fmt_money(new_div - old_div)),
+        ("Annual Dividend $ (est.)", fmt_money(old_div), fmt_money(new_div), fmt_money_delta(new_div - old_div)),
     ]
 
-    header = f"""
-    <div class="compare-wrap">
-      <div class="compare-title">WHAT-IF SUMMARY (OLD vs NEW)</div>
-      <div class="compare-sub">
-        Buy: <b>{buy_ticker}</b> @ {fmt_money(buy_price)} × {buy_qty:,.4f} shares = <b>{fmt_money(buy_mv)}</b>
-        &nbsp;&nbsp;|&nbsp;&nbsp; Sold VMFXX: <b>{fmt_money(sold_vmfxx_mv)}</b>
-        &nbsp;&nbsp;|&nbsp;&nbsp; Shortfall: <b>{fmt_money(shortfall_mv)}</b>
-      </div>
-
-      <div class="compare-grid">
-        <div class="compare-h">METRIC</div>
-        <div class="compare-h">OLD</div>
-        <div class="compare-h">NEW</div>
-        <div class="compare-h">CHANGE</div>
-    """
-    body = ""
     for name, oldv, newv, delt in rows:
-        body += f"""
-        <div class="compare-kpi"><div class="kpi-name">{name}</div></div>
-        <div class="compare-kpi"><div class="kpi-val">{oldv}</div></div>
-        <div class="compare-kpi"><div class="kpi-val">{newv}</div></div>
-        <div class="compare-kpi">
-            <div class="kpi-val">{delt}</div>
-        </div>
-        """
+        c1, c2, c3, c4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
+        with c1:
+            wf_block(f"<div class='wf_metric'>{name}</div>", "wf_cell")
+        with c2:
+            wf_block(f"<div class='wf_val'>{oldv}</div>", "wf_cell")
+        with c3:
+            wf_block(f"<div class='wf_val'>{newv}</div>", "wf_cell")
+        with c4:
+            wf_block(f"<div class='wf_delta'>{delt}</div>", "wf_cell")
 
-    footer = f"""
-      </div>
-      <div class="kpi-meta">
-        Net Account Value (for Account Yield): <b>{fmt_money(net_val)}</b><br/>
-        {NOTE}<br/>
-        {NOTE2}
-      </div>
-    </div>
-    """
-    st.markdown(header + body + footer, unsafe_allow_html=True)
+    wf_block(
+        f"Net Account Value (for Account Yield): <b>{fmt_money(net_val)}</b><br/>{NOTE}<br/>{NOTE2}",
+        "wf_notes"
+    )
 
 # =========================
 # UI — re-ordered (KPIs first, data bottom)
 # =========================
 
-# --- Session state ---
+# Session state
 if "acct_df" not in st.session_state:
     st.session_state.acct_df = None
 if "hold_df" not in st.session_state:
     st.session_state.hold_df = None
 if "net_val" not in st.session_state:
     st.session_state.net_val = np.nan
+if "last_scenario_df" not in st.session_state:
+    st.session_state.last_scenario_df = None
+if "last_whatif_payload" not in st.session_state:
+    st.session_state.last_whatif_payload = None
 
-# --- TOP: Upload + Buttons + What-if inputs ---
+# TOP: Upload + actions
 r1a, r1b, r1c = st.columns([1.3, 1.0, 1.2], gap="large")
 
 with r1a:
@@ -647,7 +659,6 @@ with r1c:
     clear_clicked = st.button("CLEAR STATE", use_container_width=True)
 
 st.subheader("VMFXX → BUY (WHAT-IF)")
-
 w1, w2, w3, w4 = st.columns([1.2, 1.0, 1.0, 1.1], gap="medium")
 
 with w1:
@@ -670,13 +681,13 @@ with w4:
 
 st.divider()
 
-# --- State actions ---
+# Clear
 if clear_clicked:
     st.session_state.acct_df = None
     st.session_state.hold_df = None
     st.session_state.net_val = np.nan
-    st.session_state["last_scenario_df"] = None
-    st.session_state["last_whatif_payload"] = None
+    st.session_state.last_scenario_df = None
+    st.session_state.last_whatif_payload = None
     st.rerun()
 
 def overrides_dict():
@@ -705,7 +716,7 @@ hold_df = st.session_state.hold_df
 net_val = st.session_state.net_val
 ovr = overrides_dict()
 
-# --- KPIs (top) ---
+# KPIs
 if hold_df is not None and not hold_df.empty:
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
     hy = holdings_yield_pct(hold_df, overrides=ovr)
@@ -722,7 +733,7 @@ if hold_df is not None and not hold_df.empty:
 else:
     st.info("Upload + PARSE to view yields and run what-if.")
 
-# --- What-if ---
+# What-if
 if run_clicked:
     if hold_df is None or hold_df.empty:
         st.error("Parse the file first.")
@@ -749,9 +760,8 @@ if run_clicked:
             new_ay = account_yield_pct(scen_df, net_val, overrides=ovr)
             new_ey = etrade_like_yield_pct(scen_df, overrides=ovr)
 
-            # store for bottom tab + persistent rendering
-            st.session_state["last_scenario_df"] = scen_df
-            st.session_state["last_whatif_payload"] = dict(
+            st.session_state.last_scenario_df = scen_df
+            st.session_state.last_whatif_payload = dict(
                 buy_ticker=buy_ticker,
                 buy_price=info["buy_price"],
                 buy_qty=buy_qty,
@@ -769,11 +779,14 @@ if run_clicked:
         except Exception as e:
             st.error(f"What-if error: {e}")
 
-# Render the big compare panel if we have one
-payload = st.session_state.get("last_whatif_payload")
+# Render compare (fixed) + download
+payload = st.session_state.last_whatif_payload
 if isinstance(payload, dict):
+    st.markdown("<div class='wf_wrap'>", unsafe_allow_html=True)
     render_whatif_compare(**payload)
-    scen_df = st.session_state.get("last_scenario_df")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    scen_df = st.session_state.last_scenario_df
     if isinstance(scen_df, pd.DataFrame) and not scen_df.empty:
         scen_csv = scen_df.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -785,7 +798,7 @@ if isinstance(payload, dict):
         )
 
 # =========================
-# BOTTOM: data tables + downloads
+# Bottom: data tables
 # =========================
 st.divider()
 st.subheader("DATA (DETAILS)")
@@ -817,10 +830,11 @@ with data_tabs[1]:
         st.info("No account summary loaded yet.")
 
 with data_tabs[2]:
-    scen_df = st.session_state.get("last_scenario_df")
+    scen_df = st.session_state.last_scenario_df
     if isinstance(scen_df, pd.DataFrame) and not scen_df.empty:
         st.dataframe(pretty_holdings(scen_df), use_container_width=True, hide_index=True)
     else:
         st.info("Run a what-if to populate scenario holdings here.")
 
 st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+```
