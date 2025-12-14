@@ -206,4 +206,26 @@ if run:
             x="Date",
             y="Close Price",
             color="Ticker",
-            title="Daily Clo
+            title="Daily Close Price (Visual Only)"
+        )
+        fig.update_layout(
+            paper_bgcolor="black",
+            plot_bgcolor="black",
+            font=dict(color="#ff9900", family="Courier New"),
+            xaxis=dict(gridcolor="#222222"),
+            yaxis=dict(gridcolor="#222222"),
+            legend=dict(font=dict(color="#ff9900")),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+    st.write(
+        f"**Worst:** {worst['Ticker']} lost {fmt_money(worst['Profit / Loss ($)'])} "
+        f"({fmt_pct(worst['Percent Change'])})"
+    )
+    st.write(
+        f"**Best:** {best['Ticker']} at {fmt_money(best['Profit / Loss ($)'])}"
+    )
+
+else:
+    st.info("Enter inputs and click RUN COMPARISON.")
