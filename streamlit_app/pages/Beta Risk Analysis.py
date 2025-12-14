@@ -162,7 +162,6 @@ with c4:
     end_date = st.date_input("END DATE", value=date(2025, 4, 7))
 
 st.markdown("")
-
 run = st.button("RUN COMPARISON")
 
 tickers = parse_tickers_space(raw_tickers)
@@ -255,10 +254,15 @@ if run:
     worst = summary_df.iloc[0]
     best = summary_df.iloc[-1]
 
-    m1, m2, m3 = st.columns(3)
+    # ✅ Show BOTH worst + best in the top metrics
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("WORST TICKER", worst["Ticker"])
     m2.metric("WORST P/L", fmt_money(float(worst["Profit / Loss ($)"])))
     m3.metric("WORST %", fmt_pct(float(worst["Percent Change"])))
+
+    m4.metric("BEST TICKER", best["Ticker"])
+    m5.metric("BEST P/L", fmt_money(float(best["Profit / Loss ($)"])))
+    m6.metric("BEST %", fmt_pct(float(best["Percent Change"])))
 
     st.markdown("---")
 
@@ -292,8 +296,8 @@ if run:
 
         # Cleaner + transparent plot background
         fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",   # transparent outer bg
-            plot_bgcolor="rgba(0,0,0,0)",    # transparent plot bg
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#ff9900", family="Courier New"),
             legend=dict(font=dict(color="#ff9900")),
             xaxis=dict(gridcolor="rgba(255,153,0,0.18)", zerolinecolor="rgba(255,153,0,0.25)"),
@@ -314,7 +318,7 @@ if run:
         f"from {worst['Start Date Used']} → {worst['End Date Used']}."
     )
     st.write(
-        f"- Best (least loss / most gain): **{best['Ticker']}** at **{fmt_money(float(best['Profit / Loss ($)']))}** "
+        f"- Best result: **{best['Ticker']}** at **{fmt_money(float(best['Profit / Loss ($)']))}** "
         f"from {best['Start Date Used']} → {best['End Date Used']}."
     )
 
