@@ -1,5 +1,7 @@
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app (no controls in sidebar, sidebar stays visible)
+# UPDATED: layout re-ordered so key KPIs + controls show first; data tables move to bottom.
+# NOTE: NO calc/logic changed.
 
 import csv
 import re
@@ -502,37 +504,10 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # =========================
-# UI — no sidebar controls
+# UI — re-ordered (KPIs first, data bottom)
 # =========================
-top_left, top_right = st.columns([1.35, 1.0], gap="large")
 
-with top_left:
-    st.subheader("1) Upload Portfolio CSV")
-    f = st.file_uploader("Upload PortfolioDownload.csv", type=["csv"], label_visibility="collapsed")
-
-with top_right:
-    st.subheader("2) Optional yield override (to calibrate)")
-    vmfxx_override_str = st.text_input(
-        "VMFXX Yield % override (optional)",
-        value="",
-        help="Leave blank to use CSV yield. You can enter 3.86 or 3.86% or $-style strings; it will parse.",
-    )
-    vmfxx_override = _to_float(vmfxx_override_str) if vmfxx_override_str.strip() else np.nan
-
-st.divider()
-
-# action buttons row
-b1, b2, b3, b4 = st.columns([1, 1, 1.2, 1.8], gap="medium")
-with b1:
-    parse_clicked = st.button("PARSE FILE", use_container_width=True)
-with b2:
-    clear_clicked = st.button("CLEAR STATE", use_container_width=True)
-with b3:
-    run_clicked = st.button("RUN VMFXX→BUY WHAT-IF", use_container_width=True)
-with b4:
-    st.markdown("**TIP:** Inputs accept accounting format like `$1,000.00` or `(1,000.00)`")
-
-# State
+# --- Session state ---
 if "acct_df" not in st.session_state:
     st.session_state.acct_df = None
 if "hold_df" not in st.session_state:
@@ -540,6 +515,54 @@ if "hold_df" not in st.session_state:
 if "net_val" not in st.session_state:
     st.session_state.net_val = np.nan
 
+# --- TOP: Upload + Buttons + What-if inputs (front and center) ---
+r1a, r1b, r1c = st.columns([1.3, 1.0, 1.2], gap="large")
+
+with r1a:
+    st.subheader("UPLOAD")
+    f = st.file_uploader("Upload PortfolioDownload.csv", type=["csv"], label_visibility="collapsed")
+
+with r1b:
+    st.subheader("CALIBRATE (Optional)")
+    vmfxx_override_str = st.text_input(
+        "VMFXX Yield % override (optional)",
+        value="",
+        help="Leave blank to use CSV yield. You can enter 3.86 or 3.86% or $-style strings; it will parse.",
+    )
+    vmfxx_override = _to_float(vmfxx_override_str) if vmfxx_override_str.strip() else np.nan
+
+with r1c:
+    st.subheader("ACTIONS")
+    parse_clicked = st.button("PARSE FILE", use_container_width=True)
+    clear_clicked = st.button("CLEAR STATE", use_container_width=True)
+
+st.markdown("")
+
+st.subheader("VMFXX → BUY (WHAT-IF)")
+
+w1, w2, w3, w4 = st.columns([1.2, 1.0, 1.0, 1.1], gap="medium")
+
+with w1:
+    buy_ticker_raw = st.text_input("Buy Ticker", value="", help="Auto uppercased.")
+    buy_ticker = (buy_ticker_raw or "").upper()
+
+with w2:
+    buy_qty_str = st.text_input("Buy QTY (shares)", value="0", help="Accounting format allowed, e.g., 1,000")
+    buy_qty = _to_float(buy_qty_str)
+    buy_qty = float(buy_qty) if pd.notna(buy_qty) else 0.0
+
+with w3:
+    buy_yield_str = st.text_input("Buy Yield %", value="0", help="Enter like 18.91 or 18.91%")
+    buy_yield = _to_float(buy_yield_str)
+    buy_yield = float(buy_yield) if pd.notna(buy_yield) else 0.0
+
+with w4:
+    run_clicked = st.button("RUN WHAT-IF", use_container_width=True)
+    st.markdown("**TIP:** accounting format ok")
+
+st.divider()
+
+# --- State actions ---
 if clear_clicked:
     st.session_state.acct_df = None
     st.session_state.hold_df = None
@@ -567,73 +590,32 @@ if parse_clicked:
         except Exception as e:
             st.error(f"Parse error: {e}")
 
-# =========================
-# Display parsed results + yields
-# =========================
 acct_df = st.session_state.acct_df
 hold_df = st.session_state.hold_df
 net_val = st.session_state.net_val
 ovr = overrides_dict()
 
-if acct_df is not None and not acct_df.empty:
-    st.subheader("ACCOUNT SUMMARY")
-    acct_disp = acct_df.copy()
-    for c in acct_disp.columns:
-        if c != "ACCOUNT":
-            acct_disp[c] = acct_disp[c].apply(lambda v: fmt_money(v) if "PCT" not in c else fmt_pct4(v))
-    st.dataframe(acct_disp, use_container_width=True, hide_index=True)
-
+# --- KPIs (front and center) ---
 if hold_df is not None and not hold_df.empty:
-    st.subheader("HOLDINGS (grouped: equity then its options)")
-    st.dataframe(pretty_holdings(hold_df), use_container_width=True, hide_index=True)
-
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
     hy = holdings_yield_pct(hold_df, overrides=ovr)
     ay = account_yield_pct(hold_df, net_val, overrides=ovr)
     ey = etrade_like_yield_pct(hold_df, overrides=ovr)
-
     mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
 
-    m1, m2, m3, m4, m5 = st.columns(5, gap="medium")
-    m1.metric("Annual Dividend $ (est.)", fmt_money(annual_div))
-    m2.metric("Holdings MV $", fmt_money(mv_total))
-    m3.metric("Holdings Yield %", fmt_pct4(hy))
-    m4.metric("Account Yield %", fmt_pct4(ay))
-    m5.metric("E*TRADE-like Yield %", fmt_pct4(ey))
+    k1, k2, k3, k4, k5 = st.columns(5, gap="medium")
+    k1.metric("Annual Dividend $ (est.)", fmt_money(annual_div))
+    k2.metric("Holdings MV $", fmt_money(mv_total))
+    k3.metric("Holdings Yield %", fmt_pct4(hy))
+    k4.metric("Account Yield %", fmt_pct4(ay))
+    k5.metric("E*TRADE-like Yield %", fmt_pct4(ey))
 
     st.markdown(NOTE)
     st.markdown(NOTE2)
+else:
+    st.info("Upload + PARSE to view yields and run what-if.")
 
-    # Download current grouped holdings
-    csv_bytes = hold_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "DOWNLOAD holdings_grouped.csv",
-        data=csv_bytes,
-        file_name="holdings_grouped.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
-
-st.divider()
-
-# =========================
-# What-if input panel (no sidebar)
-# =========================
-st.subheader("VMFXX → BUY (WHAT-IF)")
-
-c1, c2, c3 = st.columns([1.2, 1.0, 1.0], gap="medium")
-with c1:
-    buy_ticker_raw = st.text_input("Buy Ticker", value="", help="Auto uppercased.")
-    buy_ticker = (buy_ticker_raw or "").upper()
-with c2:
-    buy_qty_str = st.text_input("Buy QTY (shares)", value="0", help="Accounting format allowed, e.g., 1,000")
-    buy_qty = _to_float(buy_qty_str)
-    buy_qty = float(buy_qty) if pd.notna(buy_qty) else 0.0
-with c3:
-    buy_yield_str = st.text_input("Buy Yield %", value="0", help="Enter like 18.91 or 18.91%")
-    buy_yield = _to_float(buy_yield_str)
-    buy_yield = float(buy_yield) if pd.notna(buy_yield) else 0.0
-
+# --- What-if results (front, below KPIs) ---
 if run_clicked:
     if hold_df is None or hold_df.empty:
         st.error("Parse the file first.")
@@ -664,7 +646,6 @@ if run_clicked:
 
             st.success("What-if calculated successfully.")
 
-            # Summary table (Old vs New)
             summary = pd.DataFrame([{
                 "Buy Ticker": buy_ticker,
                 "Buy Price": info["buy_price"],
@@ -690,7 +671,6 @@ if run_clicked:
                 "Net Account Value $": net_val,
             }])
 
-            # pretty display
             disp = summary.copy()
             for c in ["Buy MV $","Sold VMFXX MV $","Shortfall MV $","Old Annual Dividend $","New Annual Dividend $","Net Account Value $"]:
                 disp[c] = disp[c].apply(fmt_money)
@@ -705,11 +685,6 @@ if run_clicked:
 
             st.subheader("WHAT-IF SUMMARY (OLD vs NEW)")
             st.dataframe(disp, use_container_width=True, hide_index=True)
-            st.markdown(NOTE)
-            st.markdown(NOTE2)
-
-            st.subheader("SCENARIO HOLDINGS (grouped)")
-            st.dataframe(pretty_holdings(scen_df), use_container_width=True, hide_index=True)
 
             scen_csv = scen_df.to_csv(index=False).encode("utf-8")
             st.download_button(
@@ -720,8 +695,49 @@ if run_clicked:
                 use_container_width=True
             )
 
+            # store scenario for bottom tables
+            st.session_state["last_scenario_df"] = scen_df
+
         except Exception as e:
             st.error(f"What-if error: {e}")
 
-# Footer
+# =========================
+# BOTTOM: data tables + downloads (moved down)
+# =========================
+st.divider()
+st.subheader("DATA (DETAILS)")
+
+data_tabs = st.tabs(["HOLDINGS (Grouped)", "ACCOUNT SUMMARY", "SCENARIO HOLDINGS"])
+
+with data_tabs[0]:
+    if hold_df is not None and not hold_df.empty:
+        st.dataframe(pretty_holdings(hold_df), use_container_width=True, hide_index=True)
+        csv_bytes = hold_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "DOWNLOAD holdings_grouped.csv",
+            data=csv_bytes,
+            file_name="holdings_grouped.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    else:
+        st.info("No holdings loaded yet.")
+
+with data_tabs[1]:
+    if acct_df is not None and not acct_df.empty:
+        acct_disp = acct_df.copy()
+        for c in acct_disp.columns:
+            if c != "ACCOUNT":
+                acct_disp[c] = acct_disp[c].apply(lambda v: fmt_money(v) if "PCT" not in c else fmt_pct4(v))
+        st.dataframe(acct_disp, use_container_width=True, hide_index=True)
+    else:
+        st.info("No account summary loaded yet.")
+
+with data_tabs[2]:
+    scen_df = st.session_state.get("last_scenario_df")
+    if isinstance(scen_df, pd.DataFrame) and not scen_df.empty:
+        st.dataframe(pretty_holdings(scen_df), use_container_width=True, hide_index=True)
+    else:
+        st.info("Run a what-if to populate scenario holdings here.")
+
 st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
