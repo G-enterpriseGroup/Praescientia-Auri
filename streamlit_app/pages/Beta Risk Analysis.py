@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -32,7 +33,7 @@ input, textarea {
   box-shadow: none !important;
 }
 
-div[data-baseweb="select"] > div,
+/* Date + number inputs */
 div[data-baseweb="input"] > div {
   background: #0b0b0b !important;
   color: #ff9900 !important;
@@ -40,6 +41,7 @@ div[data-baseweb="input"] > div {
   border-radius: 0px !important;
 }
 
+/* Buttons */
 .stButton > button {
   background: #000000 !important;
   color: #ff9900 !important;
@@ -57,15 +59,6 @@ div[data-baseweb="input"] > div {
   border-radius: 0px !important;
 }
 
-section[data-testid="stSidebar"] {
-  background: #000000 !important;
-  border-right: 2px solid #ff9900 !important;
-}
-section[data-testid="stSidebar"] * {
-  color: #ff9900 !important;
-  font-family: "Courier New", Courier, monospace !important;
-}
-
 hr { border: 0; border-top: 2px dashed #ff9900; }
 a { color: #ffcc66 !important; }
 a:hover { color: #ffffff !important; }
@@ -76,11 +69,15 @@ div[data-testid="stMetric"] {
   border-radius: 0px;
   background: #050505;
 }
+
+/* Hide sidebar completely */
+section[data-testid="stSidebar"] { display: none !important; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 st.title("MID-PRICE DROP COMPARATOR (DAILY MID = (HIGH + LOW) / 2)")
+st.caption("Table math uses Mid = (High + Low) / 2 • Chart is NORMALIZED (each ticker starts at 100)")
 st.markdown("---")
 
 # ----------------------------
@@ -100,11 +97,6 @@ def parse_tickers_space(raw: str) -> list[str]:
 
 @st.cache_data(ttl=60 * 30, show_spinner=False)
 def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame:
-    """
-    Fetch daily OHLC for a window around requested dates to allow:
-    - nearest previous trading day for start/end
-    - series data for chart over the full range
-    """
     s = datetime.combine(start_dt, datetime.min.time()) - timedelta(days=10)
     e = datetime.combine(end_dt, datetime.min.time()) + timedelta(days=1)
 
@@ -155,19 +147,24 @@ def safe_float(v):
         return None
 
 # ----------------------------
-# Sidebar Inputs
+# On-page Inputs (no sidebar)
 # ----------------------------
-with st.sidebar:
-    st.header("INPUTS")
+st.subheader("INPUTS")
+
+c1, c2, c3, c4 = st.columns([2.2, 1.3, 1.3, 1.2])
+
+with c1:
     raw_tickers = st.text_input("TICKERS (space-separated)", value="CLOZ SPY")
+with c2:
     amount = st.number_input("AMOUNT ($)", min_value=0.0, value=80000.0, step=1000.0)
+with c3:
     start_date = st.date_input("START DATE", value=date(2025, 2, 24))
+with c4:
     end_date = st.date_input("END DATE", value=date(2025, 4, 7))
 
-    st.markdown("---")
-    st.caption("Table math uses Mid = (High + Low) / 2")
-    st.caption("Chart is NORMALIZED: each ticker starts at 100")
-    run = st.button("RUN COMPARISON")
+st.markdown("")
+
+run = st.button("RUN COMPARISON")
 
 tickers = parse_tickers_space(raw_tickers)
 
@@ -196,7 +193,6 @@ if run:
                 errors.append(f"{tkr}: no data returned (check ticker).")
                 continue
 
-            # nearest previous trading rows for selected start/end
             r_s = nearest_prev_trading_row(df, start_date)
             r_e = nearest_prev_trading_row(df, end_date)
 
@@ -237,8 +233,7 @@ if run:
                 "Profit / Loss ($)": pnl,
             })
 
-            # Build chart series over requested date range using MID (High/Low mid),
-            # then normalize later so each ticker starts at 100.
+            # Chart series (MID) -> normalized to 100 later
             df_range = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))].copy()
             if not df_range.empty and "High" in df_range.columns and "Low" in df_range.columns:
                 df_range["Series Price"] = (df_range["High"].astype(float) + df_range["Low"].astype(float)) / 2.0
@@ -256,22 +251,19 @@ if run:
         st.error("No results to display.")
         st.stop()
 
-    summary_df = pd.DataFrame(summary_rows)
-
-    # Rank by worst loss (most negative P/L)
-    summary_df = summary_df.sort_values(by="Profit / Loss ($)", ascending=True).reset_index(drop=True)
+    summary_df = pd.DataFrame(summary_rows).sort_values(by="Profit / Loss ($)", ascending=True).reset_index(drop=True)
 
     worst = summary_df.iloc[0]
     best = summary_df.iloc[-1]
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("WORST TICKER", worst["Ticker"])
-    c2.metric("WORST P/L", fmt_money(float(worst["Profit / Loss ($)"])))
-    c3.metric("WORST %", fmt_pct(float(worst["Percent Change"])))
+    m1, m2, m3 = st.columns(3)
+    m1.metric("WORST TICKER", worst["Ticker"])
+    m2.metric("WORST P/L", fmt_money(float(worst["Profit / Loss ($)"])))
+    m3.metric("WORST %", fmt_pct(float(worst["Percent Change"])))
 
     st.markdown("---")
 
-    # Display table (pretty formatting)
+    # Table formatting
     display_df = summary_df.copy()
     money_cols = ["Start High", "Start Low", "Start Mid", "End High", "End Low", "End Mid"]
     for c in money_cols:
@@ -288,8 +280,6 @@ if run:
 
     if chart_rows:
         chart_df = pd.DataFrame(chart_rows).sort_values(["Ticker", "Date"]).reset_index(drop=True)
-
-        # Normalize each ticker so it starts at 100 on its first available date
         chart_df["Base"] = chart_df.groupby("Ticker")["Series Price"].transform("first")
         chart_df["Indexed (Start=100)"] = (chart_df["Series Price"] / chart_df["Base"]) * 100.0
 
@@ -301,15 +291,19 @@ if run:
             title="Normalized Performance (All Start at 100)"
         )
 
+        # Cleaner + transparent plot background
         fig.update_layout(
-            paper_bgcolor="black",
-            plot_bgcolor="black",
+            paper_bgcolor="rgba(0,0,0,0)",   # transparent outer bg
+            plot_bgcolor="rgba(0,0,0,0)",    # transparent plot bg
             font=dict(color="#ff9900", family="Courier New"),
             legend=dict(font=dict(color="#ff9900")),
-            xaxis=dict(gridcolor="#222222", zerolinecolor="#222222"),
-            yaxis=dict(gridcolor="#222222", zerolinecolor="#222222"),
+            xaxis=dict(gridcolor="rgba(255,153,0,0.18)", zerolinecolor="rgba(255,153,0,0.25)"),
+            yaxis=dict(gridcolor="rgba(255,153,0,0.18)", zerolinecolor="rgba(255,153,0,0.25)"),
             title=dict(font=dict(color="#ff9900")),
+            margin=dict(l=40, r=20, t=60, b=40),
         )
+        fig.update_traces(line=dict(width=2))
+
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Not enough range data to draw lines (try a wider date range).")
@@ -326,4 +320,5 @@ if run:
     )
 
 else:
-    st.info("Enter inputs in the left sidebar, then click **RUN COMPARISON**.")
+    st.info("Enter inputs above, then click **RUN COMPARISON**.")
+```
