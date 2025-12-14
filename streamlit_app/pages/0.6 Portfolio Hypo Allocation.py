@@ -1,7 +1,6 @@
-```python
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app (no controls in sidebar, sidebar stays visible)
-# UPDATED: Fix WHAT-IF panel rendering (was showing raw HTML as code). Now uses Streamlit columns + safe HTML blocks (no markdown code-block indentation).
+# UPDATED: layout re-ordered so key KPIs + controls show first; data tables move to bottom.
 # NOTE: NO calc/logic changed.
 
 import csv
@@ -105,61 +104,6 @@ div[data-testid="metric-container"] {
 div[data-testid="metric-container"] * {
   color: #ff9900 !important;
 }
-
-/* --- WHAT-IF COMPARE PANEL (fixed) --- */
-.wf_wrap {
-  border: 2px solid #ff9900;
-  background: #050505;
-  padding: 14px;
-}
-.wf_title {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 0.7px;
-  margin: 0 0 8px 0;
-}
-.wf_sub {
-  font-size: 13px;
-  opacity: 0.95;
-  margin: 0 0 12px 0;
-}
-.wf_hdr {
-  border: 2px solid #ff9900;
-  background: #0b0b0b;
-  padding: 10px;
-  font-weight: 900;
-  text-align: center;
-}
-.wf_cell {
-  border: 2px solid #ff9900;
-  background: #000000;
-  padding: 10px;
-  height: 100%;
-}
-.wf_metric {
-  font-size: 14px;
-  font-weight: 900;
-  opacity: 0.95;
-}
-.wf_val {
-  font-size: 22px;
-  font-weight: 900;
-  line-height: 1.15;
-  margin-top: 4px;
-}
-.wf_delta {
-  font-size: 16px;
-  font-weight: 900;
-  margin-top: 4px;
-  opacity: 0.95;
-}
-.wf_notes {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed #ff9900;
-  font-size: 12px;
-  opacity: 0.95;
-}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -174,6 +118,10 @@ st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + 
 # Helpers
 # =========================
 def _to_float(x):
+    """
+    Convert strings like '$1,234.50', '(1,234.50)', '-.02', '.25' to float.
+    Returns pd.NA if not numeric.
+    """
     if x is None or (isinstance(x, float) and pd.isna(x)):
         return pd.NA
     s = str(x).strip()
@@ -202,6 +150,9 @@ def _safe_text(file_bytes: bytes) -> str:
 
 @st.cache_data(ttl=60*10, show_spinner=False)
 def get_last_price_yf(ticker: str):
+    """
+    Pull last close from yfinance.
+    """
     try:
         t = yf.Ticker(ticker)
         hist = t.history(period="5d", auto_adjust=False)
@@ -296,6 +247,7 @@ HOLD_COLS_15 = [
 def parse_portfolio_text(text: str):
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
 
+    # Account Summary
     acct_df = pd.DataFrame()
     acct_hdr_idx = next((i for i, l in enumerate(lines) if l.startswith("Account,Net Account Value")), None)
     if acct_hdr_idx is not None:
@@ -310,6 +262,7 @@ def parse_portfolio_text(text: str):
                 if c != "ACCOUNT":
                     acct_df[c] = acct_df[c].map(_to_float)
 
+    # Holdings
     holdings_df = pd.DataFrame()
     hold_hdr_idx = next((i for i, l in enumerate(lines) if l.startswith("Symbol,% of Portfolio")), None)
     if hold_hdr_idx is not None:
@@ -319,6 +272,7 @@ def parse_portfolio_text(text: str):
                 break
             rows.append(next(csv.reader([lines[j]])))
 
+        # normalize row lengths
         norm_rows = []
         for r in rows:
             if len(r) >= 15:
@@ -328,10 +282,12 @@ def parse_portfolio_text(text: str):
 
         holdings_df = pd.DataFrame(norm_rows, columns=HOLD_COLS_15)
 
+        # numeric conversions
         num_cols = ["WGT_PCT","LAST","COST_SH","QTY","COST_TOT","GAIN_$","MV_$","GAIN_PCT","DAY_$","DAY_PCT","DIV_YLD_PCT","DIV_$"]
         for c in num_cols:
             holdings_df[c] = holdings_df[c].map(_to_float)
 
+        # dates
         for dc in ["DIV_PAY_DT","ACQ_DT"]:
             holdings_df[dc] = pd.to_datetime(holdings_df[dc], errors="coerce")
 
@@ -444,10 +400,12 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     sold_mv = min(vm_mv, buy_mv)
     shortfall = max(0.0, buy_mv - vm_mv)
 
+    # reduce VMFXX MV
     df.loc[vm_idx, "MV_$"] = vm_mv - sold_mv
     df.loc[vm_idx, "QTY"] = df.loc[vm_idx, "MV_$"]   # VMFXX ~ $1 NAV
     df.loc[vm_idx, "LAST"] = 1.0
 
+    # add/update buy ticker row
     eq_mask = (df["SYM"].astype(str).str.upper() == buy_ticker) & (df["SEC_TYPE"].astype(str).str.upper() == "EQUITY/ETF")
     if eq_mask.sum() > 0:
         idx = df.index[eq_mask][0]
@@ -460,6 +418,7 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
         df.loc[idx, "HAS_EQUITY"] = True
         df.loc[idx, "ROW_KIND"] = 0
     else:
+        # ensure required columns exist
         for col in ["DISPLAY_SYM","SEC_TYPE","UNDER","EXP_DT","STRIKE","CP","GROUP","HAS_EQUITY","GROUP_WGT","ROW_KIND"]:
             if col not in df.columns:
                 df[col] = pd.NA
@@ -494,6 +453,7 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
         })
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
+    # recompute weights
     df["MV_$"] = pd.to_numeric(df["MV_$"], errors="coerce").fillna(0.0)
     total_mv = float(df["MV_$"].sum())
     df["WGT_PCT"] = np.where(total_mv > 0, df["MV_$"] / total_mv * 100.0, 0.0)
@@ -522,36 +482,18 @@ def fmt_pct4(x):
     except Exception:
         return ""
 
-def fmt_pp(x):
-    try:
-        v = float(x)
-        if np.isnan(v):
-            return ""
-        sign = "+" if v >= 0 else ""
-        return f"{sign}{v:.4f} pp"
-    except Exception:
-        return ""
-
-def fmt_money_delta(x):
-    try:
-        v = float(x)
-        if np.isnan(v):
-            return ""
-        sign = "+" if v >= 0 else "-"
-        return f"{sign}${abs(v):,.2f}"
-    except Exception:
-        return ""
-
 def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return df
     out = df.copy()
 
+    # key columns first
     front = ["DISPLAY_SYM","SEC_TYPE","WGT_PCT","MV_$","DIV_YLD_PCT","LAST","QTY"]
     cols = front + [c for c in out.columns if c not in front]
     cols = [c for c in cols if c in out.columns]
     out = out[cols]
 
+    # format columns (string)
     if "WGT_PCT" in out.columns:
         out["WGT_PCT"] = out["WGT_PCT"].apply(lambda v: fmt_pct4(v))
     if "DIV_YLD_PCT" in out.columns:
@@ -562,82 +504,18 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # =========================
-# WHAT-IF compare panel (FIXED RENDERING)
-# =========================
-def wf_block(text: str, cls: str):
-    # IMPORTANT: string must start at column 0 to avoid markdown code-block behavior
-    st.markdown(f"<div class='{cls}'>{text}</div>", unsafe_allow_html=True)
-
-def render_whatif_compare(
-    *,
-    buy_ticker: str,
-    buy_price: float,
-    buy_qty: float,
-    buy_mv: float,
-    sold_vmfxx_mv: float,
-    shortfall_mv: float,
-    old_hy: float, new_hy: float,
-    old_ay: float, new_ay: float,
-    old_ey: float, new_ey: float,
-    old_div: float, new_div: float,
-    net_val: float
-):
-    wf_block("WHAT-IF SUMMARY (OLD vs NEW)", "wf_title")
-    wf_block(
-        f"Buy: <b>{buy_ticker}</b> @ {fmt_money(buy_price)} × {buy_qty:,.4f} shares = <b>{fmt_money(buy_mv)}</b>"
-        f" &nbsp;|&nbsp; Sold VMFXX: <b>{fmt_money(sold_vmfxx_mv)}</b>"
-        f" &nbsp;|&nbsp; Shortfall: <b>{fmt_money(shortfall_mv)}</b>",
-        "wf_sub"
-    )
-
-    # Header row
-    h1, h2, h3, h4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
-    with h1: wf_block("METRIC", "wf_hdr")
-    with h2: wf_block("OLD", "wf_hdr")
-    with h3: wf_block("NEW", "wf_hdr")
-    with h4: wf_block("CHANGE", "wf_hdr")
-
-    # Rows (big + easy)
-    rows = [
-        ("Holdings Yield %", fmt_pct4(old_hy), fmt_pct4(new_hy), fmt_pp(new_hy - old_hy)),
-        ("Account Yield %", fmt_pct4(old_ay), fmt_pct4(new_ay), fmt_pp(new_ay - old_ay)),
-        ("E*TRADE-like Yield %", fmt_pct4(old_ey), fmt_pct4(new_ey), fmt_pp(new_ey - old_ey)),
-        ("Annual Dividend $ (est.)", fmt_money(old_div), fmt_money(new_div), fmt_money_delta(new_div - old_div)),
-    ]
-
-    for name, oldv, newv, delt in rows:
-        c1, c2, c3, c4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
-        with c1:
-            wf_block(f"<div class='wf_metric'>{name}</div>", "wf_cell")
-        with c2:
-            wf_block(f"<div class='wf_val'>{oldv}</div>", "wf_cell")
-        with c3:
-            wf_block(f"<div class='wf_val'>{newv}</div>", "wf_cell")
-        with c4:
-            wf_block(f"<div class='wf_delta'>{delt}</div>", "wf_cell")
-
-    wf_block(
-        f"Net Account Value (for Account Yield): <b>{fmt_money(net_val)}</b><br/>{NOTE}<br/>{NOTE2}",
-        "wf_notes"
-    )
-
-# =========================
 # UI — re-ordered (KPIs first, data bottom)
 # =========================
 
-# Session state
+# --- Session state ---
 if "acct_df" not in st.session_state:
     st.session_state.acct_df = None
 if "hold_df" not in st.session_state:
     st.session_state.hold_df = None
 if "net_val" not in st.session_state:
     st.session_state.net_val = np.nan
-if "last_scenario_df" not in st.session_state:
-    st.session_state.last_scenario_df = None
-if "last_whatif_payload" not in st.session_state:
-    st.session_state.last_whatif_payload = None
 
-# TOP: Upload + actions
+# --- TOP: Upload + Buttons + What-if inputs (front and center) ---
 r1a, r1b, r1c = st.columns([1.3, 1.0, 1.2], gap="large")
 
 with r1a:
@@ -658,7 +536,10 @@ with r1c:
     parse_clicked = st.button("PARSE FILE", use_container_width=True)
     clear_clicked = st.button("CLEAR STATE", use_container_width=True)
 
+st.markdown("")
+
 st.subheader("VMFXX → BUY (WHAT-IF)")
+
 w1, w2, w3, w4 = st.columns([1.2, 1.0, 1.0, 1.1], gap="medium")
 
 with w1:
@@ -681,13 +562,11 @@ with w4:
 
 st.divider()
 
-# Clear
+# --- State actions ---
 if clear_clicked:
     st.session_state.acct_df = None
     st.session_state.hold_df = None
     st.session_state.net_val = np.nan
-    st.session_state.last_scenario_df = None
-    st.session_state.last_whatif_payload = None
     st.rerun()
 
 def overrides_dict():
@@ -716,7 +595,7 @@ hold_df = st.session_state.hold_df
 net_val = st.session_state.net_val
 ovr = overrides_dict()
 
-# KPIs
+# --- KPIs (front and center) ---
 if hold_df is not None and not hold_df.empty:
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
     hy = holdings_yield_pct(hold_df, overrides=ovr)
@@ -730,10 +609,13 @@ if hold_df is not None and not hold_df.empty:
     k3.metric("Holdings Yield %", fmt_pct4(hy))
     k4.metric("Account Yield %", fmt_pct4(ay))
     k5.metric("E*TRADE-like Yield %", fmt_pct4(ey))
+
+    st.markdown(NOTE)
+    st.markdown(NOTE2)
 else:
     st.info("Upload + PARSE to view yields and run what-if.")
 
-# What-if
+# --- What-if results (front, below KPIs) ---
 if run_clicked:
     if hold_df is None or hold_df.empty:
         st.error("Parse the file first.")
@@ -743,6 +625,7 @@ if run_clicked:
         st.error("Buy QTY must be > 0.")
     else:
         try:
+            # Base yields
             base_div = dividend_dollars_annual(hold_df, overrides=ovr)
             old_hy = holdings_yield_pct(hold_df, overrides=ovr)
             old_ay = account_yield_pct(hold_df, net_val, overrides=ovr)
@@ -755,50 +638,71 @@ if run_clicked:
                 buy_yield_pct=buy_yield
             )
 
+            # New yields
             new_div = dividend_dollars_annual(scen_df, overrides=ovr)
             new_hy = holdings_yield_pct(scen_df, overrides=ovr)
             new_ay = account_yield_pct(scen_df, net_val, overrides=ovr)
             new_ey = etrade_like_yield_pct(scen_df, overrides=ovr)
 
-            st.session_state.last_scenario_df = scen_df
-            st.session_state.last_whatif_payload = dict(
-                buy_ticker=buy_ticker,
-                buy_price=info["buy_price"],
-                buy_qty=buy_qty,
-                buy_mv=info["buy_mv"],
-                sold_vmfxx_mv=info["sold_vmfxx_mv"],
-                shortfall_mv=info["shortfall_mv"],
-                old_hy=old_hy, new_hy=new_hy,
-                old_ay=old_ay, new_ay=new_ay,
-                old_ey=old_ey, new_ey=new_ey,
-                old_div=base_div, new_div=new_div,
-                net_val=net_val
+            st.success("What-if calculated successfully.")
+
+            summary = pd.DataFrame([{
+                "Buy Ticker": buy_ticker,
+                "Buy Price": info["buy_price"],
+                "Buy QTY": buy_qty,
+                "Buy MV $": info["buy_mv"],
+                "Sold VMFXX MV $": info["sold_vmfxx_mv"],
+                "Shortfall MV $": info["shortfall_mv"],
+
+                "Old Holdings Yield %": old_hy,
+                "New Holdings Yield %": new_hy,
+                "Δ Holdings (pp)": (new_hy - old_hy),
+
+                "Old Account Yield %": old_ay,
+                "New Account Yield %": new_ay,
+                "Δ Account (pp)": (new_ay - old_ay),
+
+                "Old E*TRADE-like Yield %": old_ey,
+                "New E*TRADE-like Yield %": new_ey,
+                "Δ E*TRADE-like (pp)": (new_ey - old_ey),
+
+                "Old Annual Dividend $": base_div,
+                "New Annual Dividend $": new_div,
+                "Net Account Value $": net_val,
+            }])
+
+            disp = summary.copy()
+            for c in ["Buy MV $","Sold VMFXX MV $","Shortfall MV $","Old Annual Dividend $","New Annual Dividend $","Net Account Value $"]:
+                disp[c] = disp[c].apply(fmt_money)
+            disp["Buy Price"] = disp["Buy Price"].apply(fmt_money)
+
+            for c in [
+                "Old Holdings Yield %","New Holdings Yield %","Δ Holdings (pp)",
+                "Old Account Yield %","New Account Yield %","Δ Account (pp)",
+                "Old E*TRADE-like Yield %","New E*TRADE-like Yield %","Δ E*TRADE-like (pp)"
+            ]:
+                disp[c] = disp[c].apply(fmt_pct4)
+
+            st.subheader("WHAT-IF SUMMARY (OLD vs NEW)")
+            st.dataframe(disp, use_container_width=True, hide_index=True)
+
+            scen_csv = scen_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "DOWNLOAD holdings_scenario.csv",
+                data=scen_csv,
+                file_name="holdings_scenario.csv",
+                mime="text/csv",
+                use_container_width=True
             )
 
-            st.success("What-if calculated successfully.")
+            # store scenario for bottom tables
+            st.session_state["last_scenario_df"] = scen_df
+
         except Exception as e:
             st.error(f"What-if error: {e}")
 
-# Render compare (fixed) + download
-payload = st.session_state.last_whatif_payload
-if isinstance(payload, dict):
-    st.markdown("<div class='wf_wrap'>", unsafe_allow_html=True)
-    render_whatif_compare(**payload)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    scen_df = st.session_state.last_scenario_df
-    if isinstance(scen_df, pd.DataFrame) and not scen_df.empty:
-        scen_csv = scen_df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "DOWNLOAD holdings_scenario.csv",
-            data=scen_csv,
-            file_name="holdings_scenario.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-
 # =========================
-# Bottom: data tables
+# BOTTOM: data tables + downloads (moved down)
 # =========================
 st.divider()
 st.subheader("DATA (DETAILS)")
@@ -830,11 +734,10 @@ with data_tabs[1]:
         st.info("No account summary loaded yet.")
 
 with data_tabs[2]:
-    scen_df = st.session_state.last_scenario_df
+    scen_df = st.session_state.get("last_scenario_df")
     if isinstance(scen_df, pd.DataFrame) and not scen_df.empty:
         st.dataframe(pretty_holdings(scen_df), use_container_width=True, hide_index=True)
     else:
         st.info("Run a what-if to populate scenario holdings here.")
 
 st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-```
