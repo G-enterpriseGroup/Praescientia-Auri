@@ -156,20 +156,6 @@ def safe_float(v):
     except Exception:
         return None
 
-def normalize_to_100(series: pd.Series) -> pd.Series:
-    """
-    Robust normalize: first non-null value becomes 100.
-    Avoids NaN base + divide-by-zero issues.
-    """
-    s = pd.to_numeric(series, errors="coerce")
-    s_non_null = s.dropna()
-    if s_non_null.empty:
-        return pd.Series([None] * len(s), index=s.index)
-    base = float(s_non_null.iloc[0])
-    if base == 0:
-        return pd.Series([None] * len(s), index=s.index)
-    return (s / base) * 100.0
-
 # ----------------------------
 # Sidebar Inputs
 # ----------------------------
@@ -255,9 +241,7 @@ if run:
             # Build chart series over the actual requested date range (use trading days in range)
             df_range = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))].copy()
             if not df_range.empty and "High" in df_range.columns and "Low" in df_range.columns:
-                df_range["Mid Price"] = (pd.to_numeric(df_range["High"], errors="coerce") + pd.to_numeric(df_range["Low"], errors="coerce")) / 2.0
-                df_range = df_range.dropna(subset=["Mid Price"])
-
+                df_range["Mid Price"] = (df_range["High"].astype(float) + df_range["Low"].astype(float)) / 2.0
                 for dt_idx, row in df_range.iterrows():
                     chart_rows.append({
                         "Date": dt_idx,
@@ -300,25 +284,18 @@ if run:
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("VISUAL: NORMALIZED MID PRICE (ALL START AT 100)")
+    st.subheader("VISUAL: DAILY MID PRICE LINES (HIGH/LOW MID)")
 
     if chart_rows:
-        chart_df = pd.DataFrame(chart_rows)
-
-        # Ensure correct ordering BEFORE normalization
-        chart_df = chart_df.sort_values(["Ticker", "Date"]).reset_index(drop=True)
-
-        # Normalize each ticker so first non-null value in range = 100
-        chart_df["Mid (Start=100)"] = chart_df.groupby("Ticker")["Mid Price"].transform(normalize_to_100)
-
+        chart_df = pd.DataFrame(chart_rows).sort_values(["Date", "Ticker"])
         fig = px.line(
             chart_df,
             x="Date",
-            y="Mid (Start=100)",
+            y="Mid Price",
             color="Ticker",
-            title="Normalized Mid Price Over Time (Start = 100)"
+            title="Mid Price Over Time (Mid = (High + Low) / 2)"
         )
-
+        # Make plot match the theme (no fixed colors; just dark background & orange text)
         fig.update_layout(
             paper_bgcolor="black",
             plot_bgcolor="black",
