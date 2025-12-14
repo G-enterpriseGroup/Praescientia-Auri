@@ -118,25 +118,18 @@ def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame
     keep = [c for c in ["High", "Low", "Open", "Close", "Volume"] if c in df.columns]
     return df[keep]
 
-def nearest_prev_trading_row(df: pd.DataFrame, target_dt: date) -> pd.Series | None:
-    if df is None or df.empty:
+def nearest_prev_trading_row(df: pd.DataFrame, target_dt: date):
+    if df.empty:
         return None
-    t = pd.to_datetime(target_dt)
-    eligible = df[df.index <= t]
-    if eligible.empty:
-        return None
-    return eligible.iloc[-1]
+    eligible = df[df.index <= pd.to_datetime(target_dt)]
+    return None if eligible.empty else eligible.iloc[-1]
 
-def fmt_money(x: float) -> str:
-    if x is None or pd.isna(x):
-        return "—"
-    if x < 0:
-        return f"(${abs(x):,.2f})"
-    return f"${x:,.2f}"
+def fmt_money(x):
+    if x is None or pd.isna(x): return "—"
+    return f"(${abs(x):,.2f})" if x < 0 else f"${x:,.2f}"
 
-def fmt_pct(x: float) -> str:
-    if x is None or pd.isna(x):
-        return "—"
+def fmt_pct(x):
+    if x is None or pd.isna(x): return "—"
     return f"{x * 100:.2f}%"
 
 def safe_float(v):
@@ -146,23 +139,24 @@ def safe_float(v):
         return None
 
 # ----------------------------
-# On-page Inputs (no sidebar)
+# INPUTS (ENTER RUNS)
 # ----------------------------
 st.subheader("INPUTS")
 
-c1, c2, c3, c4 = st.columns([2.2, 1.3, 1.3, 1.2])
+with st.form("run_form", clear_on_submit=False):
+    c1, c2, c3, c4 = st.columns([2.2, 1.3, 1.3, 1.2])
 
-with c1:
-    raw_tickers = st.text_input("TICKERS (space-separated)", value="CLOZ SPY")
-with c2:
-    amount = st.number_input("AMOUNT ($)", min_value=0.0, value=80000.0, step=1000.0)
-with c3:
-    start_date = st.date_input("START DATE", value=date(2025, 2, 24))
-with c4:
-    end_date = st.date_input("END DATE", value=date(2025, 4, 7))
+    with c1:
+        raw_tickers = st.text_input("TICKERS (space-separated)", value="CLOZ SPY")
+    with c2:
+        amount = st.number_input("AMOUNT ($)", min_value=0.0, value=80000.0, step=1000.0)
+    with c3:
+        start_date = st.date_input("START DATE", value=date(2025, 2, 24))
+    with c4:
+        end_date = st.date_input("END DATE", value=date(2025, 4, 7))
 
-st.markdown("")
-run = st.button("RUN COMPARISON")
+    st.markdown("")
+    run = st.form_submit_button("RUN COMPARISON")
 
 tickers = parse_tickers_space(raw_tickers)
 
@@ -180,9 +174,9 @@ if run:
 
     st.write(f"**Tickers (cleaned to UPPERCASE):** {' '.join(tickers)}")
 
-    summary_rows: list[dict] = []
-    chart_rows: list[dict] = []
-    errors: list[str] = []
+    summary_rows = []
+    chart_rows = []
+    errors = []
 
     with st.spinner("Pulling daily High/Low data..."):
         for tkr in tickers:
@@ -194,133 +188,59 @@ if run:
             r_s = nearest_prev_trading_row(df, start_date)
             r_e = nearest_prev_trading_row(df, end_date)
 
-            if r_s is None:
-                errors.append(f"{tkr}: no trading day found on/before start date.")
-                continue
-            if r_e is None:
-                errors.append(f"{tkr}: no trading day found on/before end date.")
+            if r_s is None or r_e is None:
+                errors.append(f"{tkr}: missing trading day.")
                 continue
 
-            used_start = pd.to_datetime(r_s.name).date()
-            used_end = pd.to_datetime(r_e.name).date()
+            s_high, s_low = safe_float(r_s["High"]), safe_float(r_s["Low"])
+            e_high, e_low = safe_float(r_e["High"]), safe_float(r_e["Low"])
 
-            s_high, s_low = safe_float(r_s.get("High")), safe_float(r_s.get("Low"))
-            e_high, e_low = safe_float(r_e.get("High")), safe_float(r_e.get("Low"))
-
-            if s_high is None or s_low is None or e_high is None or e_low is None:
-                errors.append(f"{tkr}: missing High/Low data in range.")
-                continue
-
-            start_mid = (s_high + s_low) / 2.0
-            end_mid = (e_high + e_low) / 2.0
-
-            pct_change = (end_mid / start_mid) - 1.0 if start_mid != 0 else None
-            pnl = amount * pct_change if pct_change is not None else None
+            start_mid = (s_high + s_low) / 2
+            end_mid = (e_high + e_low) / 2
+            pct_change = (end_mid / start_mid) - 1
+            pnl = amount * pct_change
 
             summary_rows.append({
                 "Ticker": tkr,
-                "Start Date Used": used_start.isoformat(),
-                "End Date Used": used_end.isoformat(),
-                "Start High": s_high,
-                "Start Low": s_low,
+                "Start Date Used": r_s.name.date().isoformat(),
+                "End Date Used": r_e.name.date().isoformat(),
                 "Start Mid": start_mid,
-                "End High": e_high,
-                "End Low": e_low,
                 "End Mid": end_mid,
                 "Percent Change": pct_change,
                 "Profit / Loss ($)": pnl,
             })
 
-            # Chart series (MID) -> normalized to 100 later
-            df_range = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))].copy()
-            if not df_range.empty and "High" in df_range.columns and "Low" in df_range.columns:
-                df_range["Series Price"] = (df_range["High"].astype(float) + df_range["Low"].astype(float)) / 2.0
-                for dt_idx, row in df_range.iterrows():
-                    chart_rows.append({
-                        "Date": dt_idx,
-                        "Ticker": tkr,
-                        "Series Price": float(row["Series Price"]),
-                    })
+            df_r = df.loc[start_date:end_date].copy()
+            df_r["Series Price"] = (df_r["High"] + df_r["Low"]) / 2
+            for i, r in df_r.iterrows():
+                chart_rows.append({"Date": i, "Ticker": tkr, "Series Price": r["Series Price"]})
 
-    if errors:
-        st.warning("SOME TICKERS HAD ISSUES:\n\n- " + "\n- ".join(errors))
-
-    if not summary_rows:
-        st.error("No results to display.")
-        st.stop()
-
-    summary_df = pd.DataFrame(summary_rows).sort_values(by="Profit / Loss ($)", ascending=True).reset_index(drop=True)
+    summary_df = pd.DataFrame(summary_rows).sort_values("Profit / Loss ($)")
 
     worst = summary_df.iloc[0]
     best = summary_df.iloc[-1]
 
-    # ✅ Show BOTH worst + best in the top metrics
     m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("WORST TICKER", worst["Ticker"])
-    m2.metric("WORST P/L", fmt_money(float(worst["Profit / Loss ($)"])))
-    m3.metric("WORST %", fmt_pct(float(worst["Percent Change"])))
-
+    m2.metric("WORST P/L", fmt_money(worst["Profit / Loss ($)"]))
+    m3.metric("WORST %", fmt_pct(worst["Percent Change"]))
     m4.metric("BEST TICKER", best["Ticker"])
-    m5.metric("BEST P/L", fmt_money(float(best["Profit / Loss ($)"])))
-    m6.metric("BEST %", fmt_pct(float(best["Percent Change"])))
+    m5.metric("BEST P/L", fmt_money(best["Profit / Loss ($)"]))
+    m6.metric("BEST %", fmt_pct(best["Percent Change"]))
 
-    st.markdown("---")
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-    # Table formatting
-    display_df = summary_df.copy()
-    money_cols = ["Start High", "Start Low", "Start Mid", "End High", "End Low", "End Mid"]
-    for c in money_cols:
-        display_df[c] = display_df[c].map(lambda x: f"{float(x):,.2f}")
+    chart_df = pd.DataFrame(chart_rows)
+    chart_df["Base"] = chart_df.groupby("Ticker")["Series Price"].transform("first")
+    chart_df["Indexed (Start=100)"] = chart_df["Series Price"] / chart_df["Base"] * 100
 
-    display_df["Percent Change"] = display_df["Percent Change"].map(lambda x: fmt_pct(float(x)))
-    display_df["Profit / Loss ($)"] = display_df["Profit / Loss ($)"].map(lambda x: fmt_money(float(x)))
-
-    st.subheader("RESULTS (RANKED BY WORST LOSS)")
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.subheader("VISUAL: NORMALIZED LINES (EACH STARTS AT 100)")
-
-    if chart_rows:
-        chart_df = pd.DataFrame(chart_rows).sort_values(["Ticker", "Date"]).reset_index(drop=True)
-        chart_df["Base"] = chart_df.groupby("Ticker")["Series Price"].transform("first")
-        chart_df["Indexed (Start=100)"] = (chart_df["Series Price"] / chart_df["Base"]) * 100.0
-
-        fig = px.line(
-            chart_df,
-            x="Date",
-            y="Indexed (Start=100)",
-            color="Ticker",
-            title="Normalized Performance (All Start at 100)"
-        )
-
-        # Cleaner + transparent plot background
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#ff9900", family="Courier New"),
-            legend=dict(font=dict(color="#ff9900")),
-            xaxis=dict(gridcolor="rgba(255,153,0,0.18)", zerolinecolor="rgba(255,153,0,0.25)"),
-            yaxis=dict(gridcolor="rgba(255,153,0,0.18)", zerolinecolor="rgba(255,153,0,0.25)"),
-            title=dict(font=dict(color="#ff9900")),
-            margin=dict(l=40, r=20, t=60, b=40),
-        )
-        fig.update_traces(line=dict(width=2))
-
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Not enough range data to draw lines (try a wider date range).")
-
-    st.markdown("---")
-    st.subheader("QUICK READ")
-    st.write(
-        f"- Worst loss: **{worst['Ticker']}** at **{fmt_money(float(worst['Profit / Loss ($)']))}** "
-        f"from {worst['Start Date Used']} → {worst['End Date Used']}."
+    fig = px.line(chart_df, x="Date", y="Indexed (Start=100)", color="Ticker")
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#ff9900", family="Courier New"),
     )
-    st.write(
-        f"- Best result: **{best['Ticker']}** at **{fmt_money(float(best['Profit / Loss ($)']))}** "
-        f"from {best['Start Date Used']} → {best['End Date Used']}."
-    )
+    st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.info("Enter inputs above, then click **RUN COMPARISON**.")
+    st.info("Enter inputs above, then press ENTER.")
