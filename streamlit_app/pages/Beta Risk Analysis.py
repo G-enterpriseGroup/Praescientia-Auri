@@ -73,7 +73,7 @@ div[data-testid="stMetric"] {
 }
 
 /* Hide sidebar completely */
-section[data-testid="stSidebar"] { display: none !important; }
+section[data-testid="stSidebar"] { display: Block !important; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
