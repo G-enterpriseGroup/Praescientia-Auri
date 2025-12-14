@@ -32,6 +32,7 @@ input, textarea {
   box-shadow: none !important;
 }
 
+/* Date + number inputs */
 div[data-baseweb="input"] > div {
   background: #0b0b0b !important;
   color: #ff9900 !important;
@@ -39,6 +40,7 @@ div[data-baseweb="input"] > div {
   border-radius: 0px !important;
 }
 
+/* Buttons */
 .stButton > button {
   background: #000000 !important;
   color: #ff9900 !important;
@@ -51,6 +53,23 @@ div[data-baseweb="input"] > div {
 }
 .stButton > button:hover { background: #111111 !important; }
 
+[data-testid="stDataFrame"] {
+  border: 2px solid #ff9900 !important;
+  border-radius: 0px !important;
+}
+
+hr { border: 0; border-top: 2px dashed #ff9900; }
+a { color: #ffcc66 !important; }
+a:hover { color: #ffffff !important; }
+
+div[data-testid="stMetric"] {
+  border: 2px solid #ff9900;
+  padding: 10px;
+  border-radius: 0px;
+  background: #050505;
+}
+
+/* Hide sidebar completely */
 section[data-testid="stSidebar"] { display: none !important; }
 </style>
 """
@@ -75,9 +94,6 @@ def parse_tickers_space(raw: str) -> list[str]:
             seen.add(t)
     return out
 
-def uppercase_tickers():
-    st.session_state["raw_tickers"] = st.session_state["raw_tickers"].upper()
-
 @st.cache_data(ttl=60 * 30, show_spinner=False)
 def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame:
     s = datetime.combine(start_dt, datetime.min.time()) - timedelta(days=10)
@@ -98,9 +114,13 @@ def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame
 
     df = df.copy()
     df.index = pd.to_datetime(df.index).tz_localize(None)
-    return df[["High", "Low", "Open", "Close", "Volume"]]
+
+    keep = [c for c in ["High", "Low", "Open", "Close", "Volume"] if c in df.columns]
+    return df[keep]
 
 def nearest_prev_trading_row(df: pd.DataFrame, target_dt: date):
+    if df.empty:
+        return None
     eligible = df[df.index <= pd.to_datetime(target_dt)]
     return None if eligible.empty else eligible.iloc[-1]
 
@@ -112,6 +132,12 @@ def fmt_pct(x):
     if x is None or pd.isna(x): return "—"
     return f"{x * 100:.2f}%"
 
+def safe_float(v):
+    try:
+        return float(v)
+    except Exception:
+        return None
+
 # ----------------------------
 # INPUTS (ENTER RUNS)
 # ----------------------------
@@ -121,21 +147,9 @@ with st.form("run_form", clear_on_submit=False):
     c1, c2, c3, c4 = st.columns([2.2, 1.3, 1.3, 1.2])
 
     with c1:
-        raw_tickers = st.text_input(
-            "TICKERS (space-separated)",
-            value="CLOZ SPY",
-            key="raw_tickers",
-            on_change=uppercase_tickers
-        )
-
+        raw_tickers = st.text_input("TICKERS (space-separated)", value="CLOZ SPY")
     with c2:
-        amount = st.number_input(
-            "AMOUNT ($)",
-            min_value=0.0,
-            value=80000.0,
-            step=1000.0
-        )
-
+        amount = st.number_input("AMOUNT ($)", min_value=0.0, value=80000.0, step=1000.0)
     with c3:
         start_date = st.date_input("START DATE", value=date(2025, 2, 24))
     with c4:
@@ -151,38 +165,69 @@ tickers = parse_tickers_space(raw_tickers)
 # ----------------------------
 if run:
     if not tickers:
-        st.error("Enter at least one ticker.")
+        st.error("Enter at least one ticker (space-separated). Example: CLOZ SPY")
         st.stop()
 
     if end_date < start_date:
         st.error("End Date must be on/after Start Date.")
         st.stop()
 
+    st.write(f"**Tickers (cleaned to UPPERCASE):** {' '.join(tickers)}")
+
     summary_rows = []
     chart_rows = []
+    errors = []
 
-    for tkr in tickers:
-        df = fetch_ohlc_window(tkr, start_date, end_date)
-        r_s = nearest_prev_trading_row(df, start_date)
-        r_e = nearest_prev_trading_row(df, end_date)
+    with st.spinner("Pulling daily High/Low data..."):
+        for tkr in tickers:
+            df = fetch_ohlc_window(tkr, start_date, end_date)
+            if df.empty:
+                errors.append(f"{tkr}: no data returned (check ticker).")
+                continue
 
-        start_mid = (r_s["High"] + r_s["Low"]) / 2
-        end_mid = (r_e["High"] + r_e["Low"]) / 2
-        pct_change = (end_mid / start_mid) - 1
-        pnl = amount * pct_change
+            r_s = nearest_prev_trading_row(df, start_date)
+            r_e = nearest_prev_trading_row(df, end_date)
 
-        summary_rows.append({
-            "Ticker": tkr,
-            "Percent Change": pct_change,
-            "Profit / Loss ($)": pnl,
-        })
+            if r_s is None or r_e is None:
+                errors.append(f"{tkr}: missing trading day.")
+                continue
 
-        df_r = df.loc[start_date:end_date]
-        df_r["Series Price"] = (df_r["High"] + df_r["Low"]) / 2
-        for i, r in df_r.iterrows():
-            chart_rows.append({"Date": i, "Ticker": tkr, "Series Price": r["Series Price"]})
+            s_high, s_low = safe_float(r_s["High"]), safe_float(r_s["Low"])
+            e_high, e_low = safe_float(r_e["High"]), safe_float(r_e["Low"])
 
-    summary_df = pd.DataFrame(summary_rows)
+            start_mid = (s_high + s_low) / 2
+            end_mid = (e_high + e_low) / 2
+            pct_change = (end_mid / start_mid) - 1
+            pnl = amount * pct_change
+
+            summary_rows.append({
+                "Ticker": tkr,
+                "Start Date Used": r_s.name.date().isoformat(),
+                "End Date Used": r_e.name.date().isoformat(),
+                "Start Mid": start_mid,
+                "End Mid": end_mid,
+                "Percent Change": pct_change,
+                "Profit / Loss ($)": pnl,
+            })
+
+            df_r = df.loc[start_date:end_date].copy()
+            df_r["Series Price"] = (df_r["High"] + df_r["Low"]) / 2
+            for i, r in df_r.iterrows():
+                chart_rows.append({"Date": i, "Ticker": tkr, "Series Price": r["Series Price"]})
+
+    summary_df = pd.DataFrame(summary_rows).sort_values("Profit / Loss ($)")
+
+    worst = summary_df.iloc[0]
+    best = summary_df.iloc[-1]
+
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("WORST TICKER", worst["Ticker"])
+    m2.metric("WORST P/L", fmt_money(worst["Profit / Loss ($)"]))
+    m3.metric("WORST %", fmt_pct(worst["Percent Change"]))
+    m4.metric("BEST TICKER", best["Ticker"])
+    m5.metric("BEST P/L", fmt_money(best["Profit / Loss ($)"]))
+    m6.metric("BEST %", fmt_pct(best["Percent Change"]))
+
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
     chart_df = pd.DataFrame(chart_rows)
@@ -190,7 +235,11 @@ if run:
     chart_df["Indexed (Start=100)"] = chart_df["Series Price"] / chart_df["Base"] * 100
 
     fig = px.line(chart_df, x="Date", y="Indexed (Start=100)", color="Ticker")
-    fig.update_layout(font=dict(color="#ff9900", family="Courier New"))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#ff9900", family="Courier New"),
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 else:
