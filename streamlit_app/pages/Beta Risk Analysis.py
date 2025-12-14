@@ -89,7 +89,6 @@ st.markdown("---")
 def parse_tickers_space(raw: str) -> list[str]:
     if not raw:
         return []
-    # split on whitespace, uppercase, de-dup keep order
     parts = [p.strip().upper() for p in raw.split() if p.strip()]
     seen = set()
     out = []
@@ -99,12 +98,12 @@ def parse_tickers_space(raw: str) -> list[str]:
             seen.add(t)
     return out
 
-@st.cache_data(ttl=60*30, show_spinner=False)
+@st.cache_data(ttl=60 * 30, show_spinner=False)
 def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame:
     """
     Fetch daily OHLC for a window around requested dates to allow:
     - nearest previous trading day for start/end
-    - mid-price series for chart over the full range
+    - series data for chart over the full range
     """
     s = datetime.combine(start_dt, datetime.min.time()) - timedelta(days=10)
     e = datetime.combine(end_dt, datetime.min.time()) + timedelta(days=1)
@@ -125,7 +124,6 @@ def fetch_ohlc_window(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame
     df = df.copy()
     df.index = pd.to_datetime(df.index).tz_localize(None)
 
-    # Keep only needed columns
     keep = [c for c in ["High", "Low", "Open", "Close", "Volume"] if c in df.columns]
     return df[keep]
 
@@ -148,7 +146,7 @@ def fmt_money(x: float) -> str:
 def fmt_pct(x: float) -> str:
     if x is None or pd.isna(x):
         return "—"
-    return f"{x*100:.2f}%"
+    return f"{x * 100:.2f}%"
 
 def safe_float(v):
     try:
@@ -167,7 +165,8 @@ with st.sidebar:
     end_date = st.date_input("END DATE", value=date(2025, 4, 7))
 
     st.markdown("---")
-    st.caption("Daily Mid Price = (High + Low) / 2")
+    st.caption("Table math uses Mid = (High + Low) / 2")
+    st.caption("Chart is NORMALIZED: each ticker starts at 100")
     run = st.button("RUN COMPARISON")
 
 tickers = parse_tickers_space(raw_tickers)
@@ -186,9 +185,9 @@ if run:
 
     st.write(f"**Tickers (cleaned to UPPERCASE):** {' '.join(tickers)}")
 
-    summary_rows = []
-    chart_rows = []
-    errors = []
+    summary_rows: list[dict] = []
+    chart_rows: list[dict] = []
+    errors: list[str] = []
 
     with st.spinner("Pulling daily High/Low data..."):
         for tkr in tickers:
@@ -238,15 +237,16 @@ if run:
                 "Profit / Loss ($)": pnl,
             })
 
-            # Build chart series over the actual requested date range (use trading days in range)
+            # Build chart series over requested date range using MID (High/Low mid),
+            # then normalize later so each ticker starts at 100.
             df_range = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))].copy()
             if not df_range.empty and "High" in df_range.columns and "Low" in df_range.columns:
-                df_range["Mid Price"] = (df_range["High"].astype(float) + df_range["Low"].astype(float)) / 2.0
+                df_range["Series Price"] = (df_range["High"].astype(float) + df_range["Low"].astype(float)) / 2.0
                 for dt_idx, row in df_range.iterrows():
                     chart_rows.append({
                         "Date": dt_idx,
                         "Ticker": tkr,
-                        "Mid Price": float(row["Mid Price"]),
+                        "Series Price": float(row["Series Price"]),
                     })
 
     if errors:
@@ -284,18 +284,23 @@ if run:
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("VISUAL: DAILY MID PRICE LINES (HIGH/LOW MID)")
+    st.subheader("VISUAL: NORMALIZED LINES (EACH STARTS AT 100)")
 
     if chart_rows:
-        chart_df = pd.DataFrame(chart_rows).sort_values(["Date", "Ticker"])
+        chart_df = pd.DataFrame(chart_rows).sort_values(["Ticker", "Date"]).reset_index(drop=True)
+
+        # Normalize each ticker so it starts at 100 on its first available date
+        chart_df["Base"] = chart_df.groupby("Ticker")["Series Price"].transform("first")
+        chart_df["Indexed (Start=100)"] = (chart_df["Series Price"] / chart_df["Base"]) * 100.0
+
         fig = px.line(
             chart_df,
             x="Date",
-            y="Mid Price",
+            y="Indexed (Start=100)",
             color="Ticker",
-            title="Mid Price Over Time (Mid = (High + Low) / 2)"
+            title="Normalized Performance (All Start at 100)"
         )
-        # Make plot match the theme (no fixed colors; just dark background & orange text)
+
         fig.update_layout(
             paper_bgcolor="black",
             plot_bgcolor="black",
