@@ -1,7 +1,8 @@
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
-# FIX: Rebuilt WHAT-IF SUMMARY using ONLY Streamlit-native layout (columns + metric)
-# so it cannot render as raw HTML/code. NO calc/logic changed.
+# CHANGE: Removed Holdings Yield + Account Yield from UI + What-If summary.
+# Kept ONLY E*TRADE-like Yield (plus Annual Dividend $ and MV $ for context).
+# NOTE: No underlying yield math changed; we only stopped displaying the other yield methods.
 
 import csv
 import re
@@ -109,11 +110,10 @@ div[data-testid="metric-container"] * {
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-NOTE = "*Holdings yield = good for investment-focused tracking; Account yield = best for “what my account actually earns.”*"
-NOTE2 = "*E*TRADE-like yield ≈ dividend yield on income-producing holdings (excludes options/cash/zero-yield holdings). Small differences can remain due to rounding and money-market yield methodology.*"
+NOTE_ETRADE = "*E*TRADE-like yield ≈ weighted dividend yield on income-producing holdings (excludes options/cash/zero-yield holdings). Small differences can remain due to rounding and money-market yield methodology.*"
 
 st.title("PORTFOLIO YIELD LAB — 90s ORANGE")
-st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + Account Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if.")
+st.caption("Upload your E*TRADE PortfolioDownload CSV, compute E*TRADE-like Yield, then run a VMFXX→Buy what-if.")
 
 # =========================
 # Helpers
@@ -302,7 +302,7 @@ def get_net_account_value(acct_df: pd.DataFrame) -> float:
     return float("nan")
 
 # =========================
-# Yield math (3 methods)
+# Yield math (3 methods exist; UI shows ONLY E*TRADE-like)
 # =========================
 def apply_yield_overrides(df: pd.DataFrame, overrides: dict) -> pd.Series:
     y = pd.to_numeric(df.get("DIV_YLD_PCT", 0), errors="coerce").fillna(0.0).astype(float)
@@ -512,7 +512,6 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
 def render_whatif_summary(payload: dict):
     st.subheader("WHAT-IF SUMMARY (OLD vs NEW)")
 
-    # Trade detail metrics (big + immediate)
     d1, d2, d3, d4, d5, d6 = st.columns(6, gap="medium")
     d1.metric("Buy Ticker", payload["buy_ticker"])
     d2.metric("Buy Price", fmt_money(payload["buy_price"]))
@@ -521,12 +520,9 @@ def render_whatif_summary(payload: dict):
     d5.metric("Sold VMFXX $", fmt_money(payload["sold_vmfxx_mv"]))
     d6.metric("Shortfall $", fmt_money(payload["shortfall_mv"]))
 
-    st.markdown(NOTE)
-    st.markdown(NOTE2)
-
+    st.markdown(NOTE_ETRADE)
     st.markdown("---")
 
-    # Table-style compare grid using columns + metric (no HTML injection)
     h1, h2, h3, h4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
     h1.markdown("<div class='bb_hdr'>METRIC</div>", unsafe_allow_html=True)
     h2.markdown("<div class='bb_hdr'>OLD</div>", unsafe_allow_html=True)
@@ -534,10 +530,9 @@ def render_whatif_summary(payload: dict):
     h4.markdown("<div class='bb_hdr'>CHANGE</div>", unsafe_allow_html=True)
 
     rows = [
-        ("Holdings Yield %", payload["old_hy"], payload["new_hy"], "pp"),
-        ("Account Yield %", payload["old_ay"], payload["new_ay"], "pp"),
         ("E*TRADE-like Yield %", payload["old_ey"], payload["new_ey"], "pp"),
         ("Annual Dividend $ (est.)", payload["old_div"], payload["new_div"], "$"),
+        ("Holdings MV $", payload["old_mv_total"], payload["new_mv_total"], "$"),
     ]
 
     for name, oldv, newv, kind in rows:
@@ -553,7 +548,7 @@ def render_whatif_summary(payload: dict):
             c3.metric(" ", fmt_money(newv))
             c4.metric(" ", fmt_money_delta(float(newv) - float(oldv)))
 
-    st.caption(f"Net Account Value (for Account Yield): {fmt_money(payload['net_val'])}")
+    st.caption(f"Net Account Value (reference only): {fmt_money(payload['net_val'])}")
 
 # =========================
 # UI — organized (KPIs top, data bottom)
@@ -569,7 +564,6 @@ if "last_scenario_df" not in st.session_state:
 if "last_whatif_payload" not in st.session_state:
     st.session_state.last_whatif_payload = None
 
-# Upload + calibrate + actions
 top1, top2, top3 = st.columns([1.3, 1.0, 1.2], gap="large")
 
 with top1:
@@ -613,7 +607,6 @@ with w4:
 
 st.divider()
 
-# Clear
 if clear_clicked:
     st.session_state.acct_df = None
     st.session_state.hold_df = None
@@ -628,7 +621,6 @@ def overrides_dict():
         d["VMFXX"] = float(vmfxx_override)
     return d
 
-# Parse
 if parse_clicked:
     if f is None:
         st.error("Upload a CSV first.")
@@ -648,22 +640,19 @@ hold_df = st.session_state.hold_df
 net_val = st.session_state.net_val
 ovr = overrides_dict()
 
-# Top KPI strip
+# Top KPI strip (ONLY E*TRADE-like yield)
 if hold_df is not None and not hold_df.empty:
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
-    hy = holdings_yield_pct(hold_df, overrides=ovr)
-    ay = account_yield_pct(hold_df, net_val, overrides=ovr)
     ey = etrade_like_yield_pct(hold_df, overrides=ovr)
     mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
 
-    k1, k2, k3, k4, k5 = st.columns(5, gap="medium")
+    k1, k2, k3, k4 = st.columns(4, gap="medium")
     k1.metric("Annual Dividend $ (est.)", fmt_money(annual_div))
     k2.metric("Holdings MV $", fmt_money(mv_total))
-    k3.metric("Holdings Yield %", fmt_pct4(hy))
-    k4.metric("Account Yield %", fmt_pct4(ay))
-    k5.metric("E*TRADE-like Yield %", fmt_pct4(ey))
+    k3.metric("E*TRADE-like Yield %", fmt_pct4(ey))
+    k4.metric("Net Account Value", fmt_money(net_val))
 else:
-    st.info("Upload + PARSE to view yields and run what-if.")
+    st.info("Upload + PARSE to view yield and run what-if.")
 
 # Run what-if
 if run_clicked:
@@ -676,9 +665,8 @@ if run_clicked:
     else:
         try:
             base_div = dividend_dollars_annual(hold_df, overrides=ovr)
-            old_hy = holdings_yield_pct(hold_df, overrides=ovr)
-            old_ay = account_yield_pct(hold_df, net_val, overrides=ovr)
             old_ey = etrade_like_yield_pct(hold_df, overrides=ovr)
+            old_mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
 
             scen_df, info = apply_sell_vmfxx_buy_new(
                 hold_df,
@@ -688,9 +676,8 @@ if run_clicked:
             )
 
             new_div = dividend_dollars_annual(scen_df, overrides=ovr)
-            new_hy = holdings_yield_pct(scen_df, overrides=ovr)
-            new_ay = account_yield_pct(scen_df, net_val, overrides=ovr)
             new_ey = etrade_like_yield_pct(scen_df, overrides=ovr)
+            new_mv_total = float(info.get("holdings_total_mv", np.nan))
 
             st.session_state.last_scenario_df = scen_df
             st.session_state.last_whatif_payload = dict(
@@ -700,10 +687,9 @@ if run_clicked:
                 buy_mv=info["buy_mv"],
                 sold_vmfxx_mv=info["sold_vmfxx_mv"],
                 shortfall_mv=info["shortfall_mv"],
-                old_hy=old_hy, new_hy=new_hy,
-                old_ay=old_ay, new_ay=new_ay,
                 old_ey=old_ey, new_ey=new_ey,
                 old_div=base_div, new_div=new_div,
+                old_mv_total=old_mv_total, new_mv_total=new_mv_total,
                 net_val=net_val
             )
 
@@ -711,7 +697,7 @@ if run_clicked:
         except Exception as e:
             st.error(f"What-if error: {e}")
 
-# Render summary (fixed)
+# Render summary
 payload = st.session_state.last_whatif_payload
 if isinstance(payload, dict):
     render_whatif_summary(payload)
