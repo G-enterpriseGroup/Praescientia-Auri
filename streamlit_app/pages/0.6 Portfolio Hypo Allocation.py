@@ -1,8 +1,7 @@
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
-# CHANGE: Removed Holdings Yield + Account Yield from UI + What-If summary.
-# Kept ONLY E*TRADE-like Yield (plus Annual Dividend $ and MV $ for context).
-# NOTE: No underlying yield math changed; we only stopped displaying the other yield methods.
+# CHANGE: Put Holdings Yield % back into KPI strip + What-If summary.
+# Account Yield % stays removed. No calc logic changed.
 
 import csv
 import re
@@ -110,10 +109,11 @@ div[data-testid="metric-container"] * {
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
+NOTE_HOLD = "*Holdings yield = dividend $ / total holdings MV (excludes options/cash from dividends).*"
 NOTE_ETRADE = "*E*TRADE-like yield ≈ weighted dividend yield on income-producing holdings (excludes options/cash/zero-yield holdings). Small differences can remain due to rounding and money-market yield methodology.*"
 
 st.title("PORTFOLIO YIELD LAB — 90s ORANGE")
-st.caption("Upload your E*TRADE PortfolioDownload CSV, compute E*TRADE-like Yield, then run a VMFXX→Buy what-if.")
+st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if.")
 
 # =========================
 # Helpers
@@ -302,7 +302,7 @@ def get_net_account_value(acct_df: pd.DataFrame) -> float:
     return float("nan")
 
 # =========================
-# Yield math (3 methods exist; UI shows ONLY E*TRADE-like)
+# Yield math
 # =========================
 def apply_yield_overrides(df: pd.DataFrame, overrides: dict) -> pd.Series:
     y = pd.to_numeric(df.get("DIV_YLD_PCT", 0), errors="coerce").fillna(0.0).astype(float)
@@ -520,6 +520,7 @@ def render_whatif_summary(payload: dict):
     d5.metric("Sold VMFXX $", fmt_money(payload["sold_vmfxx_mv"]))
     d6.metric("Shortfall $", fmt_money(payload["shortfall_mv"]))
 
+    st.markdown(NOTE_HOLD)
     st.markdown(NOTE_ETRADE)
     st.markdown("---")
 
@@ -530,6 +531,7 @@ def render_whatif_summary(payload: dict):
     h4.markdown("<div class='bb_hdr'>CHANGE</div>", unsafe_allow_html=True)
 
     rows = [
+        ("Holdings Yield %", payload["old_hy"], payload["new_hy"], "pp"),
         ("E*TRADE-like Yield %", payload["old_ey"], payload["new_ey"], "pp"),
         ("Annual Dividend $ (est.)", payload["old_div"], payload["new_div"], "$"),
         ("Holdings MV $", payload["old_mv_total"], payload["new_mv_total"], "$"),
@@ -640,19 +642,21 @@ hold_df = st.session_state.hold_df
 net_val = st.session_state.net_val
 ovr = overrides_dict()
 
-# Top KPI strip (ONLY E*TRADE-like yield)
+# Top KPI strip (Holdings Yield back + E*TRADE-like)
 if hold_df is not None and not hold_df.empty:
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
+    hy = holdings_yield_pct(hold_df, overrides=ovr)
     ey = etrade_like_yield_pct(hold_df, overrides=ovr)
     mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
 
-    k1, k2, k3, k4 = st.columns(4, gap="medium")
+    k1, k2, k3, k4, k5 = st.columns(5, gap="medium")
     k1.metric("Annual Dividend $ (est.)", fmt_money(annual_div))
     k2.metric("Holdings MV $", fmt_money(mv_total))
-    k3.metric("E*TRADE-like Yield %", fmt_pct4(ey))
-    k4.metric("Net Account Value", fmt_money(net_val))
+    k3.metric("Holdings Yield %", fmt_pct4(hy))
+    k4.metric("E*TRADE-like Yield %", fmt_pct4(ey))
+    k5.metric("Net Account Value", fmt_money(net_val))
 else:
-    st.info("Upload + PARSE to view yield and run what-if.")
+    st.info("Upload + PARSE to view yields and run what-if.")
 
 # Run what-if
 if run_clicked:
@@ -665,6 +669,7 @@ if run_clicked:
     else:
         try:
             base_div = dividend_dollars_annual(hold_df, overrides=ovr)
+            old_hy = holdings_yield_pct(hold_df, overrides=ovr)
             old_ey = etrade_like_yield_pct(hold_df, overrides=ovr)
             old_mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
 
@@ -676,6 +681,7 @@ if run_clicked:
             )
 
             new_div = dividend_dollars_annual(scen_df, overrides=ovr)
+            new_hy = holdings_yield_pct(scen_df, overrides=ovr)
             new_ey = etrade_like_yield_pct(scen_df, overrides=ovr)
             new_mv_total = float(info.get("holdings_total_mv", np.nan))
 
@@ -687,6 +693,7 @@ if run_clicked:
                 buy_mv=info["buy_mv"],
                 sold_vmfxx_mv=info["sold_vmfxx_mv"],
                 shortfall_mv=info["shortfall_mv"],
+                old_hy=old_hy, new_hy=new_hy,
                 old_ey=old_ey, new_ey=new_ey,
                 old_div=base_div, new_div=new_div,
                 old_mv_total=old_mv_total, new_mv_total=new_mv_total,
