@@ -1,9 +1,13 @@
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
 # CHANGE (per your request):
-# 1) Remove ACCOUNT SUMMARY tab entirely (and account parsing/state).
-# 2) Make COST_SH (cost/share) prominent in tables AND ensure scenario COST_SH updates via weighted-average cost when adding to an existing ticker.
-# Everything else stays the same.
+# - Scenario holdings: when adding to an existing ticker, update BOTH COST_TOT and COST_SH using the exact Average Cost Method:
+#     prev_cost = prev_shares * prev_cost_sh
+#     new_cost  = new_shares * new_price
+#     new_total_cost = prev_cost + new_cost
+#     new_total_shares = prev_shares + new_shares
+#     new_cost_sh = new_total_cost / new_total_shares
+# - Also keep VMFXX COST_TOT/COST_SH consistent after selling so scenario cost basis stays accurate.
 
 import csv
 import re
@@ -186,7 +190,7 @@ def _extract_first_percent(text: str):
     except Exception:
         return None
 
-@st.cache_data(ttl=60 * 60 * 6, show_spinner=False)  # cache yields for 6 hours
+@st.cache_data(ttl=60 * 60 * 6, show_spinner=False)
 def get_dividend_yield_stockanalysis(ticker: str):
     ticker = (ticker or "").strip().upper()
     if not ticker:
@@ -212,7 +216,6 @@ def get_dividend_yield_stockanalysis(ticker: str):
         if not html:
             continue
 
-        # Try XPath (if lxml available)
         try:
             import lxml.html as LH
             tree = LH.fromstring(html)
@@ -225,7 +228,6 @@ def get_dividend_yield_stockanalysis(ticker: str):
         except Exception:
             pass
 
-        # Fallback: regex in HTML
         try:
             m = re.search(r"Dividend\s*Yield[^%]{0,80}(\d+(?:\.\d+)?)\s*%", html, flags=re.IGNORECASE)
             if m:
@@ -440,7 +442,7 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
 
     buy_qty = float(buy_qty)
     buy_yield_pct = float(buy_yield_pct)
-    buy_mv = px * buy_qty
+    buy_mv = px * buy_qty  # New Purchase Cost
 
     vm_mask = (df["SYM"].astype(str).str.upper() == "VMFXX") & (df["SEC_TYPE"].astype(str).str.upper() != "OPTION")
     if vm_mask.sum() == 0:
@@ -451,41 +453,57 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     sold_mv = min(vm_mv, buy_mv)
     shortfall = max(0.0, buy_mv - vm_mv)
 
+    # Update VMFXX to reflect the sell (keep cost basis consistent for scenario accuracy)
     df.loc[vm_idx, "MV_$"] = vm_mv - sold_mv
     df.loc[vm_idx, "QTY"] = df.loc[vm_idx, "MV_$"]   # VMFXX ~ $1 NAV
     df.loc[vm_idx, "LAST"] = 1.0
+    df.loc[vm_idx, "COST_SH"] = 1.0
+    df.loc[vm_idx, "COST_TOT"] = df.loc[vm_idx, "MV_$"]  # remaining cost basis ~ remaining MV at $1
 
+    # Buy side: if ticker already exists, apply Average Cost Method to COST_TOT & COST_SH
     eq_mask = (df["SYM"].astype(str).str.upper() == buy_ticker) & (df["SEC_TYPE"].astype(str).str.upper() == "EQUITY/ETF")
     if eq_mask.sum() > 0:
         idx = df.index[eq_mask][0]
 
-        # --- weighted average cost update ---
-        old_qty = _num(df.loc[idx, "QTY"], 0.0)
+        # Previous Shares
+        prev_shares = _num(df.loc[idx, "QTY"], 0.0)
 
-        old_cost_tot = _num(df.loc[idx, "COST_TOT"], np.nan)
-        if np.isnan(old_cost_tot) or old_cost_tot <= 0:
-            old_cost_sh = _num(df.loc[idx, "COST_SH"], np.nan)
-            if not np.isnan(old_cost_sh) and old_cost_sh > 0 and old_qty > 0:
-                old_cost_tot = old_cost_sh * old_qty
-            else:
-                old_cost_tot = 0.0
+        # Previous Price (use previous average cost/share from file)
+        prev_price = _num(df.loc[idx, "COST_SH"], np.nan)
+        if np.isnan(prev_price) or prev_price <= 0:
+            # fallback: derive from COST_TOT / QTY if possible
+            ct = _num(df.loc[idx, "COST_TOT"], 0.0)
+            prev_price = (ct / prev_shares) if prev_shares > 0 else 0.0
 
-        new_qty = old_qty + buy_qty
-        new_cost_tot = old_cost_tot + buy_mv
-        new_cost_sh = (new_cost_tot / new_qty) if new_qty > 0 else 0.0
+        # Previous Total Cost = Previous Shares x Previous Price
+        prev_total_cost = prev_shares * prev_price
 
-        df.loc[idx, "QTY"] = new_qty
-        df.loc[idx, "COST_TOT"] = new_cost_tot
+        # New Purchase Cost = New Shares x New Price
+        new_purchase_cost = buy_qty * px
+
+        # New Total Cost Basis = Previous Total Cost + New Purchase Cost
+        new_total_cost = prev_total_cost + new_purchase_cost
+
+        # New Total Shares = Previous Shares + New Shares
+        new_total_shares = prev_shares + buy_qty
+
+        # New Average Cost Per Share = New Total Cost Basis / Total Shares Owned
+        new_cost_sh = (new_total_cost / new_total_shares) if new_total_shares > 0 else 0.0
+
+        # Write back (THIS is what you asked for)
+        df.loc[idx, "QTY"] = new_total_shares
+        df.loc[idx, "COST_TOT"] = new_total_cost
         df.loc[idx, "COST_SH"] = new_cost_sh
 
-        df.loc[idx, "MV_$"] = _num(df.loc[idx, "MV_$"], 0.0) + buy_mv
+        # Market value updates (what-if assumes purchase at px today)
+        df.loc[idx, "MV_$"] = _num(df.loc[idx, "MV_$"], 0.0) + new_purchase_cost
         df.loc[idx, "LAST"] = px
         df.loc[idx, "DIV_YLD_PCT"] = buy_yield_pct
 
-        # keep scenario row consistent
+        # keep scenario P/L coherent
         df.loc[idx, "GAIN_$"] = _num(df.loc[idx, "MV_$"], 0.0) - _num(df.loc[idx, "COST_TOT"], 0.0)
-        ct = _num(df.loc[idx, "COST_TOT"], 0.0)
-        df.loc[idx, "GAIN_PCT"] = (df.loc[idx, "GAIN_$"] / ct * 100.0) if ct > 0 else 0.0
+        ct2 = _num(df.loc[idx, "COST_TOT"], 0.0)
+        df.loc[idx, "GAIN_PCT"] = (df.loc[idx, "GAIN_$"] / ct2 * 100.0) if ct2 > 0 else 0.0
 
         df.loc[idx, "DISPLAY_SYM"] = buy_ticker
         df.loc[idx, "GROUP"] = buy_ticker
@@ -580,7 +598,6 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
         return df
     out = df.copy()
 
-    # COST_SH moved up (prominent)
     front = ["DISPLAY_SYM","SEC_TYPE","WGT_PCT","MV_$","COST_SH","COST_TOT","GAIN_$","GAIN_PCT","DIV_YLD_PCT","LAST","QTY"]
     cols = front + [c for c in out.columns if c not in front]
     cols = [c for c in cols if c in out.columns]
