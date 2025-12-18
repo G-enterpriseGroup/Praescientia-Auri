@@ -1,8 +1,17 @@
-import streamlit as st
-import yfinance as yf
+import re
+from datetime import date, datetime, timedelta
+from urllib.parse import quote
+
 import pandas as pd
 import plotly.express as px
-from datetime import date, datetime, timedelta
+import requests
+import streamlit as st
+import yfinance as yf
+
+try:
+    import lxml.html as LH
+except Exception:
+    LH = None
 
 # ----------------------------
 # Page + Theme (90s Orange)
@@ -149,6 +158,74 @@ def safe_float(v):
         return None
 
 # ----------------------------
+# Dividend Yield (StockAnalysis.com)
+# ----------------------------
+DIV_YIELD_XPATH = "/html/body/div[1]/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div"
+
+def _extract_div_yield_fraction_from_html(html_text: str) -> float | None:
+    """
+    Returns dividend yield as a FRACTION (e.g., 0.043 for 4.30%) or None.
+    """
+    if not html_text:
+        return None
+
+    # Prefer XPath (per your provided xpath). If lxml isn't available, return None.
+    if LH is None:
+        return None
+
+    try:
+        root = LH.fromstring(html_text)
+        nodes = root.xpath(DIV_YIELD_XPATH)
+        if not nodes:
+            return None
+
+        txt = " ".join(nodes[0].text_content().split())
+        m = re.search(r"(\d+(?:\.\d+)?)\s*%", txt)
+        if not m:
+            return None
+
+        pct = float(m.group(1))
+        return pct / 100.0
+    except Exception:
+        return None
+
+@st.cache_data(ttl=6 * 60 * 60, show_spinner=False)
+def fetch_div_yield_stockanalysis(ticker: str) -> float | None:
+    """
+    Tries ETF page first, then stock page.
+    Returns dividend yield as a FRACTION (e.g., 0.043 for 4.30%) or None.
+    """
+    t = (ticker or "").strip().upper()
+    if not t:
+        return None
+
+    t_url = quote(t.lower())
+    urls = [
+        f"https://stockanalysis.com/etf/{t_url}/dividend/",
+        f"https://stockanalysis.com/stocks/{t_url}/dividend/",
+    ]
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; StreamlitApp/1.0)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+    }
+
+    for url in urls:
+        try:
+            r = requests.get(url, headers=headers, timeout=12)
+            if r.status_code != 200:
+                continue
+            y = _extract_div_yield_fraction_from_html(r.text)
+            if y is not None:
+                return y
+        except Exception:
+            continue
+
+    return None
+
+# ----------------------------
 # On-page Inputs (no sidebar)
 # ----------------------------
 st.subheader("INPUTS")
@@ -224,6 +301,9 @@ if run:
             pct_change = (end_mid / start_mid) - 1.0 if start_mid != 0 else None
             pnl = amount * pct_change if pct_change is not None else None
 
+            # NEW: dividend yield from StockAnalysis.com (fraction)
+            div_yield = fetch_div_yield_stockanalysis(tkr)
+
             summary_rows.append({
                 "Ticker": tkr,
                 "Start Date Used": used_start.isoformat(),
@@ -236,6 +316,7 @@ if run:
                 "End Mid": end_mid,
                 "Percent Change": pct_change,
                 "Profit / Loss ($)": pnl,
+                "Dividend Yield": div_yield,  # fraction (e.g., 0.043)
             })
 
             # Chart series (MID) -> normalized to 100 later
@@ -279,8 +360,15 @@ if run:
     for c in money_cols:
         display_df[c] = display_df[c].map(lambda x: f"{float(x):,.2f}")
 
-    display_df["Percent Change"] = display_df["Percent Change"].map(lambda x: fmt_pct(float(x)))
-    display_df["Profit / Loss ($)"] = display_df["Profit / Loss ($)"].map(lambda x: fmt_money(float(x)))
+    display_df["Percent Change"] = display_df["Percent Change"].map(lambda x: fmt_pct(float(x)) if x is not None else "—")
+    display_df["Profit / Loss ($)"] = display_df["Profit / Loss ($)"].map(lambda x: fmt_money(float(x)) if x is not None else "—")
+
+    # NEW: Dividend Yield column at the end (formatted)
+    display_df["Dividend Yield"] = display_df["Dividend Yield"].map(lambda x: fmt_pct(float(x)) if x is not None else "—")
+
+    # Ensure Dividend Yield is last column
+    cols = [c for c in display_df.columns if c != "Dividend Yield"] + ["Dividend Yield"]
+    display_df = display_df[cols]
 
     st.subheader("RESULTS (RANKED BY WORST LOSS)")
     st.dataframe(display_df, use_container_width=True, hide_index=True)
