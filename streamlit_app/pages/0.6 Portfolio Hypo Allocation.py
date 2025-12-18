@@ -1,13 +1,11 @@
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
-# CHANGE (per your request):
-# - Scenario holdings: when adding to an existing ticker, update BOTH COST_TOT and COST_SH using the exact Average Cost Method:
-#     prev_cost = prev_shares * prev_cost_sh
-#     new_cost  = new_shares * new_price
-#     new_total_cost = prev_cost + new_cost
-#     new_total_shares = prev_shares + new_shares
-#     new_cost_sh = new_total_cost / new_total_shares
-# - Also keep VMFXX COST_TOT/COST_SH consistent after selling so scenario cost basis stays accurate.
+# UPDATE:
+# - Auto-pull Buy Yield % from StockAnalysis (etf + stocks dividend pages)
+# - Remove Net Account Value KPI + remove Account Summary tab
+# - Buy QTY preset buttons (25/50/100) that add each click
+# - Scenario holdings: when adding to existing ticker, update COST_TOT + COST_SH using weighted average,
+#   and also update GAIN_$ + GAIN_PCT to keep the row consistent.
 
 import csv
 import re
@@ -15,6 +13,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import yfinance as yf
+import requests
 from datetime import datetime
 
 # =========================
@@ -117,7 +116,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 NOTE_HOLD = "*Holdings yield = dividend $ / total holdings MV (excludes options/cash from dividends).*"
 NOTE_ETRADE = "*E*TRADE-like yield ≈ weighted dividend yield on income-producing holdings (excludes options/cash/zero-yield holdings). Small differences can remain due to rounding and money-market yield methodology.*"
-NOTE_SA = "*Buy Yield% auto-pulled from StockAnalysis dividend page (ETF or stock). If blocked/changed, fallback tries yfinance.*"
+NOTE_YIELD = "*Buy Yield % auto-fills from StockAnalysis when ticker changes. You can still override it manually.*"
 
 st.title("PORTFOLIO YIELD LAB — 90s ORANGE")
 st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if.")
@@ -152,15 +151,6 @@ def _to_float(x):
 def _safe_text(file_bytes: bytes) -> str:
     return file_bytes.decode("utf-8", errors="replace")
 
-def _num(x, default=0.0) -> float:
-    try:
-        v = pd.to_numeric(x, errors="coerce")
-        if pd.isna(v):
-            return float(default)
-        return float(v)
-    except Exception:
-        return float(default)
-
 @st.cache_data(ttl=60 * 10, show_spinner=False)
 def get_last_price_yf(ticker: str):
     try:
@@ -172,84 +162,49 @@ def get_last_price_yf(ticker: str):
     except Exception:
         return None
 
-# =========================
-# StockAnalysis dividend yield fetch
-# =========================
-SA_XPATH = "/html/body/div[1]/div[1]/div[2]/main/div[2]/div/div[2]/div[1]/div"
-SA_ETF_URL = "https://stockanalysis.com/etf/{}/dividend/"
-SA_STOCK_URL = "https://stockanalysis.com/stocks/{}/dividend/"
-
-def _extract_first_percent(text: str):
-    if not text:
-        return None
-    m = re.search(r"(-?\d+(?:\.\d+)?)\s*%", text)
-    if not m:
-        return None
-    try:
-        return float(m.group(1))
-    except Exception:
-        return None
-
-@st.cache_data(ttl=60 * 60 * 6, show_spinner=False)
+@st.cache_data(ttl=60 * 60, show_spinner=False)
 def get_dividend_yield_stockanalysis(ticker: str):
-    ticker = (ticker or "").strip().upper()
-    if not ticker:
-        return None, None
+    """
+    Pull Dividend Yield % from StockAnalysis dividend page.
+    Tries ETF URL first, then Stocks URL.
+    Returns float yield percent (e.g., 4.21) or None.
+    """
+    t = (ticker or "").strip().upper()
+    if not t:
+        return None
 
-    try:
-        import requests
-    except Exception:
-        return None, "requests_not_available"
+    urls = [
+        f"https://stockanalysis.com/etf/{t}/dividend/",
+        f"https://stockanalysis.com/stocks/{t}/dividend/",
+    ]
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0"
     }
 
-    def fetch(url: str):
-        r = requests.get(url, headers=headers, timeout=15)
-        if r.status_code != 200:
-            return None, f"http_{r.status_code}"
-        return r.text, None
+    # robust-ish patterns: look near "Dividend Yield" and grab the first % number after it
+    patterns = [
+        r"Dividend Yield[^0-9]{0,300}([\d.]+)\s*%",
+        r"Dividend Yield\s*</[^>]+>\s*<[^>]+>\s*([\d.]+)\s*%",
+        r"Dividend\s*Yield[^%]{0,300}([\d.]+)%",
+    ]
 
-    for kind, url in [("ETF", SA_ETF_URL.format(ticker)), ("STOCK", SA_STOCK_URL.format(ticker))]:
-        html, _err = fetch(url)
-        if not html:
+    for url in urls:
+        try:
+            r = requests.get(url, headers=headers, timeout=12)
+            if r.status_code != 200:
+                continue
+            html = r.text or ""
+            for pat in patterns:
+                m = re.search(pat, html, flags=re.IGNORECASE | re.DOTALL)
+                if m:
+                    v = _to_float(m.group(1))
+                    if pd.notna(v):
+                        return float(v)
+        except Exception:
             continue
 
-        try:
-            import lxml.html as LH
-            tree = LH.fromstring(html)
-            nodes = tree.xpath(SA_XPATH)
-            if nodes:
-                txt = " ".join([n.text_content().strip() for n in nodes if hasattr(n, "text_content")]).strip()
-                y = _extract_first_percent(txt)
-                if y is not None:
-                    return y, f"stockanalysis_{kind.lower()}_xpath"
-        except Exception:
-            pass
-
-        try:
-            m = re.search(r"Dividend\s*Yield[^%]{0,80}(\d+(?:\.\d+)?)\s*%", html, flags=re.IGNORECASE)
-            if m:
-                return float(m.group(1)), f"stockanalysis_{kind.lower()}_regex"
-        except Exception:
-            pass
-
-    return None, "stockanalysis_not_found"
-
-@st.cache_data(ttl=60 * 60 * 6, show_spinner=False)
-def get_dividend_yield_yfinance_fallback(ticker: str):
-    try:
-        info = yf.Ticker(ticker).info or {}
-        dy = info.get("dividendYield", None)
-        if dy is None:
-            return None
-        dy = float(dy)
-        if dy <= 0:
-            return None
-        return dy * 100.0
-    except Exception:
-        return None
+    return None
 
 # =========================
 # Option parsing + grouping
@@ -322,7 +277,7 @@ def group_options_under_equities(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # =========================
-# CSV parsing (HOLDINGS ONLY)
+# CSV parsing
 # =========================
 HOLD_COLS_15 = [
     "SYM","WGT_PCT","LAST","COST_SH","QTY","COST_TOT","GAIN_$","MV_$","GAIN_PCT",
@@ -429,6 +384,15 @@ def etrade_like_yield_pct(holdings: pd.DataFrame, overrides: dict = None) -> flo
 # =========================
 # What-if: sell VMFXX -> buy new
 # =========================
+def _num(df, idx, col, default=np.nan):
+    try:
+        v = pd.to_numeric(df.loc[idx, col], errors="coerce")
+        if pd.isna(v):
+            return default
+        return float(v)
+    except Exception:
+        return default
+
 def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: float, buy_yield_pct: float):
     df = holdings.copy()
 
@@ -442,7 +406,7 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
 
     buy_qty = float(buy_qty)
     buy_yield_pct = float(buy_yield_pct)
-    buy_mv = px * buy_qty  # New Purchase Cost
+    buy_mv = px * buy_qty
 
     vm_mask = (df["SYM"].astype(str).str.upper() == "VMFXX") & (df["SEC_TYPE"].astype(str).str.upper() != "OPTION")
     if vm_mask.sum() == 0:
@@ -453,57 +417,49 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     sold_mv = min(vm_mv, buy_mv)
     shortfall = max(0.0, buy_mv - vm_mv)
 
-    # Update VMFXX to reflect the sell (keep cost basis consistent for scenario accuracy)
+    # reduce VMFXX market value
     df.loc[vm_idx, "MV_$"] = vm_mv - sold_mv
     df.loc[vm_idx, "QTY"] = df.loc[vm_idx, "MV_$"]   # VMFXX ~ $1 NAV
     df.loc[vm_idx, "LAST"] = 1.0
-    df.loc[vm_idx, "COST_SH"] = 1.0
-    df.loc[vm_idx, "COST_TOT"] = df.loc[vm_idx, "MV_$"]  # remaining cost basis ~ remaining MV at $1
 
-    # Buy side: if ticker already exists, apply Average Cost Method to COST_TOT & COST_SH
+    # add / create buy ticker
     eq_mask = (df["SYM"].astype(str).str.upper() == buy_ticker) & (df["SEC_TYPE"].astype(str).str.upper() == "EQUITY/ETF")
     if eq_mask.sum() > 0:
         idx = df.index[eq_mask][0]
 
-        # Previous Shares
-        prev_shares = _num(df.loc[idx, "QTY"], 0.0)
+        prev_qty = _num(df, idx, "QTY", default=0.0)
+        prev_cost_sh = _num(df, idx, "COST_SH", default=np.nan)
+        prev_cost_tot = _num(df, idx, "COST_TOT", default=np.nan)
 
-        # Previous Price (use previous average cost/share from file)
-        prev_price = _num(df.loc[idx, "COST_SH"], np.nan)
-        if np.isnan(prev_price) or prev_price <= 0:
-            # fallback: derive from COST_TOT / QTY if possible
-            ct = _num(df.loc[idx, "COST_TOT"], 0.0)
-            prev_price = (ct / prev_shares) if prev_shares > 0 else 0.0
+        # best-available previous total cost basis
+        if not np.isfinite(prev_cost_tot) or prev_cost_tot <= 0:
+            if np.isfinite(prev_cost_sh) and prev_qty > 0:
+                prev_cost_tot = prev_qty * prev_cost_sh
+            else:
+                # fallback: approximate using last price if cost is missing
+                prev_last = _num(df, idx, "LAST", default=px)
+                prev_cost_tot = prev_qty * (prev_last if np.isfinite(prev_last) else px)
 
-        # Previous Total Cost = Previous Shares x Previous Price
-        prev_total_cost = prev_shares * prev_price
-
-        # New Purchase Cost = New Shares x New Price
         new_purchase_cost = buy_qty * px
+        new_total_cost = prev_cost_tot + new_purchase_cost
+        new_total_qty = prev_qty + buy_qty
+        new_cost_sh = (new_total_cost / new_total_qty) if new_total_qty > 0 else px
 
-        # New Total Cost Basis = Previous Total Cost + New Purchase Cost
-        new_total_cost = prev_total_cost + new_purchase_cost
-
-        # New Total Shares = Previous Shares + New Shares
-        new_total_shares = prev_shares + buy_qty
-
-        # New Average Cost Per Share = New Total Cost Basis / Total Shares Owned
-        new_cost_sh = (new_total_cost / new_total_shares) if new_total_shares > 0 else 0.0
-
-        # Write back (THIS is what you asked for)
-        df.loc[idx, "QTY"] = new_total_shares
-        df.loc[idx, "COST_TOT"] = new_total_cost
-        df.loc[idx, "COST_SH"] = new_cost_sh
-
-        # Market value updates (what-if assumes purchase at px today)
-        df.loc[idx, "MV_$"] = _num(df.loc[idx, "MV_$"], 0.0) + new_purchase_cost
+        # update position
+        df.loc[idx, "QTY"] = new_total_qty
+        df.loc[idx, "MV_$"] = _num(df, idx, "MV_$", default=0.0) + buy_mv
         df.loc[idx, "LAST"] = px
         df.loc[idx, "DIV_YLD_PCT"] = buy_yield_pct
 
-        # keep scenario P/L coherent
-        df.loc[idx, "GAIN_$"] = _num(df.loc[idx, "MV_$"], 0.0) - _num(df.loc[idx, "COST_TOT"], 0.0)
-        ct2 = _num(df.loc[idx, "COST_TOT"], 0.0)
-        df.loc[idx, "GAIN_PCT"] = (df.loc[idx, "GAIN_$"] / ct2 * 100.0) if ct2 > 0 else 0.0
+        # weighted average cost basis update (THIS is what you wanted)
+        df.loc[idx, "COST_TOT"] = new_total_cost
+        df.loc[idx, "COST_SH"] = new_cost_sh
+
+        # keep gain fields consistent
+        mv_now = _num(df, idx, "MV_$", default=0.0)
+        gain_now = mv_now - new_total_cost
+        df.loc[idx, "GAIN_$"] = gain_now
+        df.loc[idx, "GAIN_PCT"] = (gain_now / new_total_cost * 100.0) if new_total_cost > 0 else 0.0
 
         df.loc[idx, "DISPLAY_SYM"] = buy_ticker
         df.loc[idx, "GROUP"] = buy_ticker
@@ -545,12 +501,19 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
         })
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
+    # recompute weights off MV
     df["MV_$"] = pd.to_numeric(df["MV_$"], errors="coerce").fillna(0.0)
     total_mv = float(df["MV_$"].sum())
     df["WGT_PCT"] = np.where(total_mv > 0, df["MV_$"] / total_mv * 100.0, 0.0)
 
     df = group_options_under_equities(df)
-    return df, {"buy_price": px, "buy_mv": buy_mv, "sold_vmfxx_mv": sold_mv, "shortfall_mv": shortfall, "holdings_total_mv": total_mv}
+    return df, {
+        "buy_price": px,
+        "buy_mv": buy_mv,
+        "sold_vmfxx_mv": sold_mv,
+        "shortfall_mv": shortfall,
+        "holdings_total_mv": total_mv
+    }
 
 # =========================
 # Formatting (accounting)
@@ -598,18 +561,19 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
         return df
     out = df.copy()
 
-    front = ["DISPLAY_SYM","SEC_TYPE","WGT_PCT","MV_$","COST_SH","COST_TOT","GAIN_$","GAIN_PCT","DIV_YLD_PCT","LAST","QTY"]
+    front = ["DISPLAY_SYM","SEC_TYPE","WGT_PCT","MV_$","DIV_YLD_PCT","LAST","QTY","COST_SH","COST_TOT","GAIN_$","GAIN_PCT"]
     cols = front + [c for c in out.columns if c not in front]
     cols = [c for c in cols if c in out.columns]
     out = out[cols]
 
     if "WGT_PCT" in out.columns:
         out["WGT_PCT"] = out["WGT_PCT"].apply(lambda v: fmt_pct4(v))
-    if "GAIN_PCT" in out.columns:
-        out["GAIN_PCT"] = out["GAIN_PCT"].apply(lambda v: fmt_pct4(v))
     if "DIV_YLD_PCT" in out.columns:
         out["DIV_YLD_PCT"] = out["DIV_YLD_PCT"].apply(lambda v: fmt_pct4(v))
-    for c in ["MV_$","COST_SH","COST_TOT","GAIN_$","LAST","DAY_$","DIV_$"]:
+    if "GAIN_PCT" in out.columns:
+        out["GAIN_PCT"] = out["GAIN_PCT"].apply(lambda v: fmt_pct4(v))
+
+    for c in ["MV_$","LAST","COST_SH","COST_TOT","GAIN_$","DAY_$","DIV_$"]:
         if c in out.columns:
             out[c] = out[c].apply(lambda v: fmt_money(v))
     return out
@@ -620,18 +584,16 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
 def render_whatif_summary(payload: dict):
     st.subheader("WHAT-IF SUMMARY (OLD vs NEW)")
 
-    d1, d2, d3, d4, d5, d6, d7 = st.columns(7, gap="medium")
+    d1, d2, d3, d4, d5, d6 = st.columns(6, gap="medium")
     d1.metric("Buy Ticker", payload["buy_ticker"])
     d2.metric("Buy Price", fmt_money(payload["buy_price"]))
     d3.metric("Buy QTY", f'{payload["buy_qty"]:,.4f}')
     d4.metric("Buy MV $", fmt_money(payload["buy_mv"]))
-    d5.metric("Buy Yield %", fmt_pct4(payload["buy_yield"]))
-    d6.metric("Sold VMFXX $", fmt_money(payload["sold_vmfxx_mv"]))
-    d7.metric("Shortfall $", fmt_money(payload["shortfall_mv"]))
+    d5.metric("Sold VMFXX $", fmt_money(payload["sold_vmfxx_mv"]))
+    d6.metric("Shortfall $", fmt_money(payload["shortfall_mv"]))
 
     st.markdown(NOTE_HOLD)
     st.markdown(NOTE_ETRADE)
-    st.markdown(NOTE_SA)
     st.markdown("---")
 
     h1, h2, h3, h4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
@@ -660,10 +622,8 @@ def render_whatif_summary(payload: dict):
             c3.metric(" ", fmt_money(newv))
             c4.metric(" ", fmt_money_delta(float(newv) - float(oldv)))
 
-    st.caption(f"Buy yield source: {payload.get('buy_yield_source','unknown')}")
-
 # =========================
-# UI — organized (KPIs top, data bottom)
+# State
 # =========================
 if "hold_df" not in st.session_state:
     st.session_state.hold_df = None
@@ -671,9 +631,18 @@ if "last_scenario_df" not in st.session_state:
     st.session_state.last_scenario_df = None
 if "last_whatif_payload" not in st.session_state:
     st.session_state.last_whatif_payload = None
-if "buy_qty" not in st.session_state:
-    st.session_state.buy_qty = 0.0
 
+# inputs state (so buttons can modify)
+if "buy_qty_str" not in st.session_state:
+    st.session_state.buy_qty_str = "0"
+if "buy_yield_str" not in st.session_state:
+    st.session_state.buy_yield_str = "0"
+if "last_yield_ticker" not in st.session_state:
+    st.session_state.last_yield_ticker = ""
+
+# =========================
+# Upload + calibrate + actions
+# =========================
 top1, top2, top3 = st.columns([1.3, 1.0, 1.2], gap="large")
 
 with top1:
@@ -695,40 +664,56 @@ with top3:
     clear_clicked = st.button("CLEAR STATE", use_container_width=True)
 
 st.subheader("VMFXX → BUY (WHAT-IF)")
-w1, w2, w3 = st.columns([1.3, 1.1, 1.1], gap="medium")
+w1, w2, w3, w4 = st.columns([1.2, 1.2, 1.2, 1.1], gap="medium")
 
 with w1:
-    buy_ticker_raw = st.text_input("Buy Ticker", value="", help="Auto uppercased.")
+    buy_ticker_raw = st.text_input("Buy Ticker", value="", help="Auto uppercased.", key="buy_ticker_raw")
     buy_ticker = (buy_ticker_raw or "").upper()
 
 with w2:
-    st.markdown("**Buy QTY (shares)**")
-    p1, p2, p3, p4 = st.columns([1, 1, 1, 1], gap="small")
+    st.text_input("Buy QTY (shares)", value=st.session_state.buy_qty_str, key="buy_qty_str",
+                  help="You can type or use presets below (each click adds).")
+    # preset buttons (each click adds)
+    b1, b2, b3 = st.columns(3, gap="small")
+    cur_qty = _to_float(st.session_state.buy_qty_str)
+    cur_qty = float(cur_qty) if pd.notna(cur_qty) else 0.0
 
-    if p1.button("25", use_container_width=True):
-        st.session_state.buy_qty = float(st.session_state.buy_qty) + 25.0
-    if p2.button("50", use_container_width=True):
-        st.session_state.buy_qty = float(st.session_state.buy_qty) + 50.0
-    if p3.button("100", use_container_width=True):
-        st.session_state.buy_qty = float(st.session_state.buy_qty) + 100.0
-    if p4.button("RESET", use_container_width=True):
-        st.session_state.buy_qty = 0.0
-
-    buy_qty = float(st.session_state.buy_qty)
-    st.markdown(f"**Current QTY:** `{buy_qty:,.4f}`")
+    if b1.button("+25", use_container_width=True):
+        st.session_state.buy_qty_str = f"{cur_qty + 25:.0f}"
+        st.rerun()
+    if b2.button("+50", use_container_width=True):
+        st.session_state.buy_qty_str = f"{cur_qty + 50:.0f}"
+        st.rerun()
+    if b3.button("+100", use_container_width=True):
+        st.session_state.buy_qty_str = f"{cur_qty + 100:.0f}"
+        st.rerun()
 
 with w3:
-    run_clicked = st.button("RUN WHAT-IF (auto yield)", use_container_width=True)
-    st.markdown("**TIP:** Buy yield auto-pulls from StockAnalysis")
+    # auto-fill yield when ticker changes
+    if buy_ticker and buy_ticker != st.session_state.last_yield_ticker:
+        y = get_dividend_yield_stockanalysis(buy_ticker)
+        if y is not None:
+            st.session_state.buy_yield_str = f"{y:.4f}"
+        st.session_state.last_yield_ticker = buy_ticker
+
+    st.text_input("Buy Yield %", value=st.session_state.buy_yield_str, key="buy_yield_str",
+                  help="Auto-filled from StockAnalysis on ticker change. You can override.")
+    st.caption(NOTE_YIELD)
+
+with w4:
+    run_clicked = st.button("RUN WHAT-IF", use_container_width=True)
+    st.markdown("**TIP:** accounting format ok")
 
 st.divider()
 
+# Clear
 if clear_clicked:
     st.session_state.hold_df = None
     st.session_state.last_scenario_df = None
     st.session_state.last_whatif_payload = None
-    st.session_state.buy_qty = 0.0
-    st.cache_data.clear()
+    st.session_state.buy_qty_str = "0"
+    st.session_state.buy_yield_str = "0"
+    st.session_state.last_yield_ticker = ""
     st.rerun()
 
 def overrides_dict():
@@ -737,6 +722,7 @@ def overrides_dict():
         d["VMFXX"] = float(vmfxx_override)
     return d
 
+# Parse
 if parse_clicked:
     if f is None:
         st.error("Upload a CSV first.")
@@ -751,6 +737,13 @@ if parse_clicked:
 
 hold_df = st.session_state.hold_df
 ovr = overrides_dict()
+
+# Parse buy qty/yield
+buy_qty = _to_float(st.session_state.buy_qty_str)
+buy_qty = float(buy_qty) if pd.notna(buy_qty) else 0.0
+
+buy_yield = _to_float(st.session_state.buy_yield_str)
+buy_yield = float(buy_yield) if pd.notna(buy_yield) else 0.0
 
 # Top KPI strip
 if hold_df is not None and not hold_df.empty:
@@ -767,7 +760,7 @@ if hold_df is not None and not hold_df.empty:
 else:
     st.info("Upload + PARSE to view yields and run what-if.")
 
-# Run what-if (auto yield from StockAnalysis)
+# Run what-if
 if run_clicked:
     if hold_df is None or hold_df.empty:
         st.error("Parse the file first.")
@@ -777,14 +770,6 @@ if run_clicked:
         st.error("Buy QTY must be > 0.")
     else:
         try:
-            buy_yield, src = get_dividend_yield_stockanalysis(buy_ticker)
-            if buy_yield is None:
-                yf_y = get_dividend_yield_yfinance_fallback(buy_ticker)
-                if yf_y is not None:
-                    buy_yield, src = yf_y, "yfinance_fallback"
-            if buy_yield is None:
-                raise ValueError(f"Could not fetch dividend yield for {buy_ticker} from StockAnalysis (or yfinance fallback).")
-
             base_div = dividend_dollars_annual(hold_df, overrides=ovr)
             old_hy = holdings_yield_pct(hold_df, overrides=ovr)
             old_ey = etrade_like_yield_pct(hold_df, overrides=ovr)
@@ -808,8 +793,6 @@ if run_clicked:
                 buy_price=info["buy_price"],
                 buy_qty=buy_qty,
                 buy_mv=info["buy_mv"],
-                buy_yield=float(buy_yield),
-                buy_yield_source=src,
                 sold_vmfxx_mv=info["sold_vmfxx_mv"],
                 shortfall_mv=info["shortfall_mv"],
                 old_hy=old_hy, new_hy=new_hy,
