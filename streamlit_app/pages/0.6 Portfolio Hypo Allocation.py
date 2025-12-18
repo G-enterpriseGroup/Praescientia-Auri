@@ -1,9 +1,9 @@
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
-# CHANGE:
-# 1) Auto-pull BUY dividend yield from StockAnalysis (ETF + stock pages) so you don't type it manually
-# 2) Removed Net Account Value from KPI strip + What-If summary (no longer tracked/displayed)
-# NO calc/what-if math logic changed other than sourcing buy_yield automatically.
+# CHANGE ONLY:
+# - Replaced "Buy QTY (shares)" text_input with preset buttons (25/50/100) + click-to-add behavior
+#   Example: click 25 twice => qty becomes 50
+# Everything else unchanged.
 
 import csv
 import re
@@ -179,11 +179,6 @@ def _extract_first_percent(text: str):
 
 @st.cache_data(ttl=60 * 60 * 6, show_spinner=False)  # cache yields for 6 hours
 def get_dividend_yield_stockanalysis(ticker: str):
-    """
-    Returns dividend yield as a percent (e.g., 3.45 for 3.45%).
-    Tries ETF page, then stock page.
-    Uses provided xpath first; falls back to scanning for 'Dividend Yield' text.
-    """
     ticker = (ticker or "").strip().upper()
     if not ticker:
         return None, None
@@ -203,13 +198,11 @@ def get_dividend_yield_stockanalysis(ticker: str):
             return None, f"http_{r.status_code}"
         return r.text, None
 
-    # Try ETF then stock
     for kind, url in [("ETF", SA_ETF_URL.format(ticker)), ("STOCK", SA_STOCK_URL.format(ticker))]:
         html, err = fetch(url)
         if not html:
             continue
 
-        # 1) XPATH attempt (your provided xpath)
         try:
             import lxml.html as LH
             tree = LH.fromstring(html)
@@ -222,7 +215,6 @@ def get_dividend_yield_stockanalysis(ticker: str):
         except Exception:
             pass
 
-        # 2) Fallback: find "Dividend Yield" line anywhere and pull percent
         try:
             m = re.search(r"Dividend\s*Yield[^%]{0,60}(\d+(?:\.\d+)?)\s*%", html, flags=re.IGNORECASE)
             if m:
@@ -234,9 +226,6 @@ def get_dividend_yield_stockanalysis(ticker: str):
 
 @st.cache_data(ttl=60 * 60 * 6, show_spinner=False)
 def get_dividend_yield_yfinance_fallback(ticker: str):
-    """
-    Returns dividend yield percent via yfinance (dividendYield * 100) if available.
-    """
     try:
         info = yf.Ticker(ticker).info or {}
         dy = info.get("dividendYield", None)
@@ -646,6 +635,10 @@ if "last_scenario_df" not in st.session_state:
 if "last_whatif_payload" not in st.session_state:
     st.session_state.last_whatif_payload = None
 
+# NEW: qty state (click-to-add presets)
+if "buy_qty" not in st.session_state:
+    st.session_state.buy_qty = 0.0
+
 top1, top2, top3 = st.columns([1.3, 1.0, 1.2], gap="large")
 
 with top1:
@@ -674,9 +667,21 @@ with w1:
     buy_ticker = (buy_ticker_raw or "").upper()
 
 with w2:
-    buy_qty_str = st.text_input("Buy QTY (shares)", value="0", help="Accounting format allowed, e.g., 1,000")
-    buy_qty = _to_float(buy_qty_str)
-    buy_qty = float(buy_qty) if pd.notna(buy_qty) else 0.0
+    # CHANGE ONLY (replacing text input):
+    st.markdown("**Buy QTY (shares)**")
+    p1, p2, p3, p4 = st.columns([1, 1, 1, 1], gap="small")
+
+    if p1.button("25", use_container_width=True):
+        st.session_state.buy_qty = float(st.session_state.buy_qty) + 25.0
+    if p2.button("50", use_container_width=True):
+        st.session_state.buy_qty = float(st.session_state.buy_qty) + 50.0
+    if p3.button("100", use_container_width=True):
+        st.session_state.buy_qty = float(st.session_state.buy_qty) + 100.0
+    if p4.button("RESET", use_container_width=True):
+        st.session_state.buy_qty = 0.0
+
+    buy_qty = float(st.session_state.buy_qty)
+    st.markdown(f"**Current QTY:** `{buy_qty:,.4f}`")
 
 with w3:
     run_clicked = st.button("RUN WHAT-IF (auto yield)", use_container_width=True)
@@ -690,6 +695,7 @@ if clear_clicked:
     st.session_state.hold_df = None
     st.session_state.last_scenario_df = None
     st.session_state.last_whatif_payload = None
+    st.session_state.buy_qty = 0.0
     st.cache_data.clear()
     st.rerun()
 
@@ -742,7 +748,6 @@ if run_clicked:
         st.error("Buy QTY must be > 0.")
     else:
         try:
-            # Fetch buy yield from StockAnalysis, fallback to yfinance if needed
             buy_yield, src = get_dividend_yield_stockanalysis(buy_ticker)
             if buy_yield is None:
                 yf_y = get_dividend_yield_yfinance_fallback(buy_ticker)
