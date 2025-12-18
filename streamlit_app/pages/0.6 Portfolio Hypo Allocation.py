@@ -3,7 +3,7 @@
 # UPDATE:
 # - Auto-pull Buy Yield % from StockAnalysis (etf + stocks dividend pages)
 # - Remove Net Account Value KPI + remove Account Summary tab
-# - Buy QTY preset buttons (25/50/100) that add each click
+# - Buy QTY preset buttons (25/50/100) that add each click (FIXED using callbacks)
 # - Scenario holdings: when adding to existing ticker, update COST_TOT + COST_SH using weighted average,
 #   and also update GAIN_$ + GAIN_PCT to keep the row consistent.
 
@@ -182,7 +182,6 @@ def get_dividend_yield_stockanalysis(ticker: str):
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0"
     }
 
-    # robust-ish patterns: look near "Dividend Yield" and grab the first % number after it
     patterns = [
         r"Dividend Yield[^0-9]{0,300}([\d.]+)\s*%",
         r"Dividend Yield\s*</[^>]+>\s*<[^>]+>\s*([\d.]+)\s*%",
@@ -417,12 +416,10 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     sold_mv = min(vm_mv, buy_mv)
     shortfall = max(0.0, buy_mv - vm_mv)
 
-    # reduce VMFXX market value
     df.loc[vm_idx, "MV_$"] = vm_mv - sold_mv
     df.loc[vm_idx, "QTY"] = df.loc[vm_idx, "MV_$"]   # VMFXX ~ $1 NAV
     df.loc[vm_idx, "LAST"] = 1.0
 
-    # add / create buy ticker
     eq_mask = (df["SYM"].astype(str).str.upper() == buy_ticker) & (df["SEC_TYPE"].astype(str).str.upper() == "EQUITY/ETF")
     if eq_mask.sum() > 0:
         idx = df.index[eq_mask][0]
@@ -431,12 +428,10 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
         prev_cost_sh = _num(df, idx, "COST_SH", default=np.nan)
         prev_cost_tot = _num(df, idx, "COST_TOT", default=np.nan)
 
-        # best-available previous total cost basis
         if not np.isfinite(prev_cost_tot) or prev_cost_tot <= 0:
             if np.isfinite(prev_cost_sh) and prev_qty > 0:
                 prev_cost_tot = prev_qty * prev_cost_sh
             else:
-                # fallback: approximate using last price if cost is missing
                 prev_last = _num(df, idx, "LAST", default=px)
                 prev_cost_tot = prev_qty * (prev_last if np.isfinite(prev_last) else px)
 
@@ -445,17 +440,14 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
         new_total_qty = prev_qty + buy_qty
         new_cost_sh = (new_total_cost / new_total_qty) if new_total_qty > 0 else px
 
-        # update position
         df.loc[idx, "QTY"] = new_total_qty
         df.loc[idx, "MV_$"] = _num(df, idx, "MV_$", default=0.0) + buy_mv
         df.loc[idx, "LAST"] = px
         df.loc[idx, "DIV_YLD_PCT"] = buy_yield_pct
 
-        # weighted average cost basis update (THIS is what you wanted)
         df.loc[idx, "COST_TOT"] = new_total_cost
         df.loc[idx, "COST_SH"] = new_cost_sh
 
-        # keep gain fields consistent
         mv_now = _num(df, idx, "MV_$", default=0.0)
         gain_now = mv_now - new_total_cost
         df.loc[idx, "GAIN_$"] = gain_now
@@ -501,7 +493,6 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
         })
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    # recompute weights off MV
     df["MV_$"] = pd.to_numeric(df["MV_$"], errors="coerce").fillna(0.0)
     total_mv = float(df["MV_$"].sum())
     df["WGT_PCT"] = np.where(total_mv > 0, df["MV_$"] / total_mv * 100.0, 0.0)
@@ -632,13 +623,19 @@ if "last_scenario_df" not in st.session_state:
 if "last_whatif_payload" not in st.session_state:
     st.session_state.last_whatif_payload = None
 
-# inputs state (so buttons can modify)
-if "buy_qty_str" not in st.session_state:
-    st.session_state.buy_qty_str = "0"
+# input state
+if "buy_qty_input" not in st.session_state:
+    st.session_state.buy_qty_input = "0"
 if "buy_yield_str" not in st.session_state:
     st.session_state.buy_yield_str = "0"
 if "last_yield_ticker" not in st.session_state:
     st.session_state.last_yield_ticker = ""
+
+# FIXED: preset callback updates the text_input state safely
+def add_qty(delta: float):
+    cur = _to_float(st.session_state.get("buy_qty_input", "0"))
+    cur = float(cur) if pd.notna(cur) else 0.0
+    st.session_state["buy_qty_input"] = f"{cur + float(delta):.0f}"
 
 # =========================
 # Upload + calibrate + actions
@@ -671,33 +668,34 @@ with w1:
     buy_ticker = (buy_ticker_raw or "").upper()
 
 with w2:
-    st.text_input("Buy QTY (shares)", value=st.session_state.buy_qty_str, key="buy_qty_str",
-                  help="You can type or use presets below (each click adds).")
-    # preset buttons (each click adds)
-    b1, b2, b3 = st.columns(3, gap="small")
-    cur_qty = _to_float(st.session_state.buy_qty_str)
-    cur_qty = float(cur_qty) if pd.notna(cur_qty) else 0.0
+    # NOTE: key is buy_qty_input; buttons update it via callback (no session_state exception)
+    st.text_input(
+        "Buy QTY (shares)",
+        key="buy_qty_input",
+        help="You can type or use presets below (each click adds)."
+    )
 
-    if b1.button("+25", use_container_width=True):
-        st.session_state.buy_qty_str = f"{cur_qty + 25:.0f}"
-        st.rerun()
-    if b2.button("+50", use_container_width=True):
-        st.session_state.buy_qty_str = f"{cur_qty + 50:.0f}"
-        st.rerun()
-    if b3.button("+100", use_container_width=True):
-        st.session_state.buy_qty_str = f"{cur_qty + 100:.0f}"
-        st.rerun()
+    b1, b2, b3 = st.columns(3, gap="small")
+    with b1:
+        st.button("+25", use_container_width=True, on_click=add_qty, args=(25,))
+    with b2:
+        st.button("+50", use_container_width=True, on_click=add_qty, args=(50,))
+    with b3:
+        st.button("+100", use_container_width=True, on_click=add_qty, args=(100,))
 
 with w3:
-    # auto-fill yield when ticker changes
     if buy_ticker and buy_ticker != st.session_state.last_yield_ticker:
         y = get_dividend_yield_stockanalysis(buy_ticker)
         if y is not None:
             st.session_state.buy_yield_str = f"{y:.4f}"
         st.session_state.last_yield_ticker = buy_ticker
 
-    st.text_input("Buy Yield %", value=st.session_state.buy_yield_str, key="buy_yield_str",
-                  help="Auto-filled from StockAnalysis on ticker change. You can override.")
+    st.text_input(
+        "Buy Yield %",
+        value=st.session_state.buy_yield_str,
+        key="buy_yield_str",
+        help="Auto-filled from StockAnalysis on ticker change. You can override."
+    )
     st.caption(NOTE_YIELD)
 
 with w4:
@@ -706,12 +704,11 @@ with w4:
 
 st.divider()
 
-# Clear
 if clear_clicked:
     st.session_state.hold_df = None
     st.session_state.last_scenario_df = None
     st.session_state.last_whatif_payload = None
-    st.session_state.buy_qty_str = "0"
+    st.session_state.buy_qty_input = "0"
     st.session_state.buy_yield_str = "0"
     st.session_state.last_yield_ticker = ""
     st.rerun()
@@ -722,7 +719,6 @@ def overrides_dict():
         d["VMFXX"] = float(vmfxx_override)
     return d
 
-# Parse
 if parse_clicked:
     if f is None:
         st.error("Upload a CSV first.")
@@ -738,14 +734,12 @@ if parse_clicked:
 hold_df = st.session_state.hold_df
 ovr = overrides_dict()
 
-# Parse buy qty/yield
-buy_qty = _to_float(st.session_state.buy_qty_str)
+buy_qty = _to_float(st.session_state.buy_qty_input)
 buy_qty = float(buy_qty) if pd.notna(buy_qty) else 0.0
 
 buy_yield = _to_float(st.session_state.buy_yield_str)
 buy_yield = float(buy_yield) if pd.notna(buy_yield) else 0.0
 
-# Top KPI strip
 if hold_df is not None and not hold_df.empty:
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
     hy = holdings_yield_pct(hold_df, overrides=ovr)
@@ -760,7 +754,6 @@ if hold_df is not None and not hold_df.empty:
 else:
     st.info("Upload + PARSE to view yields and run what-if.")
 
-# Run what-if
 if run_clicked:
     if hold_df is None or hold_df.empty:
         st.error("Parse the file first.")
@@ -805,7 +798,6 @@ if run_clicked:
         except Exception as e:
             st.error(f"What-if error: {e}")
 
-# Render summary
 payload = st.session_state.last_whatif_payload
 if isinstance(payload, dict):
     render_whatif_summary(payload)
@@ -821,7 +813,6 @@ if isinstance(payload, dict):
             use_container_width=True
         )
 
-# Bottom: data tables
 st.divider()
 st.subheader("DATA (DETAILS)")
 
