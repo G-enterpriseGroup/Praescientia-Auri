@@ -1,8 +1,9 @@
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
-# CHANGE ONLY:
-# - Replaced "Buy QTY (shares)" text_input with preset buttons (25/50/100) + click-to-add behavior
-#   Example: click 25 twice => qty becomes 50
+# CHANGE ONLY (new accuracy logic):
+# - If buy_ticker already exists in holdings, update COST_TOT + COST_SH using weighted-average cost
+#   based on existing shares + new shares bought at yfinance price.
+# - Recompute GAIN_$ and GAIN_PCT for that row to keep scenario dataframe accurate.
 # Everything else unchanged.
 
 import csv
@@ -147,6 +148,15 @@ def _to_float(x):
 
 def _safe_text(file_bytes: bytes) -> str:
     return file_bytes.decode("utf-8", errors="replace")
+
+def _num(x, default=0.0) -> float:
+    try:
+        v = pd.to_numeric(x, errors="coerce")
+        if pd.isna(v):
+            return float(default)
+        return float(v)
+    except Exception:
+        return float(default)
 
 @st.cache_data(ttl=60 * 10, show_spinner=False)
 def get_last_price_yf(ticker: str):
@@ -465,14 +475,39 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     eq_mask = (df["SYM"].astype(str).str.upper() == buy_ticker) & (df["SEC_TYPE"].astype(str).str.upper() == "EQUITY/ETF")
     if eq_mask.sum() > 0:
         idx = df.index[eq_mask][0]
-        df.loc[idx, "QTY"] = float(pd.to_numeric(df.loc[idx, "QTY"], errors="coerce") or 0.0) + buy_qty
-        df.loc[idx, "MV_$"] = float(pd.to_numeric(df.loc[idx, "MV_$"], errors="coerce") or 0.0) + buy_mv
+
+        # --- NEW: weighted average cost basis update (COST_TOT + COST_SH) ---
+        old_qty = _num(df.loc[idx, "QTY"], 0.0)
+
+        old_cost_tot = _num(df.loc[idx, "COST_TOT"], np.nan)
+        if np.isnan(old_cost_tot) or old_cost_tot <= 0:
+            old_cost_sh = _num(df.loc[idx, "COST_SH"], np.nan)
+            if not np.isnan(old_cost_sh) and old_cost_sh > 0 and old_qty > 0:
+                old_cost_tot = old_cost_sh * old_qty
+            else:
+                old_cost_tot = 0.0
+
+        new_qty = old_qty + buy_qty
+        new_cost_tot = old_cost_tot + buy_mv
+        new_cost_sh = (new_cost_tot / new_qty) if new_qty > 0 else 0.0
+
+        df.loc[idx, "QTY"] = new_qty
+        df.loc[idx, "COST_TOT"] = new_cost_tot
+        df.loc[idx, "COST_SH"] = new_cost_sh
+
+        df.loc[idx, "MV_$"] = _num(df.loc[idx, "MV_$"], 0.0) + buy_mv
         df.loc[idx, "LAST"] = px
         df.loc[idx, "DIV_YLD_PCT"] = buy_yield_pct
         df.loc[idx, "DISPLAY_SYM"] = buy_ticker
         df.loc[idx, "GROUP"] = buy_ticker
         df.loc[idx, "HAS_EQUITY"] = True
         df.loc[idx, "ROW_KIND"] = 0
+
+        # --- NEW: keep scenario row internally consistent ---
+        df.loc[idx, "GAIN_$"] = _num(df.loc[idx, "MV_$"], 0.0) - _num(df.loc[idx, "COST_TOT"], 0.0)
+        ct = _num(df.loc[idx, "COST_TOT"], 0.0)
+        df.loc[idx, "GAIN_PCT"] = (df.loc[idx, "GAIN_$"] / ct * 100.0) if ct > 0 else 0.0
+
     else:
         for col in ["DISPLAY_SYM","SEC_TYPE","UNDER","EXP_DT","STRIKE","CP","GROUP","HAS_EQUITY","GROUP_WGT","ROW_KIND"]:
             if col not in df.columns:
@@ -635,7 +670,7 @@ if "last_scenario_df" not in st.session_state:
 if "last_whatif_payload" not in st.session_state:
     st.session_state.last_whatif_payload = None
 
-# NEW: qty state (click-to-add presets)
+# qty state (click-to-add presets)
 if "buy_qty" not in st.session_state:
     st.session_state.buy_qty = 0.0
 
@@ -667,7 +702,6 @@ with w1:
     buy_ticker = (buy_ticker_raw or "").upper()
 
 with w2:
-    # CHANGE ONLY (replacing text input):
     st.markdown("**Buy QTY (shares)**")
     p1, p2, p3, p4 = st.columns([1, 1, 1, 1], gap="small")
 
