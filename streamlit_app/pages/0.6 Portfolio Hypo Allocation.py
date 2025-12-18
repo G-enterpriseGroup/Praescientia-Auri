@@ -1,10 +1,10 @@
+```python
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
-# CHANGE ONLY (new accuracy logic):
-# - If buy_ticker already exists in holdings, update COST_TOT + COST_SH using weighted-average cost
-#   based on existing shares + new shares bought at yfinance price.
-# - Recompute GAIN_$ and GAIN_PCT for that row to keep scenario dataframe accurate.
-# Everything else unchanged.
+# CHANGE (per your request):
+# 1) Remove ACCOUNT SUMMARY tab entirely (and account parsing/state).
+# 2) Make COST_SH (cost/share) prominent in tables AND ensure scenario COST_SH updates via weighted-average cost when adding to an existing ticker.
+# Everything else stays the same.
 
 import csv
 import re
@@ -209,10 +209,11 @@ def get_dividend_yield_stockanalysis(ticker: str):
         return r.text, None
 
     for kind, url in [("ETF", SA_ETF_URL.format(ticker)), ("STOCK", SA_STOCK_URL.format(ticker))]:
-        html, err = fetch(url)
+        html, _err = fetch(url)
         if not html:
             continue
 
+        # Try XPath (if lxml available)
         try:
             import lxml.html as LH
             tree = LH.fromstring(html)
@@ -225,8 +226,9 @@ def get_dividend_yield_stockanalysis(ticker: str):
         except Exception:
             pass
 
+        # Fallback: regex in HTML
         try:
-            m = re.search(r"Dividend\s*Yield[^%]{0,60}(\d+(?:\.\d+)?)\s*%", html, flags=re.IGNORECASE)
+            m = re.search(r"Dividend\s*Yield[^%]{0,80}(\d+(?:\.\d+)?)\s*%", html, flags=re.IGNORECASE)
             if m:
                 return float(m.group(1)), f"stockanalysis_{kind.lower()}_regex"
         except Exception:
@@ -319,12 +321,8 @@ def group_options_under_equities(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # =========================
-# CSV parsing
+# CSV parsing (HOLDINGS ONLY)
 # =========================
-ACCT_COLS_8 = [
-    "ACCOUNT","NET_ACCT_VALUE","TOTAL_GAIN_$","TOTAL_GAIN_PCT",
-    "DAY_GAIN_$","DAY_GAIN_PCT","AVAIL_WITHDRAWAL","CASH_PURCH_POWER"
-]
 HOLD_COLS_15 = [
     "SYM","WGT_PCT","LAST","COST_SH","QTY","COST_TOT","GAIN_$","MV_$","GAIN_PCT",
     "DAY_$","DAY_PCT","DIV_YLD_PCT","DIV_PAY_DT","DIV_$","ACQ_DT"
@@ -332,20 +330,6 @@ HOLD_COLS_15 = [
 
 def parse_portfolio_text(text: str):
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-
-    acct_df = pd.DataFrame()
-    acct_hdr_idx = next((i for i, l in enumerate(lines) if l.startswith("Account,Net Account Value")), None)
-    if acct_hdr_idx is not None:
-        data_rows = []
-        for j in range(acct_hdr_idx + 1, len(lines)):
-            if lines[j].strip() == "":
-                break
-            data_rows.append(next(csv.reader([lines[j]])))
-        if data_rows and len(data_rows[0]) == 8:
-            acct_df = pd.DataFrame(data_rows, columns=ACCT_COLS_8)
-            for c in acct_df.columns:
-                if c != "ACCOUNT":
-                    acct_df[c] = acct_df[c].map(_to_float)
 
     holdings_df = pd.DataFrame()
     hold_hdr_idx = next((i for i, l in enumerate(lines) if l.startswith("Symbol,% of Portfolio")), None)
@@ -384,7 +368,7 @@ def parse_portfolio_text(text: str):
         holdings_df = holdings_df[holdings_df["SEC_TYPE"] != "TOTAL"].copy()
         holdings_df = group_options_under_equities(holdings_df)
 
-    return acct_df, holdings_df
+    return holdings_df
 
 # =========================
 # Yield math
@@ -476,7 +460,7 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     if eq_mask.sum() > 0:
         idx = df.index[eq_mask][0]
 
-        # --- NEW: weighted average cost basis update (COST_TOT + COST_SH) ---
+        # --- weighted average cost update ---
         old_qty = _num(df.loc[idx, "QTY"], 0.0)
 
         old_cost_tot = _num(df.loc[idx, "COST_TOT"], np.nan)
@@ -498,15 +482,16 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
         df.loc[idx, "MV_$"] = _num(df.loc[idx, "MV_$"], 0.0) + buy_mv
         df.loc[idx, "LAST"] = px
         df.loc[idx, "DIV_YLD_PCT"] = buy_yield_pct
+
+        # keep scenario row consistent
+        df.loc[idx, "GAIN_$"] = _num(df.loc[idx, "MV_$"], 0.0) - _num(df.loc[idx, "COST_TOT"], 0.0)
+        ct = _num(df.loc[idx, "COST_TOT"], 0.0)
+        df.loc[idx, "GAIN_PCT"] = (df.loc[idx, "GAIN_$"] / ct * 100.0) if ct > 0 else 0.0
+
         df.loc[idx, "DISPLAY_SYM"] = buy_ticker
         df.loc[idx, "GROUP"] = buy_ticker
         df.loc[idx, "HAS_EQUITY"] = True
         df.loc[idx, "ROW_KIND"] = 0
-
-        # --- NEW: keep scenario row internally consistent ---
-        df.loc[idx, "GAIN_$"] = _num(df.loc[idx, "MV_$"], 0.0) - _num(df.loc[idx, "COST_TOT"], 0.0)
-        ct = _num(df.loc[idx, "COST_TOT"], 0.0)
-        df.loc[idx, "GAIN_PCT"] = (df.loc[idx, "GAIN_$"] / ct * 100.0) if ct > 0 else 0.0
 
     else:
         for col in ["DISPLAY_SYM","SEC_TYPE","UNDER","EXP_DT","STRIKE","CP","GROUP","HAS_EQUITY","GROUP_WGT","ROW_KIND"]:
@@ -596,16 +581,19 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
         return df
     out = df.copy()
 
-    front = ["DISPLAY_SYM","SEC_TYPE","WGT_PCT","MV_$","DIV_YLD_PCT","LAST","QTY"]
+    # COST_SH moved up (prominent)
+    front = ["DISPLAY_SYM","SEC_TYPE","WGT_PCT","MV_$","COST_SH","COST_TOT","GAIN_$","GAIN_PCT","DIV_YLD_PCT","LAST","QTY"]
     cols = front + [c for c in out.columns if c not in front]
     cols = [c for c in cols if c in out.columns]
     out = out[cols]
 
     if "WGT_PCT" in out.columns:
         out["WGT_PCT"] = out["WGT_PCT"].apply(lambda v: fmt_pct4(v))
+    if "GAIN_PCT" in out.columns:
+        out["GAIN_PCT"] = out["GAIN_PCT"].apply(lambda v: fmt_pct4(v))
     if "DIV_YLD_PCT" in out.columns:
         out["DIV_YLD_PCT"] = out["DIV_YLD_PCT"].apply(lambda v: fmt_pct4(v))
-    for c in ["MV_$","LAST","COST_SH","COST_TOT","GAIN_$","DAY_$","DIV_$"]:
+    for c in ["MV_$","COST_SH","COST_TOT","GAIN_$","LAST","DAY_$","DIV_$"]:
         if c in out.columns:
             out[c] = out[c].apply(lambda v: fmt_money(v))
     return out
@@ -661,16 +649,12 @@ def render_whatif_summary(payload: dict):
 # =========================
 # UI — organized (KPIs top, data bottom)
 # =========================
-if "acct_df" not in st.session_state:
-    st.session_state.acct_df = None
 if "hold_df" not in st.session_state:
     st.session_state.hold_df = None
 if "last_scenario_df" not in st.session_state:
     st.session_state.last_scenario_df = None
 if "last_whatif_payload" not in st.session_state:
     st.session_state.last_whatif_payload = None
-
-# qty state (click-to-add presets)
 if "buy_qty" not in st.session_state:
     st.session_state.buy_qty = 0.0
 
@@ -723,9 +707,7 @@ with w3:
 
 st.divider()
 
-# Clear
 if clear_clicked:
-    st.session_state.acct_df = None
     st.session_state.hold_df = None
     st.session_state.last_scenario_df = None
     st.session_state.last_whatif_payload = None
@@ -739,25 +721,22 @@ def overrides_dict():
         d["VMFXX"] = float(vmfxx_override)
     return d
 
-# Parse
 if parse_clicked:
     if f is None:
         st.error("Upload a CSV first.")
     else:
         try:
             text = _safe_text(f.getvalue())
-            acct_df, hold_df = parse_portfolio_text(text)
-            st.session_state.acct_df = acct_df
+            hold_df = parse_portfolio_text(text)
             st.session_state.hold_df = hold_df
             st.success("Parsed successfully.")
         except Exception as e:
             st.error(f"Parse error: {e}")
 
-acct_df = st.session_state.acct_df
 hold_df = st.session_state.hold_df
 ovr = overrides_dict()
 
-# Top KPI strip (NO Net Account Value)
+# Top KPI strip
 if hold_df is not None and not hold_df.empty:
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
     hy = holdings_yield_pct(hold_df, overrides=ovr)
@@ -847,7 +826,7 @@ if isinstance(payload, dict):
 st.divider()
 st.subheader("DATA (DETAILS)")
 
-tabs = st.tabs(["HOLDINGS (Grouped)", "ACCOUNT SUMMARY", "SCENARIO HOLDINGS"])
+tabs = st.tabs(["HOLDINGS (Grouped)", "SCENARIO HOLDINGS"])
 
 with tabs[0]:
     if hold_df is not None and not hold_df.empty:
@@ -864,16 +843,6 @@ with tabs[0]:
         st.info("No holdings loaded yet.")
 
 with tabs[1]:
-    if acct_df is not None and not acct_df.empty:
-        acct_disp = acct_df.copy()
-        for c in acct_disp.columns:
-            if c != "ACCOUNT":
-                acct_disp[c] = acct_disp[c].apply(lambda v: fmt_money(v) if "PCT" not in c else fmt_pct4(v))
-        st.dataframe(acct_disp, use_container_width=True, hide_index=True)
-    else:
-        st.info("No account summary loaded yet.")
-
-with tabs[2]:
     scen_df = st.session_state.last_scenario_df
     if isinstance(scen_df, pd.DataFrame) and not scen_df.empty:
         st.dataframe(pretty_holdings(scen_df), use_container_width=True, hide_index=True)
@@ -881,3 +850,4 @@ with tabs[2]:
         st.info("Run a what-if to populate scenario holdings here.")
 
 st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+```
