@@ -6,6 +6,7 @@
 # - Buy QTY preset buttons (25/50/100) that add each click (FIXED using callbacks)
 # - Scenario holdings: when adding to existing ticker, update COST_TOT + COST_SH using weighted average,
 #   and also update GAIN_$ + GAIN_PCT to keep the row consistent.
+# - UI: Make "METRIC" column label font match OLD/NEW sizing in WHAT-IF table.
 
 import csv
 import re
@@ -109,6 +110,16 @@ div[data-testid="metric-container"] * {
   font-weight: 900;
   text-align: center;
   letter-spacing: 0.6px;
+}
+
+/* BIG left-side metric labels to match st.metric sizing */
+.bb_metric_name {
+  font-size: 2.05rem;          /* close to Streamlit st.metric value size */
+  font-weight: 900;
+  line-height: 1.05;
+  padding-top: 0.65rem;         /* aligns vertically with st.metric value */
+  padding-bottom: 0.65rem;
+  white-space: nowrap;
 }
 </style>
 """
@@ -602,7 +613,9 @@ def render_whatif_summary(payload: dict):
 
     for name, oldv, newv, kind in rows:
         c1, c2, c3, c4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
-        c1.markdown(f"**{name}**")
+
+        # BIG metric label (matches st.metric visual weight)
+        c1.markdown(f"<div class='bb_metric_name'>{name}</div>", unsafe_allow_html=True)
 
         if kind == "pp":
             c2.metric(" ", fmt_pct4(oldv))
@@ -631,7 +644,6 @@ if "buy_yield_str" not in st.session_state:
 if "last_yield_ticker" not in st.session_state:
     st.session_state.last_yield_ticker = ""
 
-# FIXED: preset callback updates the text_input state safely
 def add_qty(delta: float):
     cur = _to_float(st.session_state.get("buy_qty_input", "0"))
     cur = float(cur) if pd.notna(cur) else 0.0
@@ -668,7 +680,6 @@ with w1:
     buy_ticker = (buy_ticker_raw or "").upper()
 
 with w2:
-    # NOTE: key is buy_qty_input; buttons update it via callback (no session_state exception)
     st.text_input(
         "Buy QTY (shares)",
         key="buy_qty_input",
