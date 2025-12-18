@@ -1,4 +1,3 @@
-```python
 # streamlit_app.py
 # PortfolioDownload(6).csv -> Bloomberg 90s orange Streamlit app
 # CHANGE (per your request):
@@ -850,4 +849,3 @@ with tabs[1]:
         st.info("Run a what-if to populate scenario holdings here.")
 
 st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-```
