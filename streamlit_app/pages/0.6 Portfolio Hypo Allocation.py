@@ -7,6 +7,7 @@
 # - Scenario holdings: when adding to existing ticker, update COST_TOT + COST_SH using weighted average,
 #   and also update GAIN_$ + GAIN_PCT to keep the row consistent.
 # - UI: Make "METRIC" column label font match OLD/NEW sizing in WHAT-IF table.
+# - NEW: Basket buys: allow up to 10 rows (multiple investments in one run)
 
 import csv
 import re
@@ -16,6 +17,8 @@ import streamlit as st
 import yfinance as yf
 import requests
 from datetime import datetime
+
+N_BUYS = 10
 
 # =========================
 # Page + Theme (Bloomberg 90s Orange)
@@ -128,9 +131,10 @@ st.markdown(CSS, unsafe_allow_html=True)
 NOTE_HOLD = "*Holdings yield = dividend $ / total holdings MV (excludes options/cash from dividends).*"
 NOTE_ETRADE = "*E*TRADE-like yield ≈ weighted dividend yield on income-producing holdings (excludes options/cash/zero-yield holdings). Small differences can remain due to rounding and money-market yield methodology.*"
 NOTE_YIELD = "*Buy Yield % auto-fills from StockAnalysis when ticker changes. You can still override it manually.*"
+NOTE_BASKET = "*Basket: fill up to 10 buy rows. Each row sells VMFXX and buys that ticker sequentially.*"
 
 st.title("PORTFOLIO YIELD LAB — 90s ORANGE")
-st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if.")
+st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if (basket).")
 
 # =========================
 # Helpers
@@ -392,7 +396,7 @@ def etrade_like_yield_pct(holdings: pd.DataFrame, overrides: dict = None) -> flo
     return float(income_div / income_mv * 100.0)
 
 # =========================
-# What-if: sell VMFXX -> buy new
+# What-if: sell VMFXX -> buy new (single)
 # =========================
 def _num(df, idx, col, default=np.nan):
     try:
@@ -518,6 +522,76 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     }
 
 # =========================
+# What-if: basket buys (up to 10)
+# =========================
+def apply_sell_vmfxx_buy_basket(holdings: pd.DataFrame, buys: list):
+    """
+    buys: list of dicts: {"ticker": str, "qty": float, "yield": float}
+    Applies sequentially, returning final df + basket info + per-row details.
+    """
+    if holdings is None or holdings.empty:
+        raise ValueError("Holdings are empty.")
+
+    df = holdings.copy()
+    details = []
+    total_buy_mv = 0.0
+    total_sold_vmfxx = 0.0
+    total_shortfall = 0.0
+
+    # validate VMFXX exists once up-front
+    vm_mask = (df["SYM"].astype(str).str.upper() == "VMFXX") & (df["SEC_TYPE"].astype(str).str.upper() != "OPTION")
+    if vm_mask.sum() == 0:
+        raise ValueError("VMFXX row not found in holdings.")
+
+    for b in buys:
+        t = (b.get("ticker") or "").strip().upper()
+        q = b.get("qty", 0.0)
+        y = b.get("yield", 0.0)
+
+        if not t:
+            continue
+        try:
+            qf = float(q)
+        except Exception:
+            qf = 0.0
+        if qf <= 0:
+            continue
+
+        try:
+            yf_ = float(y)
+        except Exception:
+            yf_ = 0.0
+
+        df, info = apply_sell_vmfxx_buy_new(df, buy_ticker=t, buy_qty=qf, buy_yield_pct=yf_)
+        details.append({
+            "Ticker": t,
+            "Qty": qf,
+            "Yield %": yf_,
+            "Price": float(info["buy_price"]),
+            "Buy MV $": float(info["buy_mv"]),
+            "Sold VMFXX $": float(info["sold_vmfxx_mv"]),
+            "Shortfall $": float(info["shortfall_mv"]),
+        })
+
+        total_buy_mv += float(info["buy_mv"])
+        total_sold_vmfxx += float(info["sold_vmfxx_mv"])
+        total_shortfall += float(info["shortfall_mv"])
+
+    if not details:
+        raise ValueError("No valid buy rows found (need ticker + qty > 0).")
+
+    df["MV_$"] = pd.to_numeric(df["MV_$"], errors="coerce").fillna(0.0)
+    total_mv = float(df["MV_$"].sum())
+
+    return df, {
+        "total_buy_mv": total_buy_mv,
+        "total_sold_vmfxx_mv": total_sold_vmfxx,
+        "total_shortfall_mv": total_shortfall,
+        "holdings_total_mv": total_mv,
+        "details_df": pd.DataFrame(details)
+    }
+
+# =========================
 # Formatting (accounting)
 # =========================
 def fmt_money(x):
@@ -580,22 +654,32 @@ def pretty_holdings(df: pd.DataFrame) -> pd.DataFrame:
             out[c] = out[c].apply(lambda v: fmt_money(v))
     return out
 
+def pretty_basket_details(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    out["Qty"] = out["Qty"].map(lambda v: f"{float(v):,.4f}")
+    out["Yield %"] = out["Yield %"].map(lambda v: fmt_pct4(v))
+    out["Price"] = out["Price"].map(lambda v: fmt_money(v))
+    for c in ["Buy MV $","Sold VMFXX $","Shortfall $"]:
+        out[c] = out[c].map(lambda v: fmt_money(v))
+    return out
+
 # =========================
 # What-if compare renderer (STREAMLIT NATIVE)
 # =========================
 def render_whatif_summary(payload: dict):
     st.subheader("WHAT-IF SUMMARY (OLD vs NEW)")
 
-    d1, d2, d3, d4, d5, d6 = st.columns(6, gap="medium")
-    d1.metric("Buy Ticker", payload["buy_ticker"])
-    d2.metric("Buy Price", fmt_money(payload["buy_price"]))
-    d3.metric("Buy QTY", f'{payload["buy_qty"]:,.4f}')
-    d4.metric("Buy MV $", fmt_money(payload["buy_mv"]))
-    d5.metric("Sold VMFXX $", fmt_money(payload["sold_vmfxx_mv"]))
-    d6.metric("Shortfall $", fmt_money(payload["shortfall_mv"]))
+    d1, d2, d3, d4 = st.columns(4, gap="medium")
+    d1.metric("Buy Rows Used", str(payload.get("buy_rows_used", 0)))
+    d2.metric("Total Buy MV $", fmt_money(payload["total_buy_mv"]))
+    d3.metric("Sold VMFXX $", fmt_money(payload["sold_vmfxx_mv"]))
+    d4.metric("Shortfall $", fmt_money(payload["shortfall_mv"]))
 
     st.markdown(NOTE_HOLD)
     st.markdown(NOTE_ETRADE)
+    st.markdown(NOTE_BASKET)
     st.markdown("---")
 
     h1, h2, h3, h4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
@@ -635,19 +719,25 @@ if "last_scenario_df" not in st.session_state:
     st.session_state.last_scenario_df = None
 if "last_whatif_payload" not in st.session_state:
     st.session_state.last_whatif_payload = None
+if "last_basket_details" not in st.session_state:
+    st.session_state.last_basket_details = None
 
-# input state
-if "buy_qty_input" not in st.session_state:
-    st.session_state.buy_qty_input = "0"
-if "buy_yield_str" not in st.session_state:
-    st.session_state.buy_yield_str = "0"
-if "last_yield_ticker" not in st.session_state:
-    st.session_state.last_yield_ticker = ""
+# basket input state
+for i in range(N_BUYS):
+    if f"buy_ticker_{i}" not in st.session_state:
+        st.session_state[f"buy_ticker_{i}"] = ""
+    if f"buy_qty_{i}" not in st.session_state:
+        st.session_state[f"buy_qty_{i}"] = "0"
+    if f"buy_yield_{i}" not in st.session_state:
+        st.session_state[f"buy_yield_{i}"] = "0"
+    if f"last_yield_ticker_{i}" not in st.session_state:
+        st.session_state[f"last_yield_ticker_{i}"] = ""
 
-def add_qty(delta: float):
-    cur = _to_float(st.session_state.get("buy_qty_input", "0"))
+def add_qty_row(i: int, delta: float):
+    key = f"buy_qty_{i}"
+    cur = _to_float(st.session_state.get(key, "0"))
     cur = float(cur) if pd.notna(cur) else 0.0
-    st.session_state["buy_qty_input"] = f"{cur + float(delta):.0f}"
+    st.session_state[key] = f"{cur + float(delta):.0f}"
 
 # =========================
 # Upload + calibrate + actions
@@ -672,56 +762,79 @@ with top3:
     parse_clicked = st.button("PARSE FILE", use_container_width=True)
     clear_clicked = st.button("CLEAR STATE", use_container_width=True)
 
-st.subheader("VMFXX → BUY (WHAT-IF)")
-w1, w2, w3, w4 = st.columns([1.2, 1.2, 1.2, 1.1], gap="medium")
+# =========================
+# Basket UI
+# =========================
+st.subheader("VMFXX → BUY (WHAT-IF) — BASKET (up to 10 rows)")
+st.caption(NOTE_BASKET)
 
-with w1:
-    buy_ticker_raw = st.text_input("Buy Ticker", value="", help="Auto uppercased.", key="buy_ticker_raw")
-    buy_ticker = (buy_ticker_raw or "").upper()
-
-with w2:
-    st.text_input(
-        "Buy QTY (shares)",
-        key="buy_qty_input",
-        help="You can type or use presets below (each click adds)."
-    )
-
-    b1, b2, b3 = st.columns(3, gap="small")
-    with b1:
-        st.button("+25", use_container_width=True, on_click=add_qty, args=(25,))
-    with b2:
-        st.button("+50", use_container_width=True, on_click=add_qty, args=(50,))
-    with b3:
-        st.button("+100", use_container_width=True, on_click=add_qty, args=(100,))
-
-with w3:
-    if buy_ticker and buy_ticker != st.session_state.last_yield_ticker:
-        y = get_dividend_yield_stockanalysis(buy_ticker)
+# auto-fill yields on ticker change (row-by-row)
+for i in range(N_BUYS):
+    t = (st.session_state.get(f"buy_ticker_{i}") or "").strip().upper()
+    if t and t != st.session_state.get(f"last_yield_ticker_{i}", ""):
+        y = get_dividend_yield_stockanalysis(t)
         if y is not None:
-            st.session_state.buy_yield_str = f"{y:.4f}"
-        st.session_state.last_yield_ticker = buy_ticker
+            st.session_state[f"buy_yield_{i}"] = f"{y:.4f}"
+        st.session_state[f"last_yield_ticker_{i}"] = t
 
-    st.text_input(
-        "Buy Yield %",
-        value=st.session_state.buy_yield_str,
-        key="buy_yield_str",
-        help="Auto-filled from StockAnalysis on ticker change. You can override."
-    )
-    st.caption(NOTE_YIELD)
+# header
+h1, h2, h3, h4 = st.columns([1.2, 1.2, 1.1, 1.4], gap="small")
+h1.markdown("<div class='bb_hdr'>TICKER</div>", unsafe_allow_html=True)
+h2.markdown("<div class='bb_hdr'>QTY</div>", unsafe_allow_html=True)
+h3.markdown("<div class='bb_hdr'>YIELD %</div>", unsafe_allow_html=True)
+h4.markdown("<div class='bb_hdr'>PRESETS</div>", unsafe_allow_html=True)
 
-with w4:
-    run_clicked = st.button("RUN WHAT-IF", use_container_width=True)
-    st.markdown("**TIP:** accounting format ok")
+for i in range(N_BUYS):
+    c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.1, 1.4], gap="small")
 
+    with c1:
+        st.text_input(
+            f"Buy Ticker #{i+1}",
+            key=f"buy_ticker_{i}",
+            label_visibility="collapsed",
+            help="Auto uppercased; yield auto-fills when ticker changes.",
+        )
+
+    with c2:
+        st.text_input(
+            f"Buy QTY #{i+1}",
+            key=f"buy_qty_{i}",
+            label_visibility="collapsed",
+            help="Type shares (or use presets).",
+        )
+
+    with c3:
+        st.text_input(
+            f"Buy Yield #{i+1}",
+            key=f"buy_yield_{i}",
+            label_visibility="collapsed",
+            help="Auto-filled from StockAnalysis on ticker change. You can override.",
+        )
+
+    with c4:
+        b1, b2, b3 = st.columns(3, gap="small")
+        with b1:
+            st.button(f"+25 #{i+1}", use_container_width=True, on_click=add_qty_row, args=(i, 25))
+        with b2:
+            st.button(f"+50 #{i+1}", use_container_width=True, on_click=add_qty_row, args=(i, 50))
+        with b3:
+            st.button(f"+100 #{i+1}", use_container_width=True, on_click=add_qty_row, args=(i, 100))
+
+st.caption(NOTE_YIELD)
+
+run_clicked = st.button("RUN WHAT-IF (BASKET)", use_container_width=True)
 st.divider()
 
 if clear_clicked:
     st.session_state.hold_df = None
     st.session_state.last_scenario_df = None
     st.session_state.last_whatif_payload = None
-    st.session_state.buy_qty_input = "0"
-    st.session_state.buy_yield_str = "0"
-    st.session_state.last_yield_ticker = ""
+    st.session_state.last_basket_details = None
+    for i in range(N_BUYS):
+        st.session_state[f"buy_ticker_{i}"] = ""
+        st.session_state[f"buy_qty_{i}"] = "0"
+        st.session_state[f"buy_yield_{i}"] = "0"
+        st.session_state[f"last_yield_ticker_{i}"] = ""
     st.rerun()
 
 def overrides_dict():
@@ -745,12 +858,6 @@ if parse_clicked:
 hold_df = st.session_state.hold_df
 ovr = overrides_dict()
 
-buy_qty = _to_float(st.session_state.buy_qty_input)
-buy_qty = float(buy_qty) if pd.notna(buy_qty) else 0.0
-
-buy_yield = _to_float(st.session_state.buy_yield_str)
-buy_yield = float(buy_yield) if pd.notna(buy_yield) else 0.0
-
 if hold_df is not None and not hold_df.empty:
     annual_div = dividend_dollars_annual(hold_df, overrides=ovr)
     hy = holdings_yield_pct(hold_df, overrides=ovr)
@@ -765,53 +872,65 @@ if hold_df is not None and not hold_df.empty:
 else:
     st.info("Upload + PARSE to view yields and run what-if.")
 
+def collect_buys():
+    buys = []
+    for i in range(N_BUYS):
+        t = (st.session_state.get(f"buy_ticker_{i}") or "").strip().upper()
+        q = _to_float(st.session_state.get(f"buy_qty_{i}", "0"))
+        q = float(q) if pd.notna(q) else 0.0
+        y = _to_float(st.session_state.get(f"buy_yield_{i}", "0"))
+        y = float(y) if pd.notna(y) else 0.0
+        if t and q > 0:
+            buys.append({"ticker": t, "qty": q, "yield": y})
+    return buys
+
 if run_clicked:
     if hold_df is None or hold_df.empty:
         st.error("Parse the file first.")
-    elif not buy_ticker:
-        st.error("Enter a Buy Ticker.")
-    elif buy_qty <= 0:
-        st.error("Buy QTY must be > 0.")
     else:
-        try:
-            base_div = dividend_dollars_annual(hold_df, overrides=ovr)
-            old_hy = holdings_yield_pct(hold_df, overrides=ovr)
-            old_ey = etrade_like_yield_pct(hold_df, overrides=ovr)
-            old_mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
+        buys = collect_buys()
+        if not buys:
+            st.error("Enter at least 1 valid buy row (ticker + qty > 0).")
+        else:
+            try:
+                base_div = dividend_dollars_annual(hold_df, overrides=ovr)
+                old_hy = holdings_yield_pct(hold_df, overrides=ovr)
+                old_ey = etrade_like_yield_pct(hold_df, overrides=ovr)
+                old_mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
 
-            scen_df, info = apply_sell_vmfxx_buy_new(
-                hold_df,
-                buy_ticker=buy_ticker,
-                buy_qty=buy_qty,
-                buy_yield_pct=buy_yield
-            )
+                scen_df, info = apply_sell_vmfxx_buy_basket(hold_df, buys=buys)
+                details_df = info.get("details_df")
 
-            new_div = dividend_dollars_annual(scen_df, overrides=ovr)
-            new_hy = holdings_yield_pct(scen_df, overrides=ovr)
-            new_ey = etrade_like_yield_pct(scen_df, overrides=ovr)
-            new_mv_total = float(info.get("holdings_total_mv", np.nan))
+                new_div = dividend_dollars_annual(scen_df, overrides=ovr)
+                new_hy = holdings_yield_pct(scen_df, overrides=ovr)
+                new_ey = etrade_like_yield_pct(scen_df, overrides=ovr)
+                new_mv_total = float(info.get("holdings_total_mv", np.nan))
 
-            st.session_state.last_scenario_df = scen_df
-            st.session_state.last_whatif_payload = dict(
-                buy_ticker=buy_ticker,
-                buy_price=info["buy_price"],
-                buy_qty=buy_qty,
-                buy_mv=info["buy_mv"],
-                sold_vmfxx_mv=info["sold_vmfxx_mv"],
-                shortfall_mv=info["shortfall_mv"],
-                old_hy=old_hy, new_hy=new_hy,
-                old_ey=old_ey, new_ey=new_ey,
-                old_div=base_div, new_div=new_div,
-                old_mv_total=old_mv_total, new_mv_total=new_mv_total,
-            )
+                st.session_state.last_scenario_df = scen_df
+                st.session_state.last_basket_details = details_df
+                st.session_state.last_whatif_payload = dict(
+                    buy_rows_used=len(buys),
+                    total_buy_mv=info["total_buy_mv"],
+                    sold_vmfxx_mv=info["total_sold_vmfxx_mv"],
+                    shortfall_mv=info["total_shortfall_mv"],
+                    old_hy=old_hy, new_hy=new_hy,
+                    old_ey=old_ey, new_ey=new_ey,
+                    old_div=base_div, new_div=new_div,
+                    old_mv_total=old_mv_total, new_mv_total=new_mv_total,
+                )
 
-            st.success("What-if calculated successfully.")
-        except Exception as e:
-            st.error(f"What-if error: {e}")
+                st.success("Basket what-if calculated successfully.")
+            except Exception as e:
+                st.error(f"What-if error: {e}")
 
 payload = st.session_state.last_whatif_payload
 if isinstance(payload, dict):
     render_whatif_summary(payload)
+
+    details_df = st.session_state.last_basket_details
+    if isinstance(details_df, pd.DataFrame) and not details_df.empty:
+        st.subheader("BASKET DETAILS")
+        st.dataframe(pretty_basket_details(details_df), use_container_width=True, hide_index=True)
 
     scen_df = st.session_state.last_scenario_df
     if isinstance(scen_df, pd.DataFrame) and not scen_df.empty:
