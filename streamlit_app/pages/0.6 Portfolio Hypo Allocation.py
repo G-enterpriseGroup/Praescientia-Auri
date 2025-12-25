@@ -9,6 +9,7 @@
 # - UI: Make "METRIC" column label font match OLD/NEW sizing in WHAT-IF table.
 # - NEW: Basket buys: allow up to 10 rows (multiple investments in one run)
 # - NEW: Purchasing Power (H3): use cash first, then VMFXX, then Shortfall.
+# - FIX: When using purchasing power, reduce CASH row MV_$ / QTY in scenario holdings.
 
 import csv
 import re
@@ -132,7 +133,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 NOTE_HOLD = "*Holdings yield = dividend $ / total holdings MV (excludes options/cash from dividends).*"
 NOTE_ETRADE = "*E*TRADE-like yield ≈ weighted dividend yield on income-producing holdings (excludes options/cash/zero-yield holdings). Small differences can remain due to rounding and money-market yield methodology.*"
 NOTE_YIELD = "*Buy Yield % auto-fills from StockAnalysis when ticker changes. You can still override it manually.*"
-NOTE_BASKET = "*Basket: fill up to 10 buy rows. Each row uses Purchasing Power (H3) first, then sells VMFXX for any remaining funding.*"
+NOTE_BASKET = "*Basket: fill up to 10 buy rows. Each row uses Purchasing Power (H3) first (if enabled and CASH exists), then sells VMFXX for any remaining funding.*"
 
 st.title("PORTFOLIO YIELD LAB — 90s ORANGE")
 st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if (basket) with optional Purchasing Power cash (H3).")
@@ -224,7 +225,9 @@ def get_dividend_yield_stockanalysis(ticker: str):
 # =========================
 # Option parsing + grouping
 # =========================
-_MONTH_MAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+_MONTH_MAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":6,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+# NOTE: small typo: Apr:4, May:5 — fix:
+_MONTH_MAP["May"] = 5  # ensure May is 5
 
 def parse_option_symbol(sym: str):
     s = str(sym).strip()
@@ -560,7 +563,8 @@ def apply_sell_vmfxx_buy_basket(
     buys: list of dicts: {"ticker": str, "qty": float, "yield": float}
     purchasing_power: cash/margin (H3) to use BEFORE selling VMFXX.
     Applies sequentially, returning final df + basket info + per-row details.
-    Funding order per buy: Purchasing Power -> VMFXX -> Shortfall.
+    Funding order per buy: Purchasing Power -> CASH row (if exists) -> VMFXX -> Shortfall.
+    If no CASH row exists, purchasing power is treated as external (portfolio MV can grow).
     """
     if holdings is None or holdings.empty:
         raise ValueError("Holdings are empty.")
@@ -577,12 +581,32 @@ def apply_sell_vmfxx_buy_basket(
     if vm_mask.sum() == 0:
         raise ValueError("VMFXX row not found in holdings.")
 
+    # Locate CASH row (if any)
+    cash_mask = (df["SYM"].astype(str).str.upper() == "CASH") & (df["SEC_TYPE"].astype(str).str.upper() == "CASH")
+    cash_idx = None
+    cash_mv_remaining = 0.0
+    if cash_mask.sum() > 0:
+        cash_idx = df.index[cash_mask][0]
+        try:
+            cash_mv_remaining = float(pd.to_numeric(df.loc[cash_idx, "MV_$"], errors="coerce") or 0.0)
+        except Exception:
+            cash_mv_remaining = 0.0
+
+    # Initialize purchasing power to use (clamped to CASH MV if CASH exists)
     cash_remaining = 0.0
     if use_purchasing_power_first:
         try:
-            cash_remaining = max(0.0, float(purchasing_power or 0.0))
+            pp_val = max(0.0, float(purchasing_power or 0.0))
         except Exception:
-            cash_remaining = 0.0
+            pp_val = 0.0
+        if cash_idx is not None:
+            # Can't use more cash than actually exists in the CASH row
+            cash_remaining = min(pp_val, cash_mv_remaining)
+        else:
+            # No CASH row: treat PP as external (won't adjust any row)
+            cash_remaining = pp_val
+    else:
+        cash_remaining = 0.0
 
     for b in buys:
         t = (b.get("ticker") or "").strip().upper()
@@ -611,10 +635,21 @@ def apply_sell_vmfxx_buy_basket(
 
         # Use Purchasing Power (cash) first
         cash_used = 0.0
-        if cash_remaining > 0.0:
+        if use_purchasing_power_first and cash_remaining > 0.0:
+            # Limit by the buy amount
             cash_used = min(cash_remaining, buy_mv)
             cash_remaining -= cash_used
             total_pp_used += cash_used
+
+            # If there is a CASH row, actually reduce its MV_$ / QTY
+            if cash_idx is not None and cash_mv_remaining > 0.0:
+                reduce_amt = min(cash_used, cash_mv_remaining)
+                cash_mv_remaining -= reduce_amt
+                if cash_mv_remaining < 0:
+                    cash_mv_remaining = 0.0
+                df.loc[cash_idx, "MV_$"] = cash_mv_remaining
+                # For consistency, set QTY equal to MV_$ (CASH ~ dollar balance)
+                df.loc[cash_idx, "QTY"] = cash_mv_remaining
 
         # Remaining funding needed from VMFXX
         vm_needed = buy_mv - cash_used
@@ -775,7 +810,6 @@ def render_whatif_summary(payload: dict):
     for name, oldv, newv, kind in rows:
         c1, c2, c3, c4 = st.columns([2.2, 1.0, 1.0, 1.0], gap="medium")
 
-        # BIG metric label (matches st.metric visual weight)
         c1.markdown(f"<div class='bb_metric_name'>{name}</div>", unsafe_allow_html=True)
 
         if kind == "pp":
@@ -845,7 +879,7 @@ with top3:
     st.text_input(
         "Purchasing Power Cash $ to use before VMFXX (H3)",
         key="pp_cash_str",
-        help="Enter your cash / margin purchasing power (e.g., H3). This is used BEFORE selling VMFXX.",
+        help="Enter your cash / margin purchasing power (e.g., H3). This is used BEFORE selling VMFXX. If a CASH row exists, it will decrease.",
     )
     st.checkbox(
         "Use purchasing power before selling VMFXX",
