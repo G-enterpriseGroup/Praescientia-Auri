@@ -8,6 +8,7 @@
 #   and also update GAIN_$ + GAIN_PCT to keep the row consistent.
 # - UI: Make "METRIC" column label font match OLD/NEW sizing in WHAT-IF table.
 # - NEW: Basket buys: allow up to 10 rows (multiple investments in one run)
+# - NEW: Purchasing Power (H3): use cash first, then VMFXX, then Shortfall.
 
 import csv
 import re
@@ -131,10 +132,10 @@ st.markdown(CSS, unsafe_allow_html=True)
 NOTE_HOLD = "*Holdings yield = dividend $ / total holdings MV (excludes options/cash from dividends).*"
 NOTE_ETRADE = "*E*TRADE-like yield ≈ weighted dividend yield on income-producing holdings (excludes options/cash/zero-yield holdings). Small differences can remain due to rounding and money-market yield methodology.*"
 NOTE_YIELD = "*Buy Yield % auto-fills from StockAnalysis when ticker changes. You can still override it manually.*"
-NOTE_BASKET = "*Basket: fill up to 10 buy rows. Each row sells VMFXX and buys that ticker sequentially.*"
+NOTE_BASKET = "*Basket: fill up to 10 buy rows. Each row uses Purchasing Power (H3) first, then sells VMFXX for any remaining funding.*"
 
 st.title("PORTFOLIO YIELD LAB — 90s ORANGE")
-st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if (basket).")
+st.caption("Upload your E*TRADE PortfolioDownload CSV, compute Holdings Yield + E*TRADE-like Yield, then run a VMFXX→Buy what-if (basket) with optional Purchasing Power cash (H3).")
 
 # =========================
 # Helpers
@@ -396,7 +397,7 @@ def etrade_like_yield_pct(holdings: pd.DataFrame, overrides: dict = None) -> flo
     return float(income_div / income_mv * 100.0)
 
 # =========================
-# What-if: sell VMFXX -> buy new (single)
+# What-if: sell VMFXX -> buy new (single, with optional VMFXX cap + price override)
 # =========================
 def _num(df, idx, col, default=np.nan):
     try:
@@ -407,16 +408,31 @@ def _num(df, idx, col, default=np.nan):
     except Exception:
         return default
 
-def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: float, buy_yield_pct: float):
+def apply_sell_vmfxx_buy_new(
+    holdings: pd.DataFrame,
+    buy_ticker: str,
+    buy_qty: float,
+    buy_yield_pct: float,
+    vmfxx_sell_max_mv: float = None,
+    buy_price_override: float = None,
+):
+    """
+    Apply a single buy funded by selling VMFXX.
+    vmfxx_sell_max_mv: optional cap on how much VMFXX MV to sell for this buy.
+    buy_price_override: optional last price, to avoid re-calling yfinance if already fetched.
+    """
     df = holdings.copy()
 
     buy_ticker = (buy_ticker or "").strip().upper()
     if not buy_ticker:
         raise ValueError("Buy ticker is blank.")
 
-    px = get_last_price_yf(buy_ticker)
-    if px is None:
-        raise ValueError(f"Could not fetch price for {buy_ticker} from yfinance.")
+    if buy_price_override is not None:
+        px = float(buy_price_override)
+    else:
+        px = get_last_price_yf(buy_ticker)
+        if px is None:
+            raise ValueError(f"Could not fetch price for {buy_ticker} from yfinance.")
 
     buy_qty = float(buy_qty)
     buy_yield_pct = float(buy_yield_pct)
@@ -428,8 +444,18 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     vm_idx = df.index[vm_mask][0]
     vm_mv = float(pd.to_numeric(df.loc[vm_idx, "MV_$"], errors="coerce") or 0.0)
 
-    sold_mv = min(vm_mv, buy_mv)
-    shortfall = max(0.0, buy_mv - vm_mv)
+    # Target funding from VMFXX for this buy
+    if vmfxx_sell_max_mv is None:
+        vm_target = buy_mv
+    else:
+        try:
+            vm_target = float(vmfxx_sell_max_mv)
+        except Exception:
+            vm_target = buy_mv
+        vm_target = max(0.0, min(buy_mv, vm_target))
+
+    sold_mv = min(vm_mv, vm_target)
+    shortfall = max(0.0, buy_mv - sold_mv)
 
     df.loc[vm_idx, "MV_$"] = vm_mv - sold_mv
     df.loc[vm_idx, "QTY"] = df.loc[vm_idx, "MV_$"]   # VMFXX ~ $1 NAV
@@ -522,12 +548,19 @@ def apply_sell_vmfxx_buy_new(holdings: pd.DataFrame, buy_ticker: str, buy_qty: f
     }
 
 # =========================
-# What-if: basket buys (up to 10)
+# What-if: basket buys (up to 10) with Purchasing Power
 # =========================
-def apply_sell_vmfxx_buy_basket(holdings: pd.DataFrame, buys: list):
+def apply_sell_vmfxx_buy_basket(
+    holdings: pd.DataFrame,
+    buys: list,
+    purchasing_power: float = 0.0,
+    use_purchasing_power_first: bool = True,
+):
     """
     buys: list of dicts: {"ticker": str, "qty": float, "yield": float}
+    purchasing_power: cash/margin (H3) to use BEFORE selling VMFXX.
     Applies sequentially, returning final df + basket info + per-row details.
+    Funding order per buy: Purchasing Power -> VMFXX -> Shortfall.
     """
     if holdings is None or holdings.empty:
         raise ValueError("Holdings are empty.")
@@ -537,11 +570,19 @@ def apply_sell_vmfxx_buy_basket(holdings: pd.DataFrame, buys: list):
     total_buy_mv = 0.0
     total_sold_vmfxx = 0.0
     total_shortfall = 0.0
+    total_pp_used = 0.0
 
     # validate VMFXX exists once up-front
     vm_mask = (df["SYM"].astype(str).str.upper() == "VMFXX") & (df["SEC_TYPE"].astype(str).str.upper() != "OPTION")
     if vm_mask.sum() == 0:
         raise ValueError("VMFXX row not found in holdings.")
+
+    cash_remaining = 0.0
+    if use_purchasing_power_first:
+        try:
+            cash_remaining = max(0.0, float(purchasing_power or 0.0))
+        except Exception:
+            cash_remaining = 0.0
 
     for b in buys:
         t = (b.get("ticker") or "").strip().upper()
@@ -562,20 +603,53 @@ def apply_sell_vmfxx_buy_basket(holdings: pd.DataFrame, buys: list):
         except Exception:
             yf_ = 0.0
 
-        df, info = apply_sell_vmfxx_buy_new(df, buy_ticker=t, buy_qty=qf, buy_yield_pct=yf_)
+        # Get price once here for cash logic
+        px = get_last_price_yf(t)
+        if px is None:
+            raise ValueError(f"Could not fetch price for {t} from yfinance.")
+        buy_mv = px * qf
+
+        # Use Purchasing Power (cash) first
+        cash_used = 0.0
+        if cash_remaining > 0.0:
+            cash_used = min(cash_remaining, buy_mv)
+            cash_remaining -= cash_used
+            total_pp_used += cash_used
+
+        # Remaining funding needed from VMFXX
+        vm_needed = buy_mv - cash_used
+        if vm_needed < 0:
+            vm_needed = 0.0
+
+        # Apply VMFXX sale + position update
+        df, info = apply_sell_vmfxx_buy_new(
+            df,
+            buy_ticker=t,
+            buy_qty=qf,
+            buy_yield_pct=yf_,
+            vmfxx_sell_max_mv=vm_needed,
+            buy_price_override=px,
+        )
+
+        sold_vmfxx_mv = float(info["sold_vmfxx_mv"])
+
+        # Anything not covered by Purchasing Power + VMFXX is Shortfall
+        shortfall_row = max(0.0, buy_mv - (cash_used + sold_vmfxx_mv))
+
         details.append({
             "Ticker": t,
             "Qty": qf,
             "Yield %": yf_,
             "Price": float(info["buy_price"]),
             "Buy MV $": float(info["buy_mv"]),
-            "Sold VMFXX $": float(info["sold_vmfxx_mv"]),
-            "Shortfall $": float(info["shortfall_mv"]),
+            "Cash Used $": float(cash_used),
+            "Sold VMFXX $": float(sold_vmfxx_mv),
+            "Shortfall $": float(shortfall_row),
         })
 
         total_buy_mv += float(info["buy_mv"])
-        total_sold_vmfxx += float(info["sold_vmfxx_mv"])
-        total_shortfall += float(info["shortfall_mv"])
+        total_sold_vmfxx += float(sold_vmfxx_mv)
+        total_shortfall += float(shortfall_row)
 
     if not details:
         raise ValueError("No valid buy rows found (need ticker + qty > 0).")
@@ -587,6 +661,7 @@ def apply_sell_vmfxx_buy_basket(holdings: pd.DataFrame, buys: list):
         "total_buy_mv": total_buy_mv,
         "total_sold_vmfxx_mv": total_sold_vmfxx,
         "total_shortfall_mv": total_shortfall,
+        "total_pp_used_mv": total_pp_used,
         "holdings_total_mv": total_mv,
         "details_df": pd.DataFrame(details)
     }
@@ -661,8 +736,9 @@ def pretty_basket_details(df: pd.DataFrame) -> pd.DataFrame:
     out["Qty"] = out["Qty"].map(lambda v: f"{float(v):,.4f}")
     out["Yield %"] = out["Yield %"].map(lambda v: fmt_pct4(v))
     out["Price"] = out["Price"].map(lambda v: fmt_money(v))
-    for c in ["Buy MV $","Sold VMFXX $","Shortfall $"]:
-        out[c] = out[c].map(lambda v: fmt_money(v))
+    for c in ["Buy MV $","Cash Used $","Sold VMFXX $","Shortfall $"]:
+        if c in out.columns:
+            out[c] = out[c].map(lambda v: fmt_money(v))
     return out
 
 # =========================
@@ -671,11 +747,12 @@ def pretty_basket_details(df: pd.DataFrame) -> pd.DataFrame:
 def render_whatif_summary(payload: dict):
     st.subheader("WHAT-IF SUMMARY (OLD vs NEW)")
 
-    d1, d2, d3, d4 = st.columns(4, gap="medium")
+    d1, d2, d3, d4, d5 = st.columns(5, gap="medium")
     d1.metric("Buy Rows Used", str(payload.get("buy_rows_used", 0)))
-    d2.metric("Total Buy MV $", fmt_money(payload["total_buy_mv"]))
-    d3.metric("Sold VMFXX $", fmt_money(payload["sold_vmfxx_mv"]))
-    d4.metric("Shortfall $", fmt_money(payload["shortfall_mv"]))
+    d2.metric("Total Buy MV $", fmt_money(payload.get("total_buy_mv", 0.0)))
+    d3.metric("Purchasing Power Used $", fmt_money(payload.get("pp_used_mv", 0.0)))
+    d4.metric("Sold VMFXX $", fmt_money(payload.get("sold_vmfxx_mv", 0.0)))
+    d5.metric("Shortfall $", fmt_money(payload.get("shortfall_mv", 0.0)))
 
     st.markdown(NOTE_HOLD)
     st.markdown(NOTE_ETRADE)
@@ -733,6 +810,12 @@ for i in range(N_BUYS):
     if f"last_yield_ticker_{i}" not in st.session_state:
         st.session_state[f"last_yield_ticker_{i}"] = ""
 
+# purchasing power state
+if "pp_cash_str" not in st.session_state:
+    st.session_state.pp_cash_str = ""
+if "use_pp_first" not in st.session_state:
+    st.session_state.use_pp_first = True
+
 def add_qty_row(i: int, delta: float):
     key = f"buy_qty_{i}"
     cur = _to_float(st.session_state.get(key, "0"))
@@ -742,7 +825,7 @@ def add_qty_row(i: int, delta: float):
 # =========================
 # Upload + calibrate + actions
 # =========================
-top1, top2, top3 = st.columns([1.3, 1.0, 1.2], gap="large")
+top1, top2, top3 = st.columns([1.3, 1.0, 1.3], gap="large")
 
 with top1:
     st.subheader("UPLOAD")
@@ -758,6 +841,18 @@ with top2:
     vmfxx_override = _to_float(vmfxx_override_str) if vmfxx_override_str.strip() else np.nan
 
 with top3:
+    st.subheader("PURCHASING POWER (H3)")
+    st.text_input(
+        "Purchasing Power Cash $ to use before VMFXX (H3)",
+        key="pp_cash_str",
+        help="Enter your cash / margin purchasing power (e.g., H3). This is used BEFORE selling VMFXX.",
+    )
+    st.checkbox(
+        "Use purchasing power before selling VMFXX",
+        key="use_pp_first",
+        value=st.session_state.get("use_pp_first", True),
+        help="If unchecked, basket will ignore purchasing power and only sell VMFXX.",
+    )
     st.subheader("ACTIONS")
     parse_clicked = st.button("PARSE FILE", use_container_width=True)
     clear_clicked = st.button("CLEAR STATE", use_container_width=True)
@@ -778,10 +873,10 @@ for i in range(N_BUYS):
         st.session_state[f"last_yield_ticker_{i}"] = t
 
 # header
-h1, h2, h3, h4 = st.columns([1.2, 1.2, 1.1, 1.4], gap="small")
+h1, h2, h3c, h4 = st.columns([1.2, 1.2, 1.1, 1.4], gap="small")
 h1.markdown("<div class='bb_hdr'>TICKER</div>", unsafe_allow_html=True)
 h2.markdown("<div class='bb_hdr'>QTY</div>", unsafe_allow_html=True)
-h3.markdown("<div class='bb_hdr'>YIELD %</div>", unsafe_allow_html=True)
+h3c.markdown("<div class='bb_hdr'>YIELD %</div>", unsafe_allow_html=True)
 h4.markdown("<div class='bb_hdr'>PRESETS</div>", unsafe_allow_html=True)
 
 for i in range(N_BUYS):
@@ -835,6 +930,8 @@ if clear_clicked:
         st.session_state[f"buy_qty_{i}"] = "0"
         st.session_state[f"buy_yield_{i}"] = "0"
         st.session_state[f"last_yield_ticker_{i}"] = ""
+    st.session_state.pp_cash_str = ""
+    st.session_state.use_pp_first = True
     st.rerun()
 
 def overrides_dict():
@@ -898,7 +995,16 @@ if run_clicked:
                 old_ey = etrade_like_yield_pct(hold_df, overrides=ovr)
                 old_mv_total = float(pd.to_numeric(hold_df["MV_$"], errors="coerce").fillna(0.0).sum())
 
-                scen_df, info = apply_sell_vmfxx_buy_basket(hold_df, buys=buys)
+                pp_val = _to_float(st.session_state.get("pp_cash_str", "0"))
+                pp_val = float(pp_val) if pd.notna(pp_val) else 0.0
+                use_pp_first = bool(st.session_state.get("use_pp_first", True))
+
+                scen_df, info = apply_sell_vmfxx_buy_basket(
+                    hold_df,
+                    buys=buys,
+                    purchasing_power=pp_val,
+                    use_purchasing_power_first=use_pp_first,
+                )
                 details_df = info.get("details_df")
 
                 new_div = dividend_dollars_annual(scen_df, overrides=ovr)
@@ -913,6 +1019,7 @@ if run_clicked:
                     total_buy_mv=info["total_buy_mv"],
                     sold_vmfxx_mv=info["total_sold_vmfxx_mv"],
                     shortfall_mv=info["total_shortfall_mv"],
+                    pp_used_mv=info.get("total_pp_used_mv", 0.0),
                     old_hy=old_hy, new_hy=new_hy,
                     old_ey=old_ey, new_ey=new_ey,
                     old_div=base_div, new_div=new_div,
