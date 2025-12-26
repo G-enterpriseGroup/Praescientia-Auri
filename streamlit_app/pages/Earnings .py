@@ -7,7 +7,7 @@ from datetime import date, timedelta, datetime
 # =========================
 # CONFIG (PASTE YOUR KEY LOCALLY)
 # =========================
-FMP_API_KEY = "PASTE_YOUR_FMP_KEY_HERE"  # <-- paste your key here on your computer
+FMP_API_KEY = "38psbXnud9teC46Q4zBBMzgqzNaETsNe"
 BASE = "https://financialmodelingprep.com/stable/earnings-calendar"
 
 # =========================
