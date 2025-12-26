@@ -5,9 +5,9 @@ import pandas as pd
 from datetime import date, timedelta, datetime
 
 # =========================
-# CONFIG (PASTE KEY HERE LOCALLY)
+# CONFIG (PASTE YOUR KEY LOCALLY)
 # =========================
-FMP_API_KEY = "38psbXnud9teC46Q4zBBMzgqzNaETsNe"  # <-- paste your key here on your computer
+FMP_API_KEY = "PASTE_YOUR_FMP_KEY_HERE"  # <-- paste your key here on your computer (NOT in chat)
 BASE = "https://financialmodelingprep.com/stable/earnings-calendar"
 
 
@@ -16,7 +16,7 @@ BASE = "https://financialmodelingprep.com/stable/earnings-calendar"
 # -------------------------
 def _normalize_ticker(t: str) -> str:
     t = (t or "").strip().upper()
-    # Common normalization: BRK.B -> BRK-B, BF.B -> BF-B, etc.
+    # Normalize common share-class tickers: BRK.B -> BRK-B
     t = t.replace(".", "-")
     t = t.replace(" ", "")
     return t
@@ -53,10 +53,7 @@ def next_earnings_dates(tickers: list[str], days_ahead: int) -> pd.DataFrame:
     today = date.today()
     to_day = today + timedelta(days=int(days_ahead))
 
-    from_str = today.isoformat()
-    to_str = to_day.isoformat()
-
-    rows = _fetch_calendar(from_str, to_str, FMP_API_KEY)
+    rows = _fetch_calendar(today.isoformat(), to_day.isoformat(), FMP_API_KEY)
 
     wanted = set(tickers)
     next_map: dict[str, tuple[str, str | None]] = {}  # ticker -> (date_str, time_str)
@@ -83,17 +80,9 @@ def next_earnings_dates(tickers: list[str], days_ahead: int) -> pd.DataFrame:
                 days_until = (datetime.strptime(d, "%Y-%m-%d").date() - today).days
             except Exception:
                 days_until = ""
-        out.append(
-            {
-                "Ticker": t,
-                "NextEarningsDate": d,
-                "DaysUntil": days_until,
-                "Time": tm,
-            }
-        )
+        out.append({"Ticker": t, "NextEarningsDate": d, "DaysUntil": days_until, "Time": tm})
 
-    df = pd.DataFrame(out)
-    return df
+    return pd.DataFrame(out)
 
 
 # =========================
@@ -102,8 +91,8 @@ def next_earnings_dates(tickers: list[str], days_ahead: int) -> pd.DataFrame:
 st.set_page_config(page_title="Earnings Dates (FMP)", layout="wide")
 st.title("Earnings Dates (FMP)")
 
-if not FMP_API_KEY or FMP_API_KEY.strip() in ("", "YOUR_FMP_KEY_HERE"):
-    st.error('Missing API key. Paste it into FMP_API_KEY at the top of this file.')
+if not FMP_API_KEY or FMP_API_KEY.strip() in ("", "PASTE_YOUR_FMP_KEY_HERE"):
+    st.error('Missing API key. Paste it into FMP_API_KEY at the top of this file (locally).')
     st.stop()
 
 colA, colB = st.columns([2, 1])
@@ -114,7 +103,6 @@ with colA:
         value="AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,BRK.B,AVGO,JPM",
         height=120,
     )
-
     uploaded = st.file_uploader("Optional: upload a .txt/.csv with tickers", type=["txt", "csv"])
 
 with colB:
