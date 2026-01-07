@@ -1,20 +1,3 @@
-# app.py
-# E*TRADE Earnings Analyzer + PDF Report (Realized vs Unrealized)
-#
-# Features:
-# - Upload E*TRADE CSV (with "For Account:" header)
-# - Auto-detect header row
-# - Compute:
-#     * Realized equity PnL (per symbol, FIFO lots)
-#     * Unrealized equity PnL (open positions, using yfinance last price)
-#     * Average holding period (days) for sold symbols
-#     * Options PnL (net cash, by contract)
-#     * Company dividends (per symbol + total)
-#     * VMFXX dividends via "VANGUARD FEDERAL MMKT INV DIV PAYMENT"
-#     * Other MMF/bank interest (e.g., MSPBNA)
-# - Bloomberg-style orange/dark UI
-# - One-click PDF download (no separate "generate" step)
-
 import io
 from datetime import datetime
 
@@ -325,4 +308,293 @@ def compute_report(df: pd.DataFrame):
         "realized_df": realized_df,
         "unrealized_df": unrealized_df,
         "opt_pnl_by_sym": opt_pnl_by_sym,
-        "
+        "company_div_by_sym": company_div_by_sym,
+        "vm_div_monthly": vm_div_monthly,
+        "vm_div_credits": vm_div_credits,
+        "mmf_interest_credits": mmf_interest_credits,
+    }
+
+
+# -----------------------------
+# PDF Builder
+# -----------------------------
+class EarningsPDF(FPDF):
+    def header(self):
+        self.set_font("Helvetica", "B", 14)
+        self.set_text_color(255, 127, 0)  # orange title
+        self.cell(0, 8, "E*TRADE Earnings Report", ln=1, align="C")
+        self.set_font("Helvetica", "", 9)
+        self.set_text_color(200, 200, 200)
+        self.cell(0, 5, datetime.now().strftime("Generated on %Y-%m-%d %H:%M"), ln=1, align="C")
+        self.ln(3)
+        self.set_draw_color(255, 127, 0)
+        self.line(10, self.get_y(), 200, self.get_y())
+        self.ln(5)
+
+
+def add_key_value(pdf: EarningsPDF, label: str, value: str):
+    pdf.set_font("Helvetica", "", 11)
+    pdf.set_text_color(230, 230, 230)
+    pdf.cell(80, 6, label, 0, 0, "L")
+    pdf.cell(0, 6, value, 0, 1, "R")
+
+
+def build_pdf(report: dict) -> bytes:
+    pdf = EarningsPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    totals = report["totals"]
+    total_realized_earnings = report["total_realized_earnings"]
+    unreal_total_pnl = report["unreal_total_pnl"]
+    realized_df = report["realized_df"]
+    unrealized_df = report["unrealized_df"]
+    opt_pnl_by_sym = report["opt_pnl_by_sym"]
+    company_div_by_sym = report["company_div_by_sym"]
+    vm_div_monthly = report["vm_div_monthly"]
+
+    # ---- Summary Section ----
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(255, 127, 0)
+    pdf.cell(0, 7, "1. Summary", ln=1)
+    pdf.ln(2)
+
+    pdf.set_text_color(230, 230, 230)
+    add_key_value(pdf, "Total Realized Earnings ($)", f"{total_realized_earnings:,.2f}")
+    for k, v in totals.items():
+        add_key_value(pdf, k, f"{v:,.2f}")
+    add_key_value(pdf, "Unrealized Equity PnL ($)", f"{unreal_total_pnl:,.2f}")
+
+    pdf.ln(5)
+
+    # ---- Realized Equity ----
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(255, 127, 0)
+    pdf.cell(0, 7, "2. Realized Equity PnL (FIFO, Closed)", ln=1)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(230, 230, 230)
+    pdf.ln(1)
+
+    if realized_df.empty:
+        pdf.cell(0, 6, "No realized equity PnL detected.", ln=1)
+    else:
+        for _, row in realized_df.iterrows():
+            pdf.cell(
+                0,
+                6,
+                f"{row['Symbol']}: PnL {row['Realized_PnL']:,.2f} | Qty {row['Realized_Qty']:.0f} | Avg Days Held {row['Avg_Days_Held']}",
+                ln=1,
+            )
+
+    pdf.ln(5)
+
+    # ---- Unrealized Equity ----
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(255, 127, 0)
+    pdf.cell(0, 7, "3. Unrealized Equity PnL (Open Positions)", ln=1)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(230, 230, 230)
+    pdf.ln(1)
+
+    if unrealized_df.empty:
+        pdf.cell(0, 6, "No open equity positions detected.", ln=1)
+    else:
+        for _, row in unrealized_df.iterrows():
+            symbol = row["Symbol"]
+            qty = row["Quantity"]
+            cost = row["Cost_Basis"]
+            mv = row.get("Market_Value", float("nan"))
+            upnl = row.get("Unrealized_PnL", float("nan"))
+            pdf.cell(
+                0,
+                6,
+                f"{symbol}: Qty {qty:.0f} | Cost {cost:,.2f} | MV {mv:,.2f} | U-PnL {upnl:,.2f}",
+                ln=1,
+            )
+
+    pdf.ln(5)
+
+    # ---- Options PnL ----
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(255, 127, 0)
+    pdf.cell(0, 7, "4. Options PnL (Net Cash)", ln=1)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(230, 230, 230)
+    pdf.ln(1)
+
+    if opt_pnl_by_sym.empty:
+        pdf.cell(0, 6, "No option trades detected.", ln=1)
+    else:
+        for _, row in opt_pnl_by_sym.iterrows():
+            pdf.cell(0, 6, f"{row['Symbol']}: {row['Net_PnL']:,.2f}", ln=1)
+
+    pdf.ln(5)
+
+    # ---- Company Dividends ----
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(255, 127, 0)
+    pdf.cell(0, 7, "5. Company Dividends (Equities)", ln=1)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(230, 230, 230)
+    pdf.ln(1)
+
+    if company_div_by_sym.empty:
+        pdf.cell(0, 6, "No equity dividends detected.", ln=1)
+    else:
+        for _, row in company_div_by_sym.iterrows():
+            pdf.cell(0, 6, f"{row['Symbol']}: {row['Dividends ($)']:,.2f}", ln=1)
+
+    pdf.ln(5)
+
+    # ---- VMFXX Monthly Dividends ----
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(255, 127, 0)
+    pdf.cell(0, 7, "6. VMFXX Monthly Dividends", ln=1)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(230, 230, 230)
+    pdf.ln(1)
+
+    if vm_div_monthly.empty:
+        pdf.cell(0, 6, "No VMFXX dividend payments detected.", ln=1)
+    else:
+        for _, row in vm_div_monthly.iterrows():
+            pdf.cell(0, 6, f"{row['Month']}: {row['VMFXX Dividends ($)']:,.2f}", ln=1)
+
+    # Output as bytes
+    out = pdf.output(dest="S")
+    if isinstance(out, str):
+        pdf_bytes = out.encode("latin-1")
+    else:
+        pdf_bytes = bytes(out)
+
+    return pdf_bytes
+
+
+# -----------------------------
+# Streamlit UI (Bloomberg Orange)
+# -----------------------------
+def main():
+    st.set_page_config(page_title="E*TRADE Earnings Report Generator", layout="wide")
+
+    # Bloomberg-style orange/dark CSS
+    st.markdown(
+        """
+        <style>
+        :root {
+            --primary-color: #ff7f0e;
+        }
+        body {
+            background-color: #000000;
+        }
+        [data-testid="stAppViewContainer"] {
+            background-color: #000000;
+            color: #f3f3f3;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #111111;
+        }
+        .stMarkdown, .stDataFrame, .stMetric {
+            color: #f3f3f3;
+        }
+        .stMetric label {
+            color: #ffbf69 !important;
+        }
+        .stMetric div[data-testid="stMetricValue"] {
+            color: #ffffff !important;
+        }
+        .stDownloadButton button, .stButton button {
+            background-color: #ff7f0e;
+            color: #000000;
+            border-radius: 4px;
+            border: 1px solid #ffbf69;
+        }
+        .stDownloadButton button:hover, .stButton button:hover {
+            background-color: #ffa64d;
+            color: #000000;
+        }
+        hr {
+            border-color: #333333;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.title("E*TRADE Earnings Report Generator")
+    st.caption("Upload your E*TRADE CSV → see realized + unrealized PnL → download a PDF report.")
+
+    uploaded_file = st.file_uploader("Upload E*TRADE CSV", type=["csv"])
+
+    if not uploaded_file:
+        return
+
+    df = load_etrade_csv(uploaded_file)
+    if df is None:
+        return
+
+    report = compute_report(df)
+
+    # ---- Top Summary ----
+    st.subheader("Summary (Realized vs Unrealized)")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Realized Earnings ($)", f"{report['total_realized_earnings']:,.2f}")
+    with col2:
+        st.metric("Realized Equity PnL ($)", f"{report['totals']['Realized Equity PnL ($)']:,.2f}")
+    with col3:
+        st.metric("Realized Options PnL ($)", f"{report['totals']['Realized Options PnL ($)']:,.2f}")
+
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        st.metric("Company Dividends ($)", f"{report['totals']['Company Dividends ($)']:,.2f}")
+    with col5:
+        st.metric("VMFXX Dividends ($)", f"{report['totals']['VMFXX Dividends ($)']:,.2f}")
+    with col6:
+        st.metric("Unrealized Equity PnL ($)", f"{report['unreal_total_pnl']:,.2f}")
+
+    st.markdown("---")
+
+    # ---- Detailed Tables ----
+    st.subheader("Details")
+
+    c_real, c_unreal = st.columns(2)
+    with c_real:
+        st.markdown("**Realized Equity (PnL + Days Held)**")
+        st.dataframe(report["realized_df"], use_container_width=True)
+    with c_unreal:
+        st.markdown("**Unrealized Equity (Open Positions)**")
+        st.dataframe(report["unrealized_df"], use_container_width=True)
+
+    st.markdown("**Options PnL by Contract**")
+    st.dataframe(report["opt_pnl_by_sym"], use_container_width=True)
+
+    st.markdown("**Company Dividends by Symbol**")
+    st.dataframe(report["company_div_by_sym"], use_container_width=True)
+
+    exp1, exp2 = st.columns(2)
+    with exp1:
+        st.markdown("**VMFXX Monthly Dividend Breakdown**")
+        st.dataframe(report["vm_div_monthly"], use_container_width=True)
+    with exp2:
+        st.markdown("**Other MMF / Bank Interest Rows**")
+        st.dataframe(report["mmf_interest_credits"], use_container_width=True)
+
+    st.markdown("---")
+    st.caption(
+        "Unrealized PnL uses latest prices from Yahoo Finance via yfinance. "
+        "If price lookup fails, Market Value / U-PnL may be blank."
+    )
+
+    # ---- One-click PDF Download ----
+    pdf_bytes = build_pdf(report)
+    st.download_button(
+        label="Download PDF Earnings Report",
+        data=pdf_bytes,
+        file_name="etrade_earnings_report.pdf",
+        mime="application/pdf",
+    )
+
+
+if __name__ == "__main__":
+    main()
