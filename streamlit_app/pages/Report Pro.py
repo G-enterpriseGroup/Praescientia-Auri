@@ -1,34 +1,19 @@
 # app.py / Report Pro.py
-# E*TRADE 2025 Earnings Analyzer + 1-Page PDF Report (Structured Layout)
-#
-# What it does:
-# - Upload E*TRADE CSV (with "For Account:" header)
-# - Computes:
-#     * Equity realized PnL (closed positions only)
-#     * Options PnL (closed positions only – requires a sell/expire/exercise)
-#     * Company dividends (equities)
-#     * VMFXX dividends via "VANGUARD FEDERAL MMKT INV DIV PAYMENT"
-#     * Other MMF/bank interest (e.g., MSPBNA)
-# - Streamlit UI (Bloomberg-style dark/orange)
-# - One-click PDF download:
-#   1. Summary
-#   2. Equity Realized PnL (Closed Positions)
-#   3. Options PnL (Closed Positions Only)
-#   4. Company Dividends (Equities)
-#   5. VMFXX Monthly Dividends
-#
-# PDF formatting:
-# - Font: Times New Roman (Times) black
-# - Body: size 12
-# - Section headers: size 18, bold
-# - Structured tables to use horizontal space.
+# E*TRADE 2025 Earnings Analyzer + 1-Page PDF Report (Structured Layout + Company Names)
 
 import io
 from datetime import datetime
+from functools import lru_cache
 
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
+
+# yfinance for company names
+try:
+    import yfinance as yf
+except ImportError:
+    yf = None
 
 
 # -----------------------------
@@ -71,6 +56,43 @@ def load_etrade_csv(uploaded_file) -> pd.DataFrame | None:
     )
 
     return df
+
+
+# -----------------------------
+# Symbol → Company Name via yfinance
+# -----------------------------
+@lru_cache(maxsize=None)
+def lookup_company_name(ticker: str) -> str:
+    """
+    Look up a short company name for a ticker using yfinance.
+    Returns a name truncated to 18 characters.
+    If yfinance isn't available or lookup fails, returns "".
+    """
+    if yf is None:
+        return ""
+
+    if not isinstance(ticker, str) or not ticker:
+        return ""
+
+    base = ticker.strip().upper()
+    # For option strings like "SPYM Jan 16 '26 85 Put"
+    # take the first token as the underlying
+    if " " in base:
+        base = base.split()[0]
+
+    try:
+        info = yf.Ticker(base).info
+        name = info.get("shortName") or info.get("longName") or ""
+    except Exception:
+        name = ""
+
+    if not name:
+        return ""
+
+    name = name.strip()
+    if len(name) > 18:
+        name = name[:18]
+    return name
 
 
 # -----------------------------
@@ -128,11 +150,10 @@ def compute_report(df: pd.DataFrame):
         .reset_index()
         .rename(columns={"Amount": "Dividends ($)"})
     )
+    # add company names
+    company_div_by_sym["Name"] = company_div_by_sym["Symbol"].apply(lookup_company_name)
 
     # ---- Equity Realized PnL (Closed positions only) ----
-    # Logic:
-    # - Take symbols that have at least one 'Sold'
-    # - For those symbols, sum all Bought + Sold Amount for EQ
     sold_syms = df[df["TransactionType"] == "Sold"]["Symbol"].unique().tolist()
     eq_trades = df[
         (df["SecurityType"] == "EQ")
@@ -146,14 +167,11 @@ def compute_report(df: pd.DataFrame):
         .reset_index()
         .rename(columns={"Amount": "Net PnL ($)"})
     )
+    # add company names
+    eq_pnl_by_sym["Name"] = eq_pnl_by_sym["Symbol"].apply(lookup_company_name)
     eq_total = float(eq_pnl_by_sym["Net PnL ($)"].sum()) if not eq_pnl_by_sym.empty else 0.0
 
     # ---- Options PnL (Closed positions only) ----
-    # Logic:
-    # - Consider only symbols where we see a "closing" leg:
-    #   Sold To Close / Option Exercised / Option Expired
-    # - For those, include cash from:
-    #   Bought To Open / Sold To Close / Option Exercised / Option Expired
     opt = df[df["SecurityType"] == "OPTN"]
     closed_types = ["Sold To Close", "Option Exercised", "Option Expired"]
     allowed_types = ["Bought To Open", "Sold To Close", "Option Exercised", "Option Expired"]
@@ -168,6 +186,14 @@ def compute_report(df: pd.DataFrame):
         .reset_index()
         .rename(columns={"Amount": "Net PnL ($)"})
     )
+    # add underlying company name (based on first token)
+    def _opt_name(sym: str) -> str:
+        if not isinstance(sym, str):
+            return ""
+        base = sym.split()[0]
+        return lookup_company_name(base)
+
+    opt_pnl_by_sym["Name"] = opt_pnl_by_sym["Symbol"].apply(_opt_name)
     opt_total = float(opt_pnl_by_sym["Net PnL ($)"].sum()) if not opt_pnl_by_sym.empty else 0.0
 
     # ---- Totals (all realized) ----
@@ -213,14 +239,14 @@ def add_key_value(pdf: EarningsPDF, label: str, value: str):
     pdf.cell(0, 6, value, 0, 1, "R")
 
 
-def add_table_header(pdf: EarningsPDF, col1: str, col2: str, w1: int = 90, w2: int = 40):
+def add_table_header(pdf: EarningsPDF, col1: str, col2: str, w1: int = 110, w2: int = 40):
     pdf.set_font("Times", "B", 12)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(w1, 7, col1, border="B", align="L")
     pdf.cell(w2, 7, col2, border="B", ln=1, align="R")
 
 
-def add_table_row(pdf: EarningsPDF, left: str, right: str, w1: int = 90, w2: int = 40):
+def add_table_row(pdf: EarningsPDF, left: str, right: str, w1: int = 110, w2: int = 40):
     pdf.set_font("Times", "", 12)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(w1, 6, left, border=0, align="L")
@@ -258,9 +284,13 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 12)
         pdf.cell(0, 6, "No closed equity positions.", ln=1)
     else:
-        add_table_header(pdf, "Symbol", "Net PnL ($)")
+        add_table_header(pdf, "Symbol / Name", "Net PnL ($)")
         for _, row in eq_pnl_by_sym.iterrows():
-            add_table_row(pdf, str(row["Symbol"]), f"{row['Net PnL ($)']:,.2f}")
+            name = row.get("Name", "") or ""
+            label = str(row["Symbol"])
+            if name:
+                label = f"{label}  {name}"
+            add_table_row(pdf, label, f"{row['Net PnL ($)']:,.2f}")
 
     pdf.ln(3)
 
@@ -272,9 +302,13 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 12)
         pdf.cell(0, 6, "No closed option positions.", ln=1)
     else:
-        add_table_header(pdf, "Contract", "Net PnL ($)")
+        add_table_header(pdf, "Contract / Underlying", "Net PnL ($)")
         for _, row in opt_pnl_by_sym.iterrows():
-            add_table_row(pdf, str(row["Symbol"]), f"{row['Net PnL ($)']:,.2f}")
+            name = row.get("Name", "") or ""
+            label = str(row["Symbol"])
+            if name:
+                label = f"{label}  {name}"
+            add_table_row(pdf, label, f"{row['Net PnL ($)']:,.2f}")
 
     pdf.ln(3)
 
@@ -286,9 +320,13 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 12)
         pdf.cell(0, 6, "No equity dividends.", ln=1)
     else:
-        add_table_header(pdf, "Symbol", "Dividends ($)")
+        add_table_header(pdf, "Symbol / Name", "Dividends ($)")
         for _, row in company_div_by_sym.iterrows():
-            add_table_row(pdf, str(row["Symbol"]), f"{row['Dividends ($)']:,.2f}")
+            name = row.get("Name", "") or ""
+            label = str(row["Symbol"])
+            if name:
+                label = f"{label}  {name}"
+            add_table_row(pdf, label, f"{row['Dividends ($)']:,.2f}")
 
     pdf.ln(3)
 
@@ -381,19 +419,23 @@ def main():
     # ---- Top Summary ----
     st.subheader("Summary")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    # Row 1: three metrics
+    c1, c2, c3 = st.columns(3)
+    with c1:
         st.metric("Total Earnings ($)", f"{report['total_earnings']:,.2f}")
-    with col2:
+    with c2:
         st.metric("Equity Realized PnL ($)", f"{report['totals']['Equity Realized PnL ($)']:,.2f}")
-    with col3:
+    with c3:
         st.metric("Options Net PnL ($)", f"{report['totals']['Options Net PnL ($)']:,.2f}")
 
-    col4, col5 = st.columns(2)
-    with col4:
+    # Row 2: three metrics (aligned under the first row)
+    c4, c5, c6 = st.columns(3)
+    with c4:
         st.metric("Company Dividends ($)", f"{report['totals']['Company Dividends ($)']:,.2f}")
-    with col5:
+    with c5:
         st.metric("VMFXX Dividends ($)", f"{report['totals']['VMFXX Dividends ($)']:,.2f}")
+    with c6:
+        st.metric("Other MMF/Bank Interest ($)", f"{report['totals']['Other MMF/Bank Interest ($)']:,.2f}")
 
     st.markdown("---")
 
