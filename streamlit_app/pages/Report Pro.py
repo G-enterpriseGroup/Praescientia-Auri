@@ -260,8 +260,13 @@ def build_pdf(report: dict) -> bytes:
         for _, row in vm_div_monthly.iterrows():
             pdf.cell(0, 6, f"{row['Month']}: {row['VMFXX Dividends ($)']:,.2f}", ln=1)
 
-    # Output as bytes
-    pdf_bytes = pdf.output(dest="S").encode("latin-1")
+    # Output as bytes (handle both str and bytes/bytearray from fpdf2)
+    out = pdf.output(dest="S")
+    if isinstance(out, str):
+        pdf_bytes = out.encode("latin-1")
+    else:
+        pdf_bytes = bytes(out)
+
     return pdf_bytes
 
 
