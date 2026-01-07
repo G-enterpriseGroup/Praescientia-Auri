@@ -6,10 +6,6 @@
 # - PDF filename: "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 # - PDF body font 10, headers 12, plus dates per line where useful
 # - Summary lines use dotted leaders: "Label .... Value"
-#
-# NOTE for correct equity PnL:
-#   Export a CSV that includes BOTH the buys and sells for a symbol.
-#   The FIFO engine will then net them properly (e.g., MFC).
 
 import io
 import re
@@ -141,6 +137,8 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
       - Maintain inventory of buy lots (qty, net cost per share).
       - On each sell, match against inventory FIFO and book realized PnL.
       - Uses Amount/Quantity to include commissions in net prices.
+      - ONLY realized for shares that have both a buy and a sell
+        (no fake PnL on unmatched sells).
     """
     eq = df[
         (df["SecurityType"] == "EQ")
@@ -162,6 +160,8 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
         realized = 0.0
         fb = None
         ls = None
+        had_buy = False
+        had_sell = False
 
         for _, row in g.iterrows():
             q = row["Quantity"]
@@ -170,9 +170,9 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
             ttype = row["TransactionType"]
 
             if ttype == "Bought":
+                had_buy = True
                 # Buys: Quantity positive, Amount negative (cash out)
-                if q <= 0 or amt >= 0 or q is None or amt is None:
-                    # fallback: use trade price
+                if q is None or amt is None or q <= 0 or amt >= 0:
                     cost_per_share = row["Price"]
                 else:
                     cost_per_share = -amt / q  # includes commission
@@ -180,16 +180,15 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
                 fb = fb or dt
 
             elif ttype == "Sold":
+                had_sell = True
                 # Sells: Quantity negative, Amount positive (cash in)
+                if q is None or amt is None or q >= 0:
+                    continue
                 sell_qty = -q  # q is negative
                 if sell_qty <= 0:
                     continue
 
-                if sell_qty != 0:
-                    sale_per_share = amt / sell_qty  # net of commission
-                else:
-                    sale_per_share = row["Price"]
-
+                sale_per_share = amt / sell_qty  # net of commission
                 remaining = sell_qty
 
                 # Match against inventory FIFO
@@ -204,15 +203,12 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
                     else:
                         inventory[0][0] = lot_qty
 
-                # If we have a sell with no prior inventory (CSV missing earlier buys),
-                # treat the whole sale as realized using its own cash value so it isn't dropped.
-                if remaining > 0:
-                    realized += sale_per_share * remaining
-                    remaining = 0
-
+                # IMPORTANT: if remaining > 0 here (sell with no prior inventory),
+                # we DO NOT book extra PnL. Only matched shares (with buys) count.
                 ls = dt
 
-        if realized != 0:
+        # Only keep symbols where we actually had both a buy and a sell
+        if had_buy and had_sell:
             results[sym] = realized
             first_buy_date[sym] = fb
             last_sell_date[sym] = ls
