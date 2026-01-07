@@ -5,6 +5,7 @@
 # - Company names (via yfinance, 18 chars)
 # - PDF filename: "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 # - PDF body font 10, headers 12, plus dates per line where useful
+# - Summary lines use dotted leaders: "Label .... Value"
 
 import io
 import re
@@ -327,10 +328,31 @@ class EarningsPDF(FPDF):
 
 
 def add_key_value(pdf: EarningsPDF, label: str, value: str):
+    """
+    Print 'Label ..... Value' with dotted leader across the available width.
+    """
     pdf.set_font("Times", "", 10)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(90, 5, label, 0, 0, "L")
-    pdf.cell(0, 5, value, 0, 1, "R")
+
+    usable = pdf.w - pdf.l_margin - pdf.r_margin
+    label_text = f"{label} "
+    value_text = str(value)
+
+    label_w = pdf.get_string_width(label_text)
+    value_w = pdf.get_string_width(value_text)
+    dot_w = pdf.get_string_width(".") or 0.5
+
+    dots_w = usable - label_w - value_w
+    if dots_w < dot_w * 3:
+        n_dots = 3
+    else:
+        n_dots = int(dots_w / dot_w)
+
+    dots = "." * max(3, n_dots)
+    line = f"{label_text}{dots} {value_text}"
+
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(usable, 5, line, 0, 1, "L")
 
 
 def add_table_header(pdf: EarningsPDF, cols, widths):
@@ -392,7 +414,6 @@ def build_pdf(report: dict) -> bytes:
             label = str(row["Symbol"])
             if name:
                 label = f"{label}  {name}"
-            date_range = ""
             fb = row.get("FirstBuyDate")
             ls = row.get("LastSellDate")
             if pd.notna(fb) and pd.notna(ls):
@@ -401,6 +422,8 @@ def build_pdf(report: dict) -> bytes:
                 date_range = f"{fb} -"
             elif pd.notna(ls):
                 date_range = f"- {ls}"
+            else:
+                date_range = ""
             vals = [
                 label,
                 date_range,
@@ -428,7 +451,6 @@ def build_pdf(report: dict) -> bytes:
             label = str(row["Symbol"])
             if name:
                 label = f"{label}  {name}"
-            dr = ""
             od = row.get("OpenDate")
             cd = row.get("CloseDate")
             if pd.notna(od) and pd.notna(cd):
@@ -437,6 +459,8 @@ def build_pdf(report: dict) -> bytes:
                 dr = f"{od} -"
             elif pd.notna(cd):
                 dr = f"- {cd}"
+            else:
+                dr = ""
             vals = [
                 label,
                 dr,
@@ -466,13 +490,14 @@ def build_pdf(report: dict) -> bytes:
                 label = f"{label}  {name}"
             fr = row.get("FirstDivDate")
             lr = row.get("LastDivDate")
-            dr = ""
             if pd.notna(fr) and pd.notna(lr):
                 dr = f"{fr} - {lr}"
             elif pd.notna(fr):
                 dr = f"{fr} -"
             elif pd.notna(lr):
                 dr = f"- {lr}"
+            else:
+                dr = ""
             vals = [
                 label,
                 dr,
@@ -522,7 +547,7 @@ def build_pdf(report: dict) -> bytes:
             desc = row.get("Description") or ""
             left = f"{date_str}  {desc}"
             vals = [
-                left[:80],  # keep it from overflowing
+                left[:80],
                 f"{row['Amount']:,.2f}",
             ]
             aligns = ["L", "R"]
