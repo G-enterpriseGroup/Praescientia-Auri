@@ -1,5 +1,5 @@
 # app.py / Report Pro.py
-# E*TRADE 2025 Earnings Analyzer + 1-Page PDF Report
+# E*TRADE 2025 Earnings Analyzer + 1-Page PDF Report (Structured Layout)
 #
 # What it does:
 # - Upload E*TRADE CSV (with "For Account:" header)
@@ -21,7 +21,7 @@
 # - Font: Times New Roman (Times) black
 # - Body: size 12
 # - Section headers: size 18, bold
-# - Designed to fit on a single page for your 2025 data.
+# - Structured tables to use horizontal space.
 
 import io
 from datetime import datetime
@@ -193,7 +193,7 @@ def compute_report(df: pd.DataFrame):
 
 
 # -----------------------------
-# PDF Builder (Times New Roman, 1 Page)
+# PDF Builder (Times New Roman, Structured Tables)
 # -----------------------------
 class EarningsPDF(FPDF):
     def header(self):
@@ -209,8 +209,22 @@ class EarningsPDF(FPDF):
 def add_key_value(pdf: EarningsPDF, label: str, value: str):
     pdf.set_font("Times", "", 12)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(80, 6, label, 0, 0, "L")
+    pdf.cell(90, 6, label, 0, 0, "L")
     pdf.cell(0, 6, value, 0, 1, "R")
+
+
+def add_table_header(pdf: EarningsPDF, col1: str, col2: str, w1: int = 90, w2: int = 40):
+    pdf.set_font("Times", "B", 12)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w1, 7, col1, border="B", align="L")
+    pdf.cell(w2, 7, col2, border="B", ln=1, align="R")
+
+
+def add_table_row(pdf: EarningsPDF, left: str, right: str, w1: int = 90, w2: int = 40):
+    pdf.set_font("Times", "", 12)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(w1, 6, left, border=0, align="L")
+    pdf.cell(w2, 6, right, border=0, ln=1, align="R")
 
 
 def build_pdf(report: dict) -> bytes:
@@ -225,92 +239,70 @@ def build_pdf(report: dict) -> bytes:
     company_div_by_sym = report["company_div_by_sym"]
     vm_div_monthly = report["vm_div_monthly"]
 
-    # To help keep it on 1 page for your data:
-    eq_pnl_by_sym = eq_pnl_by_sym.copy()
-    opt_pnl_by_sym = opt_pnl_by_sym.copy()
-    company_div_by_sym = company_div_by_sym.copy()
-
     # Section 1: Summary
     pdf.set_font("Times", "B", 18)
-    pdf.cell(0, 10, "1. Summary", ln=1)
-    pdf.ln(2)
+    pdf.cell(0, 9, "1. Summary", ln=1)
+    pdf.ln(1)
 
     add_key_value(pdf, "Total Earnings ($)", f"{total_earnings:,.2f}")
     for k, v in totals.items():
         add_key_value(pdf, k, f"{v:,.2f}")
 
-    pdf.ln(4)
+    pdf.ln(3)
 
     # Section 2: Equity Realized PnL (Closed)
     pdf.set_font("Times", "B", 18)
-    pdf.cell(0, 10, "2. Equity Realized PnL (Closed Positions)", ln=1)
-    pdf.ln(2)
-    pdf.set_font("Times", "", 12)
-
+    pdf.cell(0, 9, "2. Equity Realized PnL (Closed Positions)", ln=1)
+    pdf.ln(1)
     if eq_pnl_by_sym.empty:
+        pdf.set_font("Times", "", 12)
         pdf.cell(0, 6, "No closed equity positions.", ln=1)
     else:
-        # print all rows (your 2025 file is small enough to fit)
+        add_table_header(pdf, "Symbol", "Net PnL ($)")
         for _, row in eq_pnl_by_sym.iterrows():
-            pdf.cell(
-                0, 6,
-                f"{row['Symbol']}: {row['Net PnL ($)']:,.2f}",
-                ln=1,
-            )
+            add_table_row(pdf, str(row["Symbol"]), f"{row['Net PnL ($)']:,.2f}")
 
-    pdf.ln(4)
+    pdf.ln(3)
 
     # Section 3: Options PnL (Closed Only)
     pdf.set_font("Times", "B", 18)
-    pdf.cell(0, 10, "3. Options PnL (Closed Positions Only)", ln=1)
-    pdf.ln(2)
-    pdf.set_font("Times", "", 12)
-
+    pdf.cell(0, 9, "3. Options PnL (Closed Positions Only)", ln=1)
+    pdf.ln(1)
     if opt_pnl_by_sym.empty:
+        pdf.set_font("Times", "", 12)
         pdf.cell(0, 6, "No closed option positions.", ln=1)
     else:
+        add_table_header(pdf, "Contract", "Net PnL ($)")
         for _, row in opt_pnl_by_sym.iterrows():
-            pdf.cell(
-                0, 6,
-                f"{row['Symbol']}: {row['Net PnL ($)']:,.2f}",
-                ln=1,
-            )
+            add_table_row(pdf, str(row["Symbol"]), f"{row['Net PnL ($)']:,.2f}")
 
-    pdf.ln(4)
+    pdf.ln(3)
 
     # Section 4: Company Dividends (Equities)
     pdf.set_font("Times", "B", 18)
-    pdf.cell(0, 10, "4. Company Dividends (Equities)", ln=1)
-    pdf.ln(2)
-    pdf.set_font("Times", "", 12)
-
+    pdf.cell(0, 9, "4. Company Dividends (Equities)", ln=1)
+    pdf.ln(1)
     if company_div_by_sym.empty:
+        pdf.set_font("Times", "", 12)
         pdf.cell(0, 6, "No equity dividends.", ln=1)
     else:
+        add_table_header(pdf, "Symbol", "Dividends ($)")
         for _, row in company_div_by_sym.iterrows():
-            pdf.cell(
-                0, 6,
-                f"{row['Symbol']}: {row['Dividends ($)']:,.2f}",
-                ln=1,
-            )
+            add_table_row(pdf, str(row["Symbol"]), f"{row['Dividends ($)']:,.2f}")
 
-    pdf.ln(4)
+    pdf.ln(3)
 
     # Section 5: VMFXX Monthly Dividends
     pdf.set_font("Times", "B", 18)
-    pdf.cell(0, 10, "5. VMFXX Monthly Dividends", ln=1)
-    pdf.ln(2)
-    pdf.set_font("Times", "", 12)
-
+    pdf.cell(0, 9, "5. VMFXX Monthly Dividends", ln=1)
+    pdf.ln(1)
     if vm_div_monthly.empty:
+        pdf.set_font("Times", "", 12)
         pdf.cell(0, 6, "No VMFXX dividend payments.", ln=1)
     else:
+        add_table_header(pdf, "Month", "VMFXX Dividends ($)")
         for _, row in vm_div_monthly.iterrows():
-            pdf.cell(
-                0, 6,
-                f"{row['Month']}: {row['VMFXX Dividends ($)']:,.2f}",
-                ln=1,
-            )
+            add_table_row(pdf, str(row["Month"]), f"{row['VMFXX Dividends ($)']:,.2f}")
 
     # Output as bytes for Streamlit
     out = pdf.output(dest="S")
@@ -373,7 +365,7 @@ def main():
     )
 
     st.title("E*TRADE Earnings Report Generator")
-    st.caption("Upload your E*TRADE CSV → compute realized earnings → download a 1-page PDF.")
+    st.caption("Upload your E*TRADE CSV → compute realized earnings → download a structured 1-page PDF.")
 
     uploaded_file = st.file_uploader("Upload E*TRADE CSV", type=["csv"])
 
