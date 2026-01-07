@@ -1,7 +1,13 @@
 # app.py / Report Pro.py
 # E*TRADE 2025 Earnings Analyzer + 1-Page PDF Report (Structured Layout + Company Names)
+#
+# PDF filename pattern:
+# "<last4> Report Pro Jan 25 - Dec 25.pdf"
+#  - last4 from "For Account:" line (top of CSV)
+#  - date range from min/max TransactionDate (month + 2-digit year)
 
 import io
+import re
 from datetime import datetime
 from functools import lru_cache
 
@@ -9,7 +15,6 @@ import pandas as pd
 import streamlit as st
 from fpdf import FPDF
 
-# yfinance for company names
 try:
     import yfinance as yf
 except ImportError:
@@ -17,17 +22,20 @@ except ImportError:
 
 
 # -----------------------------
-# Helpers: Load & Clean CSV
+# Helpers: Load & Clean CSV + Metadata
 # -----------------------------
-def load_etrade_csv(uploaded_file) -> pd.DataFrame | None:
+def load_etrade_csv(uploaded_file):
     """
-    Detect the correct header row (E*TRADE has 'For Account:' above)
-    and return a clean DataFrame.
+    Detect the correct header row (E*TRADE has 'For Account:' above),
+    return:
+      df, account_last4, start_label, end_label
+    where start_label/end_label are like "Jan 25".
     """
     content_bytes = uploaded_file.getvalue()
     text = content_bytes.decode("utf-8", errors="ignore")
     lines = text.splitlines()
 
+    # --- Find header row ---
     header_idx = None
     for i, line in enumerate(lines):
         if line.startswith("TransactionDate,TransactionType"):
@@ -36,8 +44,20 @@ def load_etrade_csv(uploaded_file) -> pd.DataFrame | None:
 
     if header_idx is None:
         st.error("Could not find the 'TransactionDate,TransactionType' header in the CSV.")
-        return None
+        return None, None, None, None
 
+    # --- Find account last4 from "For Account:" line above header ---
+    account_last4 = None
+    for i in range(header_idx):
+        line = lines[i]
+        if "For Account" in line:
+            # Grab last 4 consecutive digits
+            m = re.search(r"(\d{4})\D*$", line)
+            if m:
+                account_last4 = m.group(1)
+            break
+
+    # --- Load dataframe from header down ---
     data_io = io.StringIO("\n".join(lines[header_idx:]))
     df = pd.read_csv(data_io)
 
@@ -52,10 +72,19 @@ def load_etrade_csv(uploaded_file) -> pd.DataFrame | None:
     df["TransactionDate"] = pd.to_datetime(
         df["TransactionDate"],
         format="%m/%d/%y",
-        errors="coerce"
+        errors="coerce",
     )
 
-    return df
+    # --- Date range labels ---
+    start_label = end_label = None
+    valid_dates = df["TransactionDate"].dropna()
+    if not valid_dates.empty:
+        dmin = valid_dates.min()
+        dmax = valid_dates.max()
+        start_label = dmin.strftime("%b %y")  # e.g., Jan 25
+        end_label = dmax.strftime("%b %y")    # e.g., Dec 25
+
+    return df, account_last4, start_label, end_label
 
 
 # -----------------------------
@@ -150,7 +179,6 @@ def compute_report(df: pd.DataFrame):
         .reset_index()
         .rename(columns={"Amount": "Dividends ($)"})
     )
-    # add company names
     company_div_by_sym["Name"] = company_div_by_sym["Symbol"].apply(lookup_company_name)
 
     # ---- Equity Realized PnL (Closed positions only) ----
@@ -167,7 +195,6 @@ def compute_report(df: pd.DataFrame):
         .reset_index()
         .rename(columns={"Amount": "Net PnL ($)"})
     )
-    # add company names
     eq_pnl_by_sym["Name"] = eq_pnl_by_sym["Symbol"].apply(lookup_company_name)
     eq_total = float(eq_pnl_by_sym["Net PnL ($)"].sum()) if not eq_pnl_by_sym.empty else 0.0
 
@@ -186,7 +213,7 @@ def compute_report(df: pd.DataFrame):
         .reset_index()
         .rename(columns={"Amount": "Net PnL ($)"})
     )
-    # add underlying company name (based on first token)
+
     def _opt_name(sym: str) -> str:
         if not isinstance(sym, str):
             return ""
@@ -342,13 +369,11 @@ def build_pdf(report: dict) -> bytes:
         for _, row in vm_div_monthly.iterrows():
             add_table_row(pdf, str(row["Month"]), f"{row['VMFXX Dividends ($)']:,.2f}")
 
-    # Output as bytes for Streamlit
     out = pdf.output(dest="S")
     if isinstance(out, str):
         pdf_bytes = out.encode("latin-1")
     else:
         pdf_bytes = bytes(out)
-
     return pdf_bytes
 
 
@@ -358,7 +383,6 @@ def build_pdf(report: dict) -> bytes:
 def main():
     st.set_page_config(page_title="E*TRADE Earnings Report Generator", layout="wide")
 
-    # Bloomberg-style orange/dark CSS (UI only, PDF is pure black text)
     st.markdown(
         """
         <style>
@@ -410,7 +434,7 @@ def main():
     if not uploaded_file:
         return
 
-    df = load_etrade_csv(uploaded_file)
+    df, account_last4, start_label, end_label = load_etrade_csv(uploaded_file)
     if df is None:
         return
 
@@ -419,7 +443,6 @@ def main():
     # ---- Top Summary ----
     st.subheader("Summary")
 
-    # Row 1: three metrics
     c1, c2, c3 = st.columns(3)
     with c1:
         st.metric("Total Earnings ($)", f"{report['total_earnings']:,.2f}")
@@ -428,7 +451,6 @@ def main():
     with c3:
         st.metric("Options Net PnL ($)", f"{report['totals']['Options Net PnL ($)']:,.2f}")
 
-    # Row 2: three metrics (aligned under the first row)
     c4, c5, c6 = st.columns(3)
     with c4:
         st.metric("Company Dividends ($)", f"{report['totals']['Company Dividends ($)']:,.2f}")
@@ -464,10 +486,19 @@ def main():
 
     # ---- One-click PDF Download ----
     pdf_bytes = build_pdf(report)
+
+    # Build dynamic filename: "<last4> Report Pro Jan 25 - Dec 25.pdf"
+    acct_str = account_last4 or "XXXX"
+    if start_label and end_label:
+        date_range = f"{start_label} - {end_label}"
+    else:
+        date_range = "Dates"
+    file_name = f"{acct_str} Report Pro {date_range}.pdf"
+
     st.download_button(
         label="Download PDF Earnings Report",
         data=pdf_bytes,
-        file_name="etrade_earnings_report.pdf",
+        file_name=file_name,
         mime="application/pdf",
     )
 
