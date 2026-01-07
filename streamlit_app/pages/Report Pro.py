@@ -1,10 +1,10 @@
 # app.py / Report Pro.py
-# E*TRADE 2025 Earnings Analyzer + 1-Page PDF Report (Structured Layout + Company Names)
+# E*TRADE Earnings Analyzer + 1-Page PDF Report (Structured Layout + Company Names)
 #
 # PDF filename pattern:
-# "<last4> Report Pro Jan 25 - Dec 25.pdf"
+# "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 #  - last4 from "For Account:" line (top of CSV)
-#  - date range from min/max TransactionDate (month + 2-digit year)
+#  - date range from min/max TransactionDate (column A), formatted as Mon YY
 
 import io
 import re
@@ -29,7 +29,8 @@ def load_etrade_csv(uploaded_file):
     Detect the correct header row (E*TRADE has 'For Account:' above),
     return:
       df, account_last4, start_label, end_label
-    where start_label/end_label are like "Jan 25".
+    where start_label/end_label are like "Jan 25" based on the
+    min/max values in the TransactionDate column (column A).
     """
     content_bytes = uploaded_file.getvalue()
     text = content_bytes.decode("utf-8", errors="ignore")
@@ -68,21 +69,22 @@ def load_etrade_csv(uploaded_file):
     df["Commission"] = pd.to_numeric(df["Commission"], errors="coerce")
     df["Description"] = df["Description"].astype(str)
 
-    # Parse dates
+    # Parse dates from TransactionDate (column A)
     df["TransactionDate"] = pd.to_datetime(
         df["TransactionDate"],
         format="%m/%d/%y",
         errors="coerce",
     )
 
-    # --- Date range labels ---
+    # --- Date range labels based on min/max TransactionDate ---
     start_label = end_label = None
     valid_dates = df["TransactionDate"].dropna()
     if not valid_dates.empty:
         dmin = valid_dates.min()
         dmax = valid_dates.max()
-        start_label = dmin.strftime("%b %y")  # e.g., Jan 25
-        end_label = dmax.strftime("%b %y")    # e.g., Dec 25
+        # Mon YY format, e.g. Jan 25
+        start_label = dmin.strftime("%b %y")
+        end_label = dmax.strftime("%b %y")
 
     return df, account_last4, start_label, end_label
 
@@ -250,7 +252,6 @@ def compute_report(df: pd.DataFrame):
 # -----------------------------
 class EarningsPDF(FPDF):
     def header(self):
-        # Title header
         self.set_font("Times", "B", 18)
         self.set_text_color(0, 0, 0)  # black
         self.cell(0, 10, "E*TRADE Earnings Report", ln=1, align="C")
@@ -487,7 +488,7 @@ def main():
     # ---- One-click PDF Download ----
     pdf_bytes = build_pdf(report)
 
-    # Build dynamic filename: "<last4> Report Pro Jan 25 - Dec 25.pdf"
+    # Filename based on account_last4 and min/max TransactionDate (Mon YY)
     acct_str = account_last4 or "XXXX"
     if start_label and end_label:
         date_range = f"{start_label} - {end_label}"
