@@ -26,3 +26,5 @@ selenium
 webdriver-manager
 python-dateutil
 xlsxwriter
+streamlit
+fpdf2
