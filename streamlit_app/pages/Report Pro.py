@@ -6,6 +6,10 @@
 # - PDF filename: "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 # - PDF body font 10, headers 12, plus dates per line where useful
 # - Summary lines use dotted leaders: "Label .... Value"
+#
+# NOTE for correct equity PnL:
+#   Export a CSV that includes BOTH the buys and sells for a symbol.
+#   The FIFO engine will then net them properly (e.g., MFC).
 
 import io
 import re
@@ -126,12 +130,120 @@ def lookup_company_name(ticker: str) -> str:
 
 
 # -----------------------------
+# Equity FIFO Realized PnL Engine
+# -----------------------------
+def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    FIFO lot-based realized PnL for equities.
+
+    For each symbol:
+      - Walk buys and sells in date order.
+      - Maintain inventory of buy lots (qty, net cost per share).
+      - On each sell, match against inventory FIFO and book realized PnL.
+      - Uses Amount/Quantity to include commissions in net prices.
+    """
+    eq = df[
+        (df["SecurityType"] == "EQ")
+        & (df["TransactionType"].isin(["Bought", "Sold"]))
+    ].copy()
+
+    if eq.empty:
+        return pd.DataFrame(columns=["Symbol", "Net PnL ($)", "FirstBuyDate", "LastSellDate"])
+
+    eq.sort_values(["Symbol", "TransactionDate"], inplace=True)
+
+    results = {}
+    first_buy_date = {}
+    last_sell_date = {}
+
+    for sym, grp in eq.groupby("Symbol"):
+        g = grp.sort_values("TransactionDate")
+        inventory = []   # list of [remaining_qty, cost_per_share]
+        realized = 0.0
+        fb = None
+        ls = None
+
+        for _, row in g.iterrows():
+            q = row["Quantity"]
+            amt = row["Amount"]
+            dt = row["TransactionDate"]
+            ttype = row["TransactionType"]
+
+            if ttype == "Bought":
+                # Buys: Quantity positive, Amount negative (cash out)
+                if q <= 0 or amt >= 0 or q is None or amt is None:
+                    # fallback: use trade price
+                    cost_per_share = row["Price"]
+                else:
+                    cost_per_share = -amt / q  # includes commission
+                inventory.append([q, cost_per_share])
+                fb = fb or dt
+
+            elif ttype == "Sold":
+                # Sells: Quantity negative, Amount positive (cash in)
+                sell_qty = -q  # q is negative
+                if sell_qty <= 0:
+                    continue
+
+                if sell_qty != 0:
+                    sale_per_share = amt / sell_qty  # net of commission
+                else:
+                    sale_per_share = row["Price"]
+
+                remaining = sell_qty
+
+                # Match against inventory FIFO
+                while remaining > 0 and inventory:
+                    lot_qty, cps = inventory[0]
+                    take = min(lot_qty, remaining)
+                    realized += (sale_per_share - cps) * take
+                    lot_qty -= take
+                    remaining -= take
+                    if lot_qty == 0:
+                        inventory.pop(0)
+                    else:
+                        inventory[0][0] = lot_qty
+
+                # If we have a sell with no prior inventory (CSV missing earlier buys),
+                # treat the whole sale as realized using its own cash value so it isn't dropped.
+                if remaining > 0:
+                    realized += sale_per_share * remaining
+                    remaining = 0
+
+                ls = dt
+
+        if realized != 0:
+            results[sym] = realized
+            first_buy_date[sym] = fb
+            last_sell_date[sym] = ls
+
+    rows = []
+    for sym, pnl in results.items():
+        rows.append(
+            {
+                "Symbol": sym,
+                "Net PnL ($)": pnl,
+                "FirstBuyDate": first_buy_date.get(sym),
+                "LastSellDate": last_sell_date.get(sym),
+            }
+        )
+
+    res_df = pd.DataFrame(rows)
+    if not res_df.empty:
+        res_df["FirstBuyDate"] = res_df["FirstBuyDate"].dt.strftime("%m/%d/%y")
+        res_df["LastSellDate"] = res_df["LastSellDate"].dt.strftime("%m/%d/%y")
+        res_df.sort_values("Net PnL ($)", ascending=False, inplace=True)
+
+    return res_df
+
+
+# -----------------------------
 # Core Calculations (Realized Only)
 # -----------------------------
 def compute_report(df: pd.DataFrame):
     """
     Compute:
-    - Equity realized PnL (closed positions) + buy/sell dates
+    - Equity realized PnL (closed positions via FIFO) + buy/sell dates
     - Options PnL (closed positions only) + open/close dates
     - Company dividends + first/last dividend dates
     - VMFXX dividends (monthly)
@@ -167,11 +279,9 @@ def compute_report(df: pd.DataFrame):
         & (~vm_mask)
     ]
     mmf_interest_credits = mmf_interest[mmf_interest["Amount"] > 0].copy()
-    # Format-friendly date column
     mmf_interest_credits["DateStr"] = mmf_interest_credits["TransactionDate"].dt.strftime(
         "%m/%d/%y"
     )
-
     mmf_interest_total = float(mmf_interest_credits["Amount"].sum())
 
     # ---- Company Dividends (EQ only) ----
@@ -179,7 +289,6 @@ def compute_report(df: pd.DataFrame):
     company_div = div[(div["SecurityType"] == "EQ")].copy()
     company_div_total = float(company_div["Amount"].sum())
 
-    # first/last dividend dates per symbol
     div_first = (
         company_div.groupby("Symbol")["TransactionDate"]
         .min()
@@ -206,42 +315,10 @@ def compute_report(df: pd.DataFrame):
     )
     company_div_by_sym["Name"] = company_div_by_sym["Symbol"].apply(lookup_company_name)
 
-    # ---- Equity Realized PnL (Closed positions only) ----
-    sold_syms = df[df["TransactionType"] == "Sold"]["Symbol"].unique().tolist()
-    eq_trades = df[
-        (df["SecurityType"] == "EQ")
-        & (df["Symbol"].isin(sold_syms))
-        & (df["TransactionType"].isin(["Bought", "Sold"]))
-    ].copy()
-
-    eq_pnl_by_sym = (
-        eq_trades.groupby("Symbol")["Amount"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-        .rename(columns={"Amount": "Net PnL ($)"})
-    )
-
-    buys = (
-        eq_trades[eq_trades["TransactionType"] == "Bought"]
-        .groupby("Symbol")["TransactionDate"]
-        .min()
-        .dt.strftime("%m/%d/%y")
-        .rename("FirstBuyDate")
-    )
-    sells = (
-        eq_trades[eq_trades["TransactionType"] == "Sold"]
-        .groupby("Symbol")["TransactionDate"]
-        .max()
-        .dt.strftime("%m/%d/%y")
-        .rename("LastSellDate")
-    )
-
-    eq_pnl_by_sym = (
-        eq_pnl_by_sym.merge(buys, on="Symbol", how="left")
-        .merge(sells, on="Symbol", how="left")
-    )
-    eq_pnl_by_sym["Name"] = eq_pnl_by_sym["Symbol"].apply(lookup_company_name)
+    # ---- Equity Realized PnL (Closed positions via FIFO) ----
+    eq_pnl_by_sym = compute_equity_fifo(df)
+    if not eq_pnl_by_sym.empty:
+        eq_pnl_by_sym["Name"] = eq_pnl_by_sym["Symbol"].apply(lookup_company_name)
     eq_total = float(eq_pnl_by_sym["Net PnL ($)"].sum()) if not eq_pnl_by_sym.empty else 0.0
 
     # ---- Options PnL (Closed positions only) ----
@@ -288,7 +365,8 @@ def compute_report(df: pd.DataFrame):
         base = sym.split()[0]
         return lookup_company_name(base)
 
-    opt_pnl_by_sym["Name"] = opt_pnl_by_sym["Symbol"].apply(_opt_name)
+    if not opt_pnl_by_sym.empty:
+        opt_pnl_by_sym["Name"] = opt_pnl_by_sym["Symbol"].apply(_opt_name)
     opt_total = float(opt_pnl_by_sym["Net PnL ($)"].sum()) if not opt_pnl_by_sym.empty else 0.0
 
     # ---- Totals (all realized) ----
