@@ -7,12 +7,12 @@
 # - Company names (via yfinance, 18 chars)
 # - Donut-hole pies:
 #      * Category breakdown (abs amounts)
-#      * Equity PnL % by symbol (all trades)
-#      * Options PnL % by symbol (all trades)
+#      * Equity PnL % by symbol (all trades, top N + "Other")
+#      * Options PnL % by symbol (all trades, top N + "Other")
 # - Monthly bar charts:
 #      * VMFXX dividends by month
-#      * Other income (company divs + MMF interest) by month
-# - Charts in Streamlit AND in the PDF
+#      * Other income (company divs + MMF/bank interest) by month
+# - Charts in Streamlit AND in the PDF (on separate landscape pages)
 # - PDF filename: "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 # - PDF body font 10, headers 12, Times New Roman
 
@@ -486,6 +486,29 @@ def compute_report(df: pd.DataFrame):
 # -----------------------------
 # Matplotlib helpers (donut + bar)
 # -----------------------------
+def _top_n_with_other(labels, values, n=8):
+    """Return top-n labels/values, group the rest into 'Other'."""
+    values = np.array(values, dtype=float)
+    labels = np.array(labels, dtype=object)
+
+    if len(values) <= n:
+        return labels.tolist(), values.tolist()
+
+    idx = np.argsort(-np.abs(values))  # sort by abs value desc
+    top_idx = idx[:n]
+    other_idx = idx[n:]
+
+    top_labels = labels[top_idx].tolist()
+    top_values = values[top_idx].tolist()
+
+    other_val = values[other_idx].sum()
+    if other_val != 0:
+        top_labels.append("Other")
+        top_values.append(other_val)
+
+    return top_labels, top_values
+
+
 def plot_donut_with_callouts(ax, labels, values, title):
     """Donut pie with % labels and callout lines."""
     values = np.array(values, dtype=float)
@@ -551,11 +574,14 @@ def plot_monthly_barh(ax, df, amount_col, title):
 
 
 def make_donut_fig(report):
+    """
+    3 big donuts stacked vertically to fill a page cleanly.
+    """
     totals = report["totals"]
     eq = report["eq_pnl_by_sym"]
     opt = report["opt_pnl_by_sym"]
 
-    fig, axes = plt.subplots(1, 3, figsize=(9, 3))
+    fig, axes = plt.subplots(3, 1, figsize=(7, 9))
 
     # Category donut (use absolute values of totals)
     cat_labels = list(totals.keys())
@@ -570,6 +596,7 @@ def make_donut_fig(report):
     else:
         labels = eq["Symbol"].tolist()
         values = eq["AbsPnL"].tolist()
+        labels, values = _top_n_with_other(labels, values, n=8)
         plot_donut_with_callouts(axes[1], labels, values, "Equity PnL %")
 
     # Options donut (all trades, abs PnL)
@@ -580,6 +607,7 @@ def make_donut_fig(report):
     else:
         labels = opt["Symbol"].tolist()
         values = opt["AbsPnL"].tolist()
+        labels, values = _top_n_with_other(labels, values, n=8)
         plot_donut_with_callouts(axes[2], labels, values, "Options PnL %")
 
     fig.tight_layout()
@@ -590,7 +618,7 @@ def make_bar_fig(report):
     vm_monthly = report["vm_div_monthly"]
     income_monthly = report["income_monthly"]
 
-    fig, axes = plt.subplots(1, 2, figsize=(9, 3))
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
     # VMFXX monthly
     if vm_monthly is None or vm_monthly.empty:
@@ -675,7 +703,7 @@ def add_table_row(pdf: EarningsPDF, vals, widths, aligns=None):
 def build_pdf(report: dict) -> bytes:
     pdf = EarningsPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
+    pdf.add_page()  # main report page (portrait)
 
     totals = report["totals"]
     total_earnings = report["total_earnings"]
@@ -852,12 +880,9 @@ def build_pdf(report: dict) -> bytes:
             aligns = ["L", "R"]
             add_table_row(pdf, vals, widths, aligns)
 
-    # ---------- 7. Charts (new page) ----------
+    # ---------- 7. Donut Chart Page (LANDSCAPE) ----------
     donut_fig = make_donut_fig(report)
-    bar_fig = make_bar_fig(report)
-
-    # Donut page
-    pdf.add_page()
+    pdf.add_page(orientation="L")
     pdf.set_font("Times", "B", 12)
     pdf.cell(0, 7, "7. Donut Charts (Category & Trade % Breakdown)", ln=1)
     pdf.ln(2)
@@ -865,10 +890,12 @@ def build_pdf(report: dict) -> bytes:
     donut_fig.savefig(buf1, format="png", dpi=150, bbox_inches="tight")
     plt.close(donut_fig)
     buf1.seek(0)
+    # full-width image on landscape page
     pdf.image(buf1, x=pdf.l_margin, y=None, w=pdf.w - pdf.l_margin - pdf.r_margin)
 
-    # Bar page
-    pdf.add_page()
+    # ---------- 8. Bar Chart Page (LANDSCAPE) ----------
+    bar_fig = make_bar_fig(report)
+    pdf.add_page(orientation="L")
     pdf.set_font("Times", "B", 12)
     pdf.cell(0, 7, "8. Monthly Income Bar Charts", ln=1)
     pdf.ln(2)
