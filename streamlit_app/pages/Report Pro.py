@@ -1,21 +1,26 @@
 # app.py / Report Pro.py
-# E*TRADE Earnings Analyzer + 1-Page PDF Report
+# E*TRADE Earnings Analyzer + PDF Report with Donut Charts
 # - Realized PnL only (equity + options)
 # - Dividends (equities), VMFXX, other MMF/bank interest
 # - Company names (via yfinance, 18 chars)
 # - % contribution per item within each category
+# - Donut hole pie charts (no bar charts) in Streamlit + PDF
 # - PDF filename: "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 # - PDF body font 10, headers 12, plus dates per line where useful
 # - Summary lines use dotted leaders: "Label .... Value"
 
 import io
+import os
 import re
+import tempfile
 from datetime import datetime
 from functools import lru_cache
 
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
+import matplotlib.pyplot as plt
+import plotly.express as px
 
 try:
     import yfinance as yf
@@ -39,7 +44,7 @@ def load_etrade_csv(uploaded_file):
     lines = text.splitlines()
 
     # --- Find header row ---
-    header_idx = None
+    header_idx = None    # IMPORTANT: header_idx is used after the loop
     for i, line in enumerate(lines):
         if line.startswith("TransactionDate,TransactionType"):
             header_idx = i
@@ -204,8 +209,7 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
                     else:
                         inventory[0][0] = lot_qty
 
-                # If there is remaining > 0 and no inventory, we just ignore it
-                # (no artificial PnL). Only matched shares count.
+                # If there is remaining > 0 and no inventory, ignore (no fake PnL).
                 ls = dt
 
         # Only keep symbols where we actually had both a buy and a sell
@@ -376,7 +380,7 @@ def compute_report(df: pd.DataFrame):
     }
     total_earnings = round(sum(totals.values()), 2)
 
-    # ---- % contribution columns ----
+    # ---- % contribution columns (for tables + donut charts) ----
     if eq_total != 0 and not eq_pnl_by_sym.empty:
         eq_pnl_by_sym["Pct of Equity PnL (%)"] = (
             eq_pnl_by_sym["Net PnL ($)"] / eq_total * 100.0
@@ -482,6 +486,57 @@ def add_table_row(pdf: EarningsPDF, vals, widths, aligns=None):
     for val, w, a in zip(vals, widths, aligns):
         pdf.cell(w, 5, val, border=0, align=a)
     pdf.ln(5)
+
+
+def add_donut_chart_to_pdf(pdf: EarningsPDF, labels, percentages, title: str):
+    """
+    Create a colorful donut chart (using % values) and embed it into the PDF.
+    Negative/zero percentages are dropped for the chart.
+    """
+    if not labels or not percentages:
+        return
+
+    data = [(l, p) for l, p in zip(labels, percentages) if p > 0]
+    if not data:
+        return
+
+    labels, percentages = zip(*data)
+
+    fig, ax = plt.subplots(figsize=(3, 3), dpi=150)
+    wedges, texts, autotexts = ax.pie(
+        percentages,
+        labels=None,
+        autopct="%1.1f%%",
+        pctdistance=0.75,
+        startangle=90,
+        wedgeprops=dict(width=0.35, edgecolor="white"),
+    )
+    ax.set(aspect="equal")
+    ax.set_title(title, fontsize=8)
+    ax.legend(
+        wedges,
+        labels,
+        title="Legend",
+        loc="center left",
+        bbox_to_anchor=(1, 0, 0.5, 1),
+        fontsize=6,
+    )
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    tmp.write(buf.getvalue())
+    tmp.close()
+
+    # Insert image; width ~80mm to fit nicely
+    pdf.image(tmp.name, w=80)
+    pdf.ln(4)
+
+    os.unlink(tmp.name)
 
 
 def build_pdf(report: dict) -> bytes:
@@ -674,6 +729,47 @@ def build_pdf(report: dict) -> bytes:
             aligns = ["L", "R", "R"]
             add_table_row(pdf, vals, widths, aligns)
 
+    # ---------- 7. Donut Charts ----------
+    pdf.add_page()
+    pdf.set_font("Times", "B", 12)
+    pdf.cell(0, 7, "7. Donut Charts (Category % Breakdown)", ln=1)
+    pdf.ln(2)
+
+    # Overall category donut (using |Amount| so it doesn't blow up on negatives)
+    cat_labels = list(totals.keys())
+    cat_vals = [abs(v) for v in totals.values()]
+    add_donut_chart_to_pdf(pdf, cat_labels, cat_vals, "Categories (Abs Amount Share)")
+
+    # Equity donut
+    if not eq_pnl_by_sym.empty:
+        labels = eq_pnl_by_sym["Symbol"].tolist()
+        pct = eq_pnl_by_sym["Pct of Equity PnL (%)"].clip(lower=0).tolist()
+        add_donut_chart_to_pdf(pdf, labels, pct, "Equity PnL % (Winners Only)")
+
+    # Options donut
+    if not opt_pnl_by_sym.empty:
+        labels = opt_pnl_by_sym["Symbol"].tolist()
+        pct = opt_pnl_by_sym["Pct of Options PnL (%)"].clip(lower=0).tolist()
+        add_donut_chart_to_pdf(pdf, labels, pct, "Options PnL % (Winners Only)")
+
+    # Dividends donut
+    if not company_div_by_sym.empty:
+        labels = company_div_by_sym["Symbol"].tolist()
+        pct = company_div_by_sym["Pct of Dividends (%)"].clip(lower=0).tolist()
+        add_donut_chart_to_pdf(pdf, labels, pct, "Company Dividends %")
+
+    # VMFXX donut
+    if not vm_div_monthly.empty:
+        labels = vm_div_monthly["Month"].tolist()
+        pct = vm_div_monthly["Pct of VMFXX Divs (%)"].clip(lower=0).tolist()
+        add_donut_chart_to_pdf(pdf, labels, pct, "VMFXX Monthly Divs %")
+
+    # MMF interest donut
+    if not mmf_interest_credits.empty:
+        labels = mmf_interest_credits["DateStr"].tolist()
+        pct = mmf_interest_credits["Pct of MMF Int (%)"].clip(lower=0).tolist()
+        add_donut_chart_to_pdf(pdf, labels, pct, "MMF / Bank Interest % by Date")
+
     out = pdf.output(dest="S")
     if isinstance(out, str):
         pdf_bytes = out.encode("latin-1")
@@ -683,7 +779,32 @@ def build_pdf(report: dict) -> bytes:
 
 
 # -----------------------------
-# Streamlit UI (Bloomberg Orange + charts)
+# Streamlit donut chart helper
+# -----------------------------
+def donut_chart(df: pd.DataFrame, names_col: str, values_col: str, title: str):
+    """
+    Streamlit donut (hole) pie chart using Plotly.
+    Drops non-positive values.
+    """
+    if df is None or df.empty or names_col not in df or values_col not in df:
+        return
+    data = df[df[values_col] > 0].copy()
+    if data.empty:
+        return
+
+    fig = px.pie(
+        data,
+        names=names_col,
+        values=values_col,
+        hole=0.5,
+        title=title,
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# -----------------------------
+# Streamlit UI (Bloomberg Orange + donut charts)
 # -----------------------------
 def main():
     st.set_page_config(page_title="E*TRADE Earnings Report Generator", layout="wide")
@@ -767,15 +888,16 @@ def main():
             f"{report['totals']['Other MMF/Bank Interest ($)']:,.2f}",
         )
 
-    # Category breakdown chart
-    st.markdown("### Category Breakdown")
+    # Category donut (using absolute amounts)
+    st.markdown("### Category Donut (Abs Amount Share)")
     cat_df = pd.DataFrame(
         {
             "Category": list(report["totals"].keys()),
             "Amount": list(report["totals"].values()),
         }
     )
-    st.bar_chart(cat_df.set_index("Category"))
+    cat_df["AbsAmount"] = cat_df["Amount"].abs()
+    donut_chart(cat_df, "Category", "AbsAmount", "Categories (Abs Amount Share)")
 
     st.markdown("---")
 
@@ -785,34 +907,45 @@ def main():
     # Equity
     with st.expander("Equity Realized PnL (Closed Positions)", expanded=True):
         st.dataframe(report["eq_pnl_by_sym"], use_container_width=True)
-        if not report["eq_pnl_by_sym"].empty:
-            st.markdown("**Equity PnL by Symbol**")
-            eq_chart_df = report["eq_pnl_by_sym"].set_index("Symbol")[["Net PnL ($)"]]
-            st.bar_chart(eq_chart_df)
+        eq_df = report["eq_pnl_by_sym"]
+        if not eq_df.empty:
+            eq_pos = eq_df[eq_df["Pct of Equity PnL (%)"] > 0].copy()
+            if not eq_pos.empty:
+                eq_pos["Label"] = eq_pos["Symbol"]
+                st.markdown("**Equity PnL Donut (Winners Only)**")
+                donut_chart(eq_pos, "Label", "Pct of Equity PnL (%)", "Equity PnL % (Winners Only)")
 
     # Options
     with st.expander("Options PnL (Closed Positions Only)", expanded=False):
         st.dataframe(report["opt_pnl_by_sym"], use_container_width=True)
-        if not report["opt_pnl_by_sym"].empty:
-            st.markdown("**Options PnL by Contract**")
-            opt_chart_df = report["opt_pnl_by_sym"].set_index("Symbol")[["Net PnL ($)"]]
-            st.bar_chart(opt_chart_df)
+        opt_df = report["opt_pnl_by_sym"]
+        if not opt_df.empty:
+            opt_pos = opt_df[opt_df["Pct of Options PnL (%)"] > 0].copy()
+            if not opt_pos.empty:
+                opt_pos["Label"] = opt_pos["Symbol"]
+                st.markdown("**Options PnL Donut (Winners Only)**")
+                donut_chart(opt_pos, "Label", "Pct of Options PnL (%)", "Options PnL % (Winners Only)")
 
     # Dividends
     with st.expander("Company Dividends by Symbol", expanded=False):
         st.dataframe(report["company_div_by_sym"], use_container_width=True)
-        if not report["company_div_by_sym"].empty:
-            st.markdown("**Dividend Income by Symbol**")
-            div_chart_df = report["company_div_by_sym"].set_index("Symbol")[["Dividends ($)"]]
-            st.bar_chart(div_chart_df)
+        div_df = report["company_div_by_sym"]
+        if not div_df.empty:
+            div_pos = div_df[div_df["Pct of Dividends (%)"] > 0].copy()
+            if not div_pos.empty:
+                div_pos["Label"] = div_pos["Symbol"]
+                st.markdown("**Company Dividends Donut**")
+                donut_chart(div_pos, "Label", "Pct of Dividends (%)", "Company Dividends %")
 
     # VMFXX
     with st.expander("VMFXX Monthly Dividend Breakdown", expanded=False):
         st.dataframe(report["vm_div_monthly"], use_container_width=True)
-        if not report["vm_div_monthly"].empty:
-            st.markdown("**VMFXX Dividends by Month**")
-            vm_chart_df = report["vm_div_monthly"].set_index("Month")[["VMFXX Dividends ($)"]]
-            st.bar_chart(vm_chart_df)
+        vm_df = report["vm_div_monthly"]
+        if not vm_df.empty:
+            vm_pos = vm_df[vm_df["Pct of VMFXX Divs (%)"] > 0].copy()
+            if not vm_pos.empty:
+                st.markdown("**VMFXX Monthly Dividends Donut**")
+                donut_chart(vm_pos, "Month", "Pct of VMFXX Divs (%)", "VMFXX Monthly Divs %")
 
     with st.expander("Raw VMFXX Dividend Rows", expanded=False):
         st.dataframe(report["vm_div_credits"], use_container_width=True)
@@ -820,16 +953,12 @@ def main():
     # MMF interest
     with st.expander("Other MMF / Bank Interest Rows", expanded=False):
         st.dataframe(report["mmf_interest_credits"], use_container_width=True)
-        if not report["mmf_interest_credits"].empty:
-            st.markdown("**Other MMF / Bank Interest by Date**")
-            mmf_chart_df = (
-                report["mmf_interest_credits"][["DateStr", "Amount"]]
-                .groupby("DateStr")["Amount"]
-                .sum()
-                .reset_index()
-                .set_index("DateStr")
-            )
-            st.bar_chart(mmf_chart_df)
+        mmf_df = report["mmf_interest_credits"]
+        if not mmf_df.empty:
+            mmf_pos = mmf_df[mmf_df["Pct of MMF Int (%)"] > 0].copy()
+            if not mmf_pos.empty:
+                st.markdown("**MMF / Bank Interest Donut**")
+                donut_chart(mmf_pos, "DateStr", "Pct of MMF Int (%)", "MMF / Bank Interest % by Date")
 
     st.markdown("---")
 
