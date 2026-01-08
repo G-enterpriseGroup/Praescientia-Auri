@@ -3,6 +3,7 @@
 # - Realized PnL only (equity + options)
 # - Dividends (equities), VMFXX, other MMF/bank interest
 # - Company names (via yfinance, 18 chars)
+# - % contribution per item within each category
 # - PDF filename: "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 # - PDF body font 10, headers 12, plus dates per line where useful
 # - Summary lines use dotted leaders: "Label .... Value"
@@ -138,7 +139,7 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
       - On each sell, match against inventory FIFO and book realized PnL.
       - Uses Amount/Quantity to include commissions in net prices.
       - ONLY realized for shares that have both a buy and a sell
-        (no fake PnL on unmatched sells).
+        (no PnL on unmatched sells).
     """
     eq = df[
         (df["SecurityType"] == "EQ")
@@ -203,8 +204,8 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
                     else:
                         inventory[0][0] = lot_qty
 
-                # IMPORTANT: if remaining > 0 here (sell with no prior inventory),
-                # we DO NOT book extra PnL. Only matched shares (with buys) count.
+                # If there is remaining > 0 and no inventory, we just ignore it
+                # (no artificial PnL). Only matched shares count.
                 ls = dt
 
         # Only keep symbols where we actually had both a buy and a sell
@@ -375,6 +376,42 @@ def compute_report(df: pd.DataFrame):
     }
     total_earnings = round(sum(totals.values()), 2)
 
+    # ---- % contribution columns ----
+    if eq_total != 0 and not eq_pnl_by_sym.empty:
+        eq_pnl_by_sym["Pct of Equity PnL (%)"] = (
+            eq_pnl_by_sym["Net PnL ($)"] / eq_total * 100.0
+        )
+    else:
+        eq_pnl_by_sym["Pct of Equity PnL (%)"] = 0.0
+
+    if opt_total != 0 and not opt_pnl_by_sym.empty:
+        opt_pnl_by_sym["Pct of Options PnL (%)"] = (
+            opt_pnl_by_sym["Net PnL ($)"] / opt_total * 100.0
+        )
+    else:
+        opt_pnl_by_sym["Pct of Options PnL (%)"] = 0.0
+
+    if company_div_total != 0 and not company_div_by_sym.empty:
+        company_div_by_sym["Pct of Dividends (%)"] = (
+            company_div_by_sym["Dividends ($)"] / company_div_total * 100.0
+        )
+    else:
+        company_div_by_sym["Pct of Dividends (%)"] = 0.0
+
+    if vm_div_total != 0 and not vm_div_monthly.empty:
+        vm_div_monthly["Pct of VMFXX Divs (%)"] = (
+            vm_div_monthly["VMFXX Dividends ($)"] / vm_div_total * 100.0
+        )
+    else:
+        vm_div_monthly["Pct of VMFXX Divs (%)"] = 0.0
+
+    if mmf_interest_total != 0 and not mmf_interest_credits.empty:
+        mmf_interest_credits["Pct of MMF Int (%)"] = (
+            mmf_interest_credits["Amount"] / mmf_interest_total * 100.0
+        )
+    else:
+        mmf_interest_credits["Pct of MMF Int (%)"] = 0.0
+
     return {
         "totals": totals,
         "total_earnings": total_earnings,
@@ -480,8 +517,8 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 10)
         pdf.cell(0, 5, "No closed equity positions.", ln=1)
     else:
-        cols = ["Symbol / Name", "Buy - Sell Dates", "Net PnL ($)"]
-        widths = [85, 60, 35]
+        cols = ["Symbol / Name", "Buy - Sell Dates", "Net PnL ($)", "% of Eq PnL"]
+        widths = [70, 55, 30, 25]
         add_table_header(pdf, cols, widths)
         for _, row in eq_pnl_by_sym.iterrows():
             name = row.get("Name", "") or ""
@@ -498,12 +535,14 @@ def build_pdf(report: dict) -> bytes:
                 date_range = f"- {ls}"
             else:
                 date_range = ""
+            pct = row.get("Pct of Equity PnL (%)", 0.0)
             vals = [
                 label,
                 date_range,
                 f"{row['Net PnL ($)']:,.2f}",
+                f"{pct:,.1f}%",
             ]
-            aligns = ["L", "L", "R"]
+            aligns = ["L", "L", "R", "R"]
             add_table_row(pdf, vals, widths, aligns)
 
     pdf.ln(2)
@@ -517,8 +556,8 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 10)
         pdf.cell(0, 5, "No closed option positions.", ln=1)
     else:
-        cols = ["Contract / Underlying", "Open - Close Dates", "Net PnL ($)"]
-        widths = [85, 60, 35]
+        cols = ["Contract / Underlying", "Open - Close Dates", "Net PnL ($)", "% of Opt PnL"]
+        widths = [70, 55, 30, 25]
         add_table_header(pdf, cols, widths)
         for _, row in opt_pnl_by_sym.iterrows():
             name = row.get("Name", "") or ""
@@ -535,12 +574,14 @@ def build_pdf(report: dict) -> bytes:
                 dr = f"- {cd}"
             else:
                 dr = ""
+            pct = row.get("Pct of Options PnL (%)", 0.0)
             vals = [
                 label,
                 dr,
                 f"{row['Net PnL ($)']:,.2f}",
+                f"{pct:,.1f}%",
             ]
-            aligns = ["L", "L", "R"]
+            aligns = ["L", "L", "R", "R"]
             add_table_row(pdf, vals, widths, aligns)
 
     pdf.ln(2)
@@ -554,8 +595,8 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 10)
         pdf.cell(0, 5, "No equity dividends.", ln=1)
     else:
-        cols = ["Symbol / Name", "Div Date Range", "Dividends ($)"]
-        widths = [85, 60, 35]
+        cols = ["Symbol / Name", "Div Date Range", "Dividends ($)", "% of Divs"]
+        widths = [70, 55, 30, 25]
         add_table_header(pdf, cols, widths)
         for _, row in company_div_by_sym.iterrows():
             name = row.get("Name", "") or ""
@@ -572,12 +613,14 @@ def build_pdf(report: dict) -> bytes:
                 dr = f"- {lr}"
             else:
                 dr = ""
+            pct = row.get("Pct of Dividends (%)", 0.0)
             vals = [
                 label,
                 dr,
                 f"{row['Dividends ($)']:,.2f}",
+                f"{pct:,.1f}%",
             ]
-            aligns = ["L", "L", "R"]
+            aligns = ["L", "L", "R", "R"]
             add_table_row(pdf, vals, widths, aligns)
 
     pdf.ln(2)
@@ -591,15 +634,17 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 10)
         pdf.cell(0, 5, "No VMFXX dividend payments.", ln=1)
     else:
-        cols = ["Month", "VMFXX Dividends ($)"]
-        widths = [110, 35]
+        cols = ["Month", "VMFXX Dividends ($)", "% of VMFXX"]
+        widths = [90, 35, 25]
         add_table_header(pdf, cols, widths)
         for _, row in vm_div_monthly.iterrows():
+            pct = row.get("Pct of VMFXX Divs (%)", 0.0)
             vals = [
                 str(row["Month"]),
                 f"{row['VMFXX Dividends ($)']:,.2f}",
+                f"{pct:,.1f}%",
             ]
-            aligns = ["L", "R"]
+            aligns = ["L", "R", "R"]
             add_table_row(pdf, vals, widths, aligns)
 
     pdf.ln(2)
@@ -613,18 +658,20 @@ def build_pdf(report: dict) -> bytes:
         pdf.set_font("Times", "", 10)
         pdf.cell(0, 5, "No additional MMF/bank interest.", ln=1)
     else:
-        cols = ["Date / Description", "Amount ($)"]
-        widths = [110, 35]
+        cols = ["Date / Description", "Amount ($)", "% of MMF Int"]
+        widths = [95, 30, 25]
         add_table_header(pdf, cols, widths)
         for _, row in mmf_interest_credits.iterrows():
             date_str = row.get("DateStr") or ""
             desc = row.get("Description") or ""
             left = f"{date_str}  {desc}"
+            pct = row.get("Pct of MMF Int (%)", 0.0)
             vals = [
-                left[:80],
+                left[:70],
                 f"{row['Amount']:,.2f}",
+                f"{pct:,.1f}%",
             ]
-            aligns = ["L", "R"]
+            aligns = ["L", "R", "R"]
             add_table_row(pdf, vals, widths, aligns)
 
     out = pdf.output(dest="S")
@@ -636,7 +683,7 @@ def build_pdf(report: dict) -> bytes:
 
 
 # -----------------------------
-# Streamlit UI (Bloomberg Orange)
+# Streamlit UI (Bloomberg Orange + charts)
 # -----------------------------
 def main():
     st.set_page_config(page_title="E*TRADE Earnings Report Generator", layout="wide")
@@ -715,30 +762,74 @@ def main():
     with c5:
         st.metric("VMFXX Dividends ($)", f"{report['totals']['VMFXX Dividends ($)']:,.2f}")
     with c6:
-        st.metric("Other MMF/Bank Interest ($)", f"{report['totals']['Other MMF/Bank Interest ($)']:,.2f}")
+        st.metric(
+            "Other MMF/Bank Interest ($)",
+            f"{report['totals']['Other MMF/Bank Interest ($)']:,.2f}",
+        )
+
+    # Category breakdown chart
+    st.markdown("### Category Breakdown")
+    cat_df = pd.DataFrame(
+        {
+            "Category": list(report["totals"].keys()),
+            "Amount": list(report["totals"].values()),
+        }
+    )
+    st.bar_chart(cat_df.set_index("Category"))
 
     st.markdown("---")
 
     # ---- Detailed Tables (optional drill-down) ----
     st.subheader("Details")
 
+    # Equity
     with st.expander("Equity Realized PnL (Closed Positions)", expanded=True):
         st.dataframe(report["eq_pnl_by_sym"], use_container_width=True)
+        if not report["eq_pnl_by_sym"].empty:
+            st.markdown("**Equity PnL by Symbol**")
+            eq_chart_df = report["eq_pnl_by_sym"].set_index("Symbol")[["Net PnL ($)"]]
+            st.bar_chart(eq_chart_df)
 
+    # Options
     with st.expander("Options PnL (Closed Positions Only)", expanded=False):
         st.dataframe(report["opt_pnl_by_sym"], use_container_width=True)
+        if not report["opt_pnl_by_sym"].empty:
+            st.markdown("**Options PnL by Contract**")
+            opt_chart_df = report["opt_pnl_by_sym"].set_index("Symbol")[["Net PnL ($)"]]
+            st.bar_chart(opt_chart_df)
 
+    # Dividends
     with st.expander("Company Dividends by Symbol", expanded=False):
         st.dataframe(report["company_div_by_sym"], use_container_width=True)
+        if not report["company_div_by_sym"].empty:
+            st.markdown("**Dividend Income by Symbol**")
+            div_chart_df = report["company_div_by_sym"].set_index("Symbol")[["Dividends ($)"]]
+            st.bar_chart(div_chart_df)
 
+    # VMFXX
     with st.expander("VMFXX Monthly Dividend Breakdown", expanded=False):
         st.dataframe(report["vm_div_monthly"], use_container_width=True)
+        if not report["vm_div_monthly"].empty:
+            st.markdown("**VMFXX Dividends by Month**")
+            vm_chart_df = report["vm_div_monthly"].set_index("Month")[["VMFXX Dividends ($)"]]
+            st.bar_chart(vm_chart_df)
 
     with st.expander("Raw VMFXX Dividend Rows", expanded=False):
         st.dataframe(report["vm_div_credits"], use_container_width=True)
 
+    # MMF interest
     with st.expander("Other MMF / Bank Interest Rows", expanded=False):
         st.dataframe(report["mmf_interest_credits"], use_container_width=True)
+        if not report["mmf_interest_credits"].empty:
+            st.markdown("**Other MMF / Bank Interest by Date**")
+            mmf_chart_df = (
+                report["mmf_interest_credits"][["DateStr", "Amount"]]
+                .groupby("DateStr")["Amount"]
+                .sum()
+                .reset_index()
+                .set_index("DateStr")
+            )
+            st.bar_chart(mmf_chart_df)
 
     st.markdown("---")
 
