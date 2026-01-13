@@ -7,11 +7,14 @@
 # - PDF filename: "<last4> Report Pro <MinMon YY> - <MaxMon YY>.pdf"
 # - PDF body font 10, headers 12, plus dates per line where useful
 # - Summary lines use dotted leaders: "Label .... Value"
+# + OPTION A: PDF preview + robust layout controls (column widths, alignments, font sizes, section order)
 
 import io
 import re
+import hashlib
 from datetime import datetime
 from functools import lru_cache
+from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -21,6 +24,13 @@ try:
     import yfinance as yf
 except ImportError:
     yf = None
+
+# Optional: PDF preview renderer (recommended)
+# pip install pymupdf
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
 
 
 # -----------------------------
@@ -204,8 +214,7 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
                     else:
                         inventory[0][0] = lot_qty
 
-                # If there is remaining > 0 and no inventory, we just ignore it
-                # (no artificial PnL). Only matched shares count.
+                # If there is remaining > 0 and no inventory, ignore it (no artificial PnL)
                 ls = dt
 
         # Only keep symbols where we actually had both a buy and a sell
@@ -425,24 +434,63 @@ def compute_report(df: pd.DataFrame):
 
 
 # -----------------------------
-# PDF Builder (Times New Roman, 10pt body, 12pt headers)
+# Layout + PDF Helpers
 # -----------------------------
-class EarningsPDF(FPDF):
-    def header(self):
-        # Title
-        self.set_font("Times", "B", 14)
-        self.set_text_color(0, 0, 0)
-        self.cell(0, 8, "E*TRADE Earnings Report", ln=1, align="C")
-        self.set_font("Times", "", 8)
-        self.cell(0, 4, datetime.now().strftime("Generated on %Y-%m-%d %H:%M"), ln=1, align="C")
-        self.ln(3)
+def _safe_align(a: str) -> str:
+    a = (a or "").upper().strip()
+    return a if a in {"L", "C", "R"} else "L"
 
 
-def add_key_value(pdf: EarningsPDF, label: str, value: str):
+def _fit_widths_to_page(
+    pdf: FPDF, widths: List[float], min_w: float = 6.0
+) -> List[float]:
+    """
+    Ensures widths fit the available PDF width.
+    If sum(widths) != usable, scale proportionally and enforce a minimum width.
+    """
+    usable = pdf.w - pdf.l_margin - pdf.r_margin
+    widths = [float(w) for w in widths]
+    s = sum(widths) if widths else 0.0
+    if s <= 0:
+        # fallback equal widths
+        n = max(1, len(widths))
+        return [usable / n] * n
+
+    # proportional scale to usable
+    scale = usable / s
+    scaled = [max(min_w, w * scale) for w in widths]
+
+    # if min widths push beyond usable, compress while respecting min_w as best-effort
+    s2 = sum(scaled)
+    if s2 > usable and len(scaled) > 0:
+        # reduce from columns above min_w
+        over = s2 - usable
+        adjustable = [i for i, w in enumerate(scaled) if w > min_w]
+        if adjustable:
+            while over > 1e-6 and adjustable:
+                per = over / len(adjustable)
+                new_adjustable = []
+                for i in adjustable:
+                    take = min(per, scaled[i] - min_w)
+                    scaled[i] -= take
+                    over -= take
+                    if scaled[i] > min_w + 1e-6:
+                        new_adjustable.append(i)
+                adjustable = new_adjustable
+        # last resort: normalize exactly (tiny drift)
+        s3 = sum(scaled)
+        if s3 > 0:
+            drift = s3 - usable
+            scaled[-1] = max(min_w, scaled[-1] - drift)
+
+    return scaled
+
+
+def add_key_value(pdf: FPDF, label: str, value: str, body_font: int):
     """
     Print 'Label ..... Value' with dotted leader across the available width.
     """
-    pdf.set_font("Times", "", 10)
+    pdf.set_font("Times", "", body_font)
     pdf.set_text_color(0, 0, 0)
 
     usable = pdf.w - pdf.l_margin - pdf.r_margin
@@ -466,28 +514,62 @@ def add_key_value(pdf: EarningsPDF, label: str, value: str):
     pdf.cell(usable, 5, line, 0, 1, "L")
 
 
-def add_table_header(pdf: EarningsPDF, cols, widths):
-    pdf.set_font("Times", "B", 10)
+def add_table_header(pdf: FPDF, cols: List[str], widths: List[float], header_font: int):
+    pdf.set_font("Times", "B", header_font)
     pdf.set_text_color(0, 0, 0)
     for col, w in zip(cols, widths):
         pdf.cell(w, 6, col, border="B", align="L")
     pdf.ln(6)
 
 
-def add_table_row(pdf: EarningsPDF, vals, widths, aligns=None):
-    pdf.set_font("Times", "", 10)
+def add_table_row(
+    pdf: FPDF,
+    vals: List[str],
+    widths: List[float],
+    aligns: List[str],
+    body_font: int,
+    row_h: float = 5.0,
+):
+    pdf.set_font("Times", "", body_font)
     pdf.set_text_color(0, 0, 0)
-    if aligns is None:
-        aligns = ["L"] * len(vals)
+    aligns = [_safe_align(a) for a in (aligns or ["L"] * len(vals))]
     for val, w, a in zip(vals, widths, aligns):
-        pdf.cell(w, 5, val, border=0, align=a)
-    pdf.ln(5)
+        # hard-trim long strings so they don't overflow; keeps layout stable
+        s = "" if val is None else str(val)
+        pdf.cell(w, row_h, s, border=0, align=a)
+    pdf.ln(row_h)
 
 
-def build_pdf(report: dict) -> bytes:
+# -----------------------------
+# PDF Builder (layout-controlled)
+# -----------------------------
+class EarningsPDF(FPDF):
+    def header(self):
+        # Title is controlled in build_pdf (we still keep a basic header here)
+        pass
+
+
+def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
     pdf = EarningsPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
+
+    # Layout basics
+    title_font = int(layout.get("title_font", 14))
+    sub_font = int(layout.get("sub_font", 8))
+    section_font = int(layout.get("section_font", 12))
+    header_font = int(layout.get("header_font", 10))
+    body_font = int(layout.get("body_font", 10))
+    row_h = float(layout.get("row_height", 5.0))
+    section_gap = float(layout.get("section_gap", 2.0))
+
+    # ----- PDF top header -----
+    pdf.set_font("Times", "B", title_font)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, "E*TRADE Earnings Report", ln=1, align="C")
+    pdf.set_font("Times", "", sub_font)
+    pdf.cell(0, 4, datetime.now().strftime("Generated on %Y-%m-%d %H:%M"), ln=1, align="C")
+    pdf.ln(3)
 
     totals = report["totals"]
     total_earnings = report["total_earnings"]
@@ -497,245 +579,461 @@ def build_pdf(report: dict) -> bytes:
     vm_div_monthly = report["vm_div_monthly"]
     mmf_interest_credits = report["mmf_interest_credits"]
 
-    # ---------- 1. Summary ----------
-    pdf.set_font("Times", "B", 12)
-    pdf.cell(0, 7, "1. Summary", ln=1)
-    pdf.ln(1)
+    # Section definitions (data + rendering config)
+    sections = {
+        "Summary": {},
+        "Equity Realized PnL": {},
+        "Options PnL": {},
+        "Company Dividends": {},
+        "VMFXX Monthly Dividends": {},
+        "Other MMF / Bank Interest": {},
+    }
 
-    add_key_value(pdf, "Total Earnings ($)", f"{total_earnings:,.2f}")
-    for k, v in totals.items():
-        add_key_value(pdf, k, f"{v:,.2f}")
+    order = layout.get("section_order") or list(sections.keys())
+    order = [s for s in order if s in sections]
 
-    pdf.ln(2)
+    # -------- Render each section in chosen order --------
+    for idx, sec in enumerate(order, start=1):
+        pdf.set_font("Times", "B", section_font)
+        pdf.cell(0, 7, f"{idx}. {sec}", ln=1)
+        pdf.ln(1)
 
-    # ---------- 2. Equity Realized PnL ----------
-    pdf.set_font("Times", "B", 12)
-    pdf.cell(0, 7, "2. Equity Realized PnL (Closed Positions)", ln=1)
-    pdf.ln(1)
+        if sec == "Summary":
+            add_key_value(pdf, "Total Earnings ($)", f"{total_earnings:,.2f}", body_font)
+            for k, v in totals.items():
+                add_key_value(pdf, k, f"{v:,.2f}", body_font)
+            pdf.ln(section_gap)
+            continue
 
-    if eq_pnl_by_sym.empty:
-        pdf.set_font("Times", "", 10)
-        pdf.cell(0, 5, "No closed equity positions.", ln=1)
-    else:
-        cols = ["Symbol / Name", "Buy - Sell Dates", "Net PnL ($)", "% of Eq PnL"]
-        widths = [70, 55, 30, 25]
-        add_table_header(pdf, cols, widths)
-        for _, row in eq_pnl_by_sym.iterrows():
-            name = row.get("Name", "") or ""
-            label = str(row["Symbol"])
-            if name:
-                label = f"{label}  {name}"
-            fb = row.get("FirstBuyDate")
-            ls = row.get("LastSellDate")
-            if pd.notna(fb) and pd.notna(ls):
-                date_range = f"{fb} - {ls}"
-            elif pd.notna(fb):
-                date_range = f"{fb} -"
-            elif pd.notna(ls):
-                date_range = f"- {ls}"
-            else:
-                date_range = ""
-            pct = row.get("Pct of Equity PnL (%)", 0.0)
-            vals = [
-                label,
-                date_range,
-                f"{row['Net PnL ($)']:,.2f}",
-                f"{pct:,.1f}%",
-            ]
-            aligns = ["L", "L", "R", "R"]
-            add_table_row(pdf, vals, widths, aligns)
+        if sec == "Equity Realized PnL":
+            if eq_pnl_by_sym.empty:
+                pdf.set_font("Times", "", body_font)
+                pdf.cell(0, 5, "No closed equity positions.", ln=1)
+                pdf.ln(section_gap)
+                continue
 
-    pdf.ln(2)
+            cols = ["Symbol / Name", "Buy - Sell Dates", "Net PnL ($)", "% of Eq PnL"]
+            default_widths = [70, 55, 30, 25]
+            default_aligns = ["L", "L", "R", "R"]
 
-    # ---------- 3. Options PnL ----------
-    pdf.set_font("Times", "B", 12)
-    pdf.cell(0, 7, "3. Options PnL (Closed Positions Only)", ln=1)
-    pdf.ln(1)
+            cfg = layout.get("tables", {}).get("equity", {})
+            widths = cfg.get("widths", default_widths)
+            aligns = cfg.get("aligns", default_aligns)
+            widths = _fit_widths_to_page(pdf, widths)
 
-    if opt_pnl_by_sym.empty:
-        pdf.set_font("Times", "", 10)
-        pdf.cell(0, 5, "No closed option positions.", ln=1)
-    else:
-        cols = ["Contract / Underlying", "Open - Close Dates", "Net PnL ($)", "% of Opt PnL"]
-        widths = [70, 55, 30, 25]
-        add_table_header(pdf, cols, widths)
-        for _, row in opt_pnl_by_sym.iterrows():
-            name = row.get("Name", "") or ""
-            label = str(row["Symbol"])
-            if name:
-                label = f"{label}  {name}"
-            od = row.get("OpenDate")
-            cd = row.get("CloseDate")
-            if pd.notna(od) and pd.notna(cd):
-                dr = f"{od} - {cd}"
-            elif pd.notna(od):
-                dr = f"{od} -"
-            elif pd.notna(cd):
-                dr = f"- {cd}"
-            else:
-                dr = ""
-            pct = row.get("Pct of Options PnL (%)", 0.0)
-            vals = [
-                label,
-                dr,
-                f"{row['Net PnL ($)']:,.2f}",
-                f"{pct:,.1f}%",
-            ]
-            aligns = ["L", "L", "R", "R"]
-            add_table_row(pdf, vals, widths, aligns)
+            add_table_header(pdf, cols, widths, header_font)
+            max_rows = int(cfg.get("max_rows", 9999))
+            for r_i, (_, row) in enumerate(eq_pnl_by_sym.iterrows()):
+                if r_i >= max_rows:
+                    pdf.set_font("Times", "", body_font)
+                    pdf.cell(0, 5, f"... ({len(eq_pnl_by_sym) - max_rows} more rows not shown)", ln=1)
+                    break
 
-    pdf.ln(2)
+                name = row.get("Name", "") or ""
+                label = str(row["Symbol"])
+                if name:
+                    label = f"{label}  {name}"
+                fb = row.get("FirstBuyDate")
+                ls = row.get("LastSellDate")
+                if pd.notna(fb) and pd.notna(ls):
+                    date_range = f"{fb} - {ls}"
+                elif pd.notna(fb):
+                    date_range = f"{fb} -"
+                elif pd.notna(ls):
+                    date_range = f"- {ls}"
+                else:
+                    date_range = ""
+                pct = row.get("Pct of Equity PnL (%)", 0.0)
 
-    # ---------- 4. Company Dividends ----------
-    pdf.set_font("Times", "B", 12)
-    pdf.cell(0, 7, "4. Company Dividends (Equities)", ln=1)
-    pdf.ln(1)
+                vals = [
+                    label[:50],
+                    str(date_range)[:25],
+                    f"{row['Net PnL ($)']:,.2f}",
+                    f"{pct:,.1f}%",
+                ]
+                add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
 
-    if company_div_by_sym.empty:
-        pdf.set_font("Times", "", 10)
-        pdf.cell(0, 5, "No equity dividends.", ln=1)
-    else:
-        cols = ["Symbol / Name", "Div Date Range", "Dividends ($)", "% of Divs"]
-        widths = [70, 55, 30, 25]
-        add_table_header(pdf, cols, widths)
-        for _, row in company_div_by_sym.iterrows():
-            name = row.get("Name", "") or ""
-            label = str(row["Symbol"])
-            if name:
-                label = f"{label}  {name}"
-            fr = row.get("FirstDivDate")
-            lr = row.get("LastDivDate")
-            if pd.notna(fr) and pd.notna(lr):
-                dr = f"{fr} - {lr}"
-            elif pd.notna(fr):
-                dr = f"{fr} -"
-            elif pd.notna(lr):
-                dr = f"- {lr}"
-            else:
-                dr = ""
-            pct = row.get("Pct of Dividends (%)", 0.0)
-            vals = [
-                label,
-                dr,
-                f"{row['Dividends ($)']:,.2f}",
-                f"{pct:,.1f}%",
-            ]
-            aligns = ["L", "L", "R", "R"]
-            add_table_row(pdf, vals, widths, aligns)
+            pdf.ln(section_gap)
+            continue
 
-    pdf.ln(2)
+        if sec == "Options PnL":
+            if opt_pnl_by_sym.empty:
+                pdf.set_font("Times", "", body_font)
+                pdf.cell(0, 5, "No closed option positions.", ln=1)
+                pdf.ln(section_gap)
+                continue
 
-    # ---------- 5. VMFXX Monthly Dividends ----------
-    pdf.set_font("Times", "B", 12)
-    pdf.cell(0, 7, "5. VMFXX Monthly Dividends", ln=1)
-    pdf.ln(1)
+            cols = ["Contract / Underlying", "Open - Close Dates", "Net PnL ($)", "% of Opt PnL"]
+            default_widths = [70, 55, 30, 25]
+            default_aligns = ["L", "L", "R", "R"]
 
-    if vm_div_monthly.empty:
-        pdf.set_font("Times", "", 10)
-        pdf.cell(0, 5, "No VMFXX dividend payments.", ln=1)
-    else:
-        cols = ["Month", "VMFXX Dividends ($)", "% of VMFXX"]
-        widths = [90, 35, 25]
-        add_table_header(pdf, cols, widths)
-        for _, row in vm_div_monthly.iterrows():
-            pct = row.get("Pct of VMFXX Divs (%)", 0.0)
-            vals = [
-                str(row["Month"]),
-                f"{row['VMFXX Dividends ($)']:,.2f}",
-                f"{pct:,.1f}%",
-            ]
-            aligns = ["L", "R", "R"]
-            add_table_row(pdf, vals, widths, aligns)
+            cfg = layout.get("tables", {}).get("options", {})
+            widths = cfg.get("widths", default_widths)
+            aligns = cfg.get("aligns", default_aligns)
+            widths = _fit_widths_to_page(pdf, widths)
 
-    pdf.ln(2)
+            add_table_header(pdf, cols, widths, header_font)
+            max_rows = int(cfg.get("max_rows", 9999))
+            for r_i, (_, row) in enumerate(opt_pnl_by_sym.iterrows()):
+                if r_i >= max_rows:
+                    pdf.set_font("Times", "", body_font)
+                    pdf.cell(0, 5, f"... ({len(opt_pnl_by_sym) - max_rows} more rows not shown)", ln=1)
+                    break
 
-    # ---------- 6. Other MMF / Bank Interest ----------
-    pdf.set_font("Times", "B", 12)
-    pdf.cell(0, 7, "6. Other MMF / Bank Interest", ln=1)
-    pdf.ln(1)
+                name = row.get("Name", "") or ""
+                label = str(row["Symbol"])
+                if name:
+                    label = f"{label}  {name}"
+                od = row.get("OpenDate")
+                cd = row.get("CloseDate")
+                if pd.notna(od) and pd.notna(cd):
+                    dr = f"{od} - {cd}"
+                elif pd.notna(od):
+                    dr = f"{od} -"
+                elif pd.notna(cd):
+                    dr = f"- {cd}"
+                else:
+                    dr = ""
+                pct = row.get("Pct of Options PnL (%)", 0.0)
 
-    if mmf_interest_credits.empty:
-        pdf.set_font("Times", "", 10)
-        pdf.cell(0, 5, "No additional MMF/bank interest.", ln=1)
-    else:
-        cols = ["Date / Description", "Amount ($)", "% of MMF Int"]
-        widths = [95, 30, 25]
-        add_table_header(pdf, cols, widths)
-        for _, row in mmf_interest_credits.iterrows():
-            date_str = row.get("DateStr") or ""
-            desc = row.get("Description") or ""
-            left = f"{date_str}  {desc}"
-            pct = row.get("Pct of MMF Int (%)", 0.0)
-            vals = [
-                left[:70],
-                f"{row['Amount']:,.2f}",
-                f"{pct:,.1f}%",
-            ]
-            aligns = ["L", "R", "R"]
-            add_table_row(pdf, vals, widths, aligns)
+                vals = [
+                    label[:50],
+                    str(dr)[:25],
+                    f"{row['Net PnL ($)']:,.2f}",
+                    f"{pct:,.1f}%",
+                ]
+                add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
+
+            pdf.ln(section_gap)
+            continue
+
+        if sec == "Company Dividends":
+            if company_div_by_sym.empty:
+                pdf.set_font("Times", "", body_font)
+                pdf.cell(0, 5, "No equity dividends.", ln=1)
+                pdf.ln(section_gap)
+                continue
+
+            cols = ["Symbol / Name", "Div Date Range", "Dividends ($)", "% of Divs"]
+            default_widths = [70, 55, 30, 25]
+            default_aligns = ["L", "L", "R", "R"]
+
+            cfg = layout.get("tables", {}).get("dividends", {})
+            widths = cfg.get("widths", default_widths)
+            aligns = cfg.get("aligns", default_aligns)
+            widths = _fit_widths_to_page(pdf, widths)
+
+            add_table_header(pdf, cols, widths, header_font)
+            max_rows = int(cfg.get("max_rows", 9999))
+            for r_i, (_, row) in enumerate(company_div_by_sym.iterrows()):
+                if r_i >= max_rows:
+                    pdf.set_font("Times", "", body_font)
+                    pdf.cell(0, 5, f"... ({len(company_div_by_sym) - max_rows} more rows not shown)", ln=1)
+                    break
+
+                name = row.get("Name", "") or ""
+                label = str(row["Symbol"])
+                if name:
+                    label = f"{label}  {name}"
+                fr = row.get("FirstDivDate")
+                lr = row.get("LastDivDate")
+                if pd.notna(fr) and pd.notna(lr):
+                    dr = f"{fr} - {lr}"
+                elif pd.notna(fr):
+                    dr = f"{fr} -"
+                elif pd.notna(lr):
+                    dr = f"- {lr}"
+                else:
+                    dr = ""
+                pct = row.get("Pct of Dividends (%)", 0.0)
+
+                vals = [
+                    label[:50],
+                    str(dr)[:25],
+                    f"{row['Dividends ($)']:,.2f}",
+                    f"{pct:,.1f}%",
+                ]
+                add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
+
+            pdf.ln(section_gap)
+            continue
+
+        if sec == "VMFXX Monthly Dividends":
+            if vm_div_monthly.empty:
+                pdf.set_font("Times", "", body_font)
+                pdf.cell(0, 5, "No VMFXX dividend payments.", ln=1)
+                pdf.ln(section_gap)
+                continue
+
+            cols = ["Month", "VMFXX Dividends ($)", "% of VMFXX"]
+            default_widths = [90, 35, 25]
+            default_aligns = ["L", "R", "R"]
+
+            cfg = layout.get("tables", {}).get("vmfxx", {})
+            widths = cfg.get("widths", default_widths)
+            aligns = cfg.get("aligns", default_aligns)
+            widths = _fit_widths_to_page(pdf, widths)
+
+            add_table_header(pdf, cols, widths, header_font)
+            max_rows = int(cfg.get("max_rows", 9999))
+            for r_i, (_, row) in enumerate(vm_div_monthly.iterrows()):
+                if r_i >= max_rows:
+                    pdf.set_font("Times", "", body_font)
+                    pdf.cell(0, 5, f"... ({len(vm_div_monthly) - max_rows} more rows not shown)", ln=1)
+                    break
+
+                pct = row.get("Pct of VMFXX Divs (%)", 0.0)
+                vals = [
+                    str(row["Month"])[:20],
+                    f"{row['VMFXX Dividends ($)']:,.2f}",
+                    f"{pct:,.1f}%",
+                ]
+                add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
+
+            pdf.ln(section_gap)
+            continue
+
+        if sec == "Other MMF / Bank Interest":
+            if mmf_interest_credits.empty:
+                pdf.set_font("Times", "", body_font)
+                pdf.cell(0, 5, "No additional MMF/bank interest.", ln=1)
+                pdf.ln(section_gap)
+                continue
+
+            cols = ["Date / Description", "Amount ($)", "% of MMF Int"]
+            default_widths = [95, 30, 25]
+            default_aligns = ["L", "R", "R"]
+
+            cfg = layout.get("tables", {}).get("mmf", {})
+            widths = cfg.get("widths", default_widths)
+            aligns = cfg.get("aligns", default_aligns)
+            widths = _fit_widths_to_page(pdf, widths)
+
+            add_table_header(pdf, cols, widths, header_font)
+            max_rows = int(cfg.get("max_rows", 9999))
+            for r_i, (_, row) in enumerate(mmf_interest_credits.iterrows()):
+                if r_i >= max_rows:
+                    pdf.set_font("Times", "", body_font)
+                    pdf.cell(0, 5, f"... ({len(mmf_interest_credits) - max_rows} more rows not shown)", ln=1)
+                    break
+
+                date_str = row.get("DateStr") or ""
+                desc = row.get("Description") or ""
+                left = f"{date_str}  {desc}"
+                pct = row.get("Pct of MMF Int (%)", 0.0)
+
+                vals = [
+                    left[:60],
+                    f"{row['Amount']:,.2f}",
+                    f"{pct:,.1f}%",
+                ]
+                add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
+
+            pdf.ln(section_gap)
+            continue
 
     out = pdf.output(dest="S")
     if isinstance(out, str):
-        pdf_bytes = out.encode("latin-1")
-    else:
-        pdf_bytes = bytes(out)
-    return pdf_bytes
+        return out.encode("latin-1")
+    return bytes(out)
 
 
 # -----------------------------
-# Streamlit UI (Bloomberg Orange + charts)
+# PDF Preview (Page 1 image)
 # -----------------------------
+@st.cache_data(show_spinner=False)
+def render_pdf_page1_png(pdf_bytes: bytes, zoom: float = 1.5) -> bytes:
+    """
+    Render first page of PDF -> PNG bytes for Streamlit preview.
+    Requires PyMuPDF (fitz). If not available, raises RuntimeError.
+    """
+    if fitz is None:
+        raise RuntimeError("PyMuPDF (fitz) not installed.")
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page = doc.load_page(0)
+    mat = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mat, alpha=False)
+    png = pix.tobytes("png")
+    doc.close()
+    return png
+
+
+def _md5(b: bytes) -> str:
+    return hashlib.md5(b).hexdigest()
+
+
+# -----------------------------
+# Streamlit UI (Bloomberg Orange + layout controls + preview)
+# -----------------------------
+def _default_layout() -> Dict[str, Any]:
+    return {
+        "title_font": 14,
+        "sub_font": 8,
+        "section_font": 12,
+        "header_font": 10,
+        "body_font": 10,
+        "row_height": 5.0,
+        "section_gap": 2.0,
+        "section_order": [
+            "Summary",
+            "Equity Realized PnL",
+            "Options PnL",
+            "Company Dividends",
+            "VMFXX Monthly Dividends",
+            "Other MMF / Bank Interest",
+        ],
+        "tables": {
+            "equity": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 9999},
+            "options": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 9999},
+            "dividends": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 9999},
+            "vmfxx": {"widths": [90, 35, 25], "aligns": ["L", "R", "R"], "max_rows": 9999},
+            "mmf": {"widths": [95, 30, 25], "aligns": ["L", "R", "R"], "max_rows": 9999},
+        },
+    }
+
+
 def main():
     st.set_page_config(page_title="E*TRADE Earnings Report Generator", layout="wide")
 
     st.markdown(
         """
         <style>
-        :root {
-            --primary-color: #ff7f0e;
-        }
-        body {
-            background-color: #000000;
-        }
-        [data-testid="stAppViewContainer"] {
-            background-color: #000000;
-            color: #f3f3f3;
-        }
-        [data-testid="stSidebar"] {
-            background-color: #111111;
-        }
-        .stMarkdown, .stDataFrame, .stMetric {
-            color: #f3f3f3;
-        }
-        .stMetric label {
-            color: #ffbf69 !important;
-        }
-        .stMetric div[data-testid="stMetricValue"] {
-            color: #ffffff !important;
-        }
+        :root { --primary-color: #ff7f0e; }
+        body { background-color: #000000; }
+        [data-testid="stAppViewContainer"] { background-color: #000000; color: #f3f3f3; }
+        [data-testid="stSidebar"] { background-color: #111111; }
+        .stMarkdown, .stDataFrame, .stMetric { color: #f3f3f3; }
+        .stMetric label { color: #ffbf69 !important; }
+        .stMetric div[data-testid="stMetricValue"] { color: #ffffff !important; }
         .stDownloadButton button, .stButton button {
-            background-color: #ff7f0e;
-            color: #000000;
-            border-radius: 4px;
-            border: 1px solid #ffbf69;
+            background-color: #ff7f0e; color: #000000; border-radius: 4px; border: 1px solid #ffbf69;
         }
         .stDownloadButton button:hover, .stButton button:hover {
-            background-color: #ffa64d;
-            color: #000000;
+            background-color: #ffa64d; color: #000000;
         }
-        hr {
-            border-color: #333333;
-        }
+        hr { border-color: #333333; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
     st.title("E*TRADE Earnings Report Generator")
-    st.caption("Upload your E*TRADE CSV → compute realized earnings → download a dated, structured PDF.")
+    st.caption("Upload your E*TRADE CSV → compute realized earnings → preview & tweak layout → download PDF.")
+
+    # Init layout state
+    if "layout" not in st.session_state:
+        st.session_state.layout = _default_layout()
+
+    # Sidebar: layout editor
+    with st.sidebar:
+        st.header("Layout Controls (PDF)")
+
+        if st.button("Reset layout to defaults"):
+            st.session_state.layout = _default_layout()
+
+        lay = st.session_state.layout
+
+        st.subheader("Fonts & Spacing")
+        lay["title_font"] = st.slider("Title font", 10, 20, int(lay["title_font"]))
+        lay["section_font"] = st.slider("Section header font", 10, 16, int(lay["section_font"]))
+        lay["header_font"] = st.slider("Table header font", 8, 14, int(lay["header_font"]))
+        lay["body_font"] = st.slider("Body font", 8, 12, int(lay["body_font"]))
+        lay["row_height"] = st.slider("Row height", 4.0, 7.0, float(lay["row_height"]), 0.1)
+        lay["section_gap"] = st.slider("Gap between sections", 0.0, 6.0, float(lay["section_gap"]), 0.5)
+
+        st.subheader("Section Order")
+        # drag-like reorder via multiselect ordering (Streamlit preserves selection order)
+        lay["section_order"] = st.multiselect(
+            "Order (top → bottom)",
+            options=[
+                "Summary",
+                "Equity Realized PnL",
+                "Options PnL",
+                "Company Dividends",
+                "VMFXX Monthly Dividends",
+                "Other MMF / Bank Interest",
+            ],
+            default=lay["section_order"],
+        )
+
+        st.subheader("Table Columns")
+        def _align_picker(label: str, current: str) -> str:
+            return st.selectbox(label, options=["L", "C", "R"], index=["L","C","R"].index(_safe_align(current)))
+
+        # Equity
+        with st.expander("Equity table settings", expanded=False):
+            t = lay["tables"]["equity"]
+            t["max_rows"] = st.number_input("Max rows (Equity)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
+            w1 = st.slider("Col1 width (Symbol/Name)", 30, 120, int(t["widths"][0]))
+            w2 = st.slider("Col2 width (Dates)", 20, 100, int(t["widths"][1]))
+            w3 = st.slider("Col3 width (PnL)", 15, 70, int(t["widths"][2]))
+            w4 = st.slider("Col4 width (% سهم)", 15, 70, int(t["widths"][3]))
+            t["widths"] = [w1, w2, w3, w4]
+            a1 = _align_picker("Col1 align", t["aligns"][0])
+            a2 = _align_picker("Col2 align", t["aligns"][1])
+            a3 = _align_picker("Col3 align", t["aligns"][2])
+            a4 = _align_picker("Col4 align", t["aligns"][3])
+            t["aligns"] = [a1, a2, a3, a4]
+
+        # Options
+        with st.expander("Options table settings", expanded=False):
+            t = lay["tables"]["options"]
+            t["max_rows"] = st.number_input("Max rows (Options)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
+            w1 = st.slider("Col1 width (Contract)", 30, 120, int(t["widths"][0]))
+            w2 = st.slider("Col2 width (Dates)", 20, 100, int(t["widths"][1]))
+            w3 = st.slider("Col3 width (PnL)", 15, 70, int(t["widths"][2]))
+            w4 = st.slider("Col4 width (% share)", 15, 70, int(t["widths"][3]))
+            t["widths"] = [w1, w2, w3, w4]
+            a1 = _align_picker("Col1 align", t["aligns"][0])
+            a2 = _align_picker("Col2 align", t["aligns"][1])
+            a3 = _align_picker("Col3 align", t["aligns"][2])
+            a4 = _align_picker("Col4 align", t["aligns"][3])
+            t["aligns"] = [a1, a2, a3, a4]
+
+        # Dividends
+        with st.expander("Dividends table settings", expanded=False):
+            t = lay["tables"]["dividends"]
+            t["max_rows"] = st.number_input("Max rows (Dividends)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
+            w1 = st.slider("Col1 width (Symbol/Name)", 30, 120, int(t["widths"][0]))
+            w2 = st.slider("Col2 width (Date range)", 20, 100, int(t["widths"][1]))
+            w3 = st.slider("Col3 width ($)", 15, 70, int(t["widths"][2]))
+            w4 = st.slider("Col4 width (% share)", 15, 70, int(t["widths"][3]))
+            t["widths"] = [w1, w2, w3, w4]
+            a1 = _align_picker("Col1 align", t["aligns"][0])
+            a2 = _align_picker("Col2 align", t["aligns"][1])
+            a3 = _align_picker("Col3 align", t["aligns"][2])
+            a4 = _align_picker("Col4 align", t["aligns"][3])
+            t["aligns"] = [a1, a2, a3, a4]
+
+        # VMFXX
+        with st.expander("VMFXX table settings", expanded=False):
+            t = lay["tables"]["vmfxx"]
+            t["max_rows"] = st.number_input("Max rows (VMFXX)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
+            w1 = st.slider("Col1 width (Month)", 40, 140, int(t["widths"][0]))
+            w2 = st.slider("Col2 width ($)", 15, 80, int(t["widths"][1]))
+            w3 = st.slider("Col3 width (% share)", 15, 80, int(t["widths"][2]))
+            t["widths"] = [w1, w2, w3]
+            a1 = _align_picker("Col1 align", t["aligns"][0])
+            a2 = _align_picker("Col2 align", t["aligns"][1])
+            a3 = _align_picker("Col3 align", t["aligns"][2])
+            t["aligns"] = [a1, a2, a3]
+
+        # MMF
+        with st.expander("Other MMF/Interest table settings", expanded=False):
+            t = lay["tables"]["mmf"]
+            t["max_rows"] = st.number_input("Max rows (MMF/Interest)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
+            w1 = st.slider("Col1 width (Date/Desc)", 40, 160, int(t["widths"][0]))
+            w2 = st.slider("Col2 width ($)", 15, 80, int(t["widths"][1]))
+            w3 = st.slider("Col3 width (% share)", 15, 80, int(t["widths"][2]))
+            t["widths"] = [w1, w2, w3]
+            a1 = _align_picker("Col1 align", t["aligns"][0])
+            a2 = _align_picker("Col2 align", t["aligns"][1])
+            a3 = _align_picker("Col3 align", t["aligns"][2])
+            t["aligns"] = [a1, a2, a3]
+
+        st.caption("Note: widths are auto-scaled to fit the PDF page margins.")
 
     uploaded_file = st.file_uploader("Upload E*TRADE CSV", type=["csv"])
-
     if not uploaded_file:
         return
 
@@ -747,7 +1045,6 @@ def main():
 
     # ---- Top Summary ----
     st.subheader("Summary")
-
     c1, c2, c3 = st.columns(3)
     with c1:
         st.metric("Total Earnings ($)", f"{report['total_earnings']:,.2f}")
@@ -762,80 +1059,46 @@ def main():
     with c5:
         st.metric("VMFXX Dividends ($)", f"{report['totals']['VMFXX Dividends ($)']:,.2f}")
     with c6:
-        st.metric(
-            "Other MMF/Bank Interest ($)",
-            f"{report['totals']['Other MMF/Bank Interest ($)']:,.2f}",
-        )
-
-    # Category breakdown chart
-    st.markdown("### Category Breakdown")
-    cat_df = pd.DataFrame(
-        {
-            "Category": list(report["totals"].keys()),
-            "Amount": list(report["totals"].values()),
-        }
-    )
-    st.bar_chart(cat_df.set_index("Category"))
+        st.metric("Other MMF/Bank Interest ($)", f"{report['totals']['Other MMF/Bank Interest ($)']:,.2f}")
 
     st.markdown("---")
 
-    # ---- Detailed Tables (optional drill-down) ----
+    # ---- Details (tables in-app) ----
     st.subheader("Details")
-
-    # Equity
     with st.expander("Equity Realized PnL (Closed Positions)", expanded=True):
         st.dataframe(report["eq_pnl_by_sym"], use_container_width=True)
-        if not report["eq_pnl_by_sym"].empty:
-            st.markdown("**Equity PnL by Symbol**")
-            eq_chart_df = report["eq_pnl_by_sym"].set_index("Symbol")[["Net PnL ($)"]]
-            st.bar_chart(eq_chart_df)
 
-    # Options
     with st.expander("Options PnL (Closed Positions Only)", expanded=False):
         st.dataframe(report["opt_pnl_by_sym"], use_container_width=True)
-        if not report["opt_pnl_by_sym"].empty:
-            st.markdown("**Options PnL by Contract**")
-            opt_chart_df = report["opt_pnl_by_sym"].set_index("Symbol")[["Net PnL ($)"]]
-            st.bar_chart(opt_chart_df)
 
-    # Dividends
     with st.expander("Company Dividends by Symbol", expanded=False):
         st.dataframe(report["company_div_by_sym"], use_container_width=True)
-        if not report["company_div_by_sym"].empty:
-            st.markdown("**Dividend Income by Symbol**")
-            div_chart_df = report["company_div_by_sym"].set_index("Symbol")[["Dividends ($)"]]
-            st.bar_chart(div_chart_df)
 
-    # VMFXX
     with st.expander("VMFXX Monthly Dividend Breakdown", expanded=False):
         st.dataframe(report["vm_div_monthly"], use_container_width=True)
-        if not report["vm_div_monthly"].empty:
-            st.markdown("**VMFXX Dividends by Month**")
-            vm_chart_df = report["vm_div_monthly"].set_index("Month")[["VMFXX Dividends ($)"]]
-            st.bar_chart(vm_chart_df)
 
-    with st.expander("Raw VMFXX Dividend Rows", expanded=False):
-        st.dataframe(report["vm_div_credits"], use_container_width=True)
-
-    # MMF interest
     with st.expander("Other MMF / Bank Interest Rows", expanded=False):
         st.dataframe(report["mmf_interest_credits"], use_container_width=True)
-        if not report["mmf_interest_credits"].empty:
-            st.markdown("**Other MMF / Bank Interest by Date**")
-            mmf_chart_df = (
-                report["mmf_interest_credits"][["DateStr", "Amount"]]
-                .groupby("DateStr")["Amount"]
-                .sum()
-                .reset_index()
-                .set_index("DateStr")
-            )
-            st.bar_chart(mmf_chart_df)
 
     st.markdown("---")
 
-    # ---- One-click PDF Download ----
-    pdf_bytes = build_pdf(report)
+    # ---- Build PDF with current layout settings ----
+    pdf_bytes = build_pdf(report, st.session_state.layout)
 
+    # ---- PDF Preview ----
+    st.subheader("PDF Preview (Page 1)")
+    if fitz is None:
+        st.info("PDF preview requires PyMuPDF. Install: `pip install pymupdf`")
+    else:
+        try:
+            # cache key driven by bytes hash + zoom
+            _ = _md5(pdf_bytes)
+            png_bytes = render_pdf_page1_png(pdf_bytes, zoom=1.6)
+            st.image(png_bytes, caption="Preview updates as you change Layout Controls", use_container_width=True)
+        except Exception as e:
+            st.warning(f"Could not render PDF preview: {e}")
+
+    # ---- One-click PDF Download ----
     acct_str = account_last4 or "XXXX"
     if start_label and end_label:
         date_range = f"{start_label} - {end_label}"
