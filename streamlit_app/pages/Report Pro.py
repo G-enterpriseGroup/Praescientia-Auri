@@ -14,7 +14,7 @@ import re
 import hashlib
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
@@ -214,7 +214,7 @@ def compute_equity_fifo(df: pd.DataFrame) -> pd.DataFrame:
                     else:
                         inventory[0][0] = lot_qty
 
-                # If there is remaining > 0 and no inventory, ignore it (no artificial PnL)
+                # If remaining > 0 and no inventory, ignore it (no artificial PnL)
                 ls = dt
 
         # Only keep symbols where we actually had both a buy and a sell
@@ -387,37 +387,27 @@ def compute_report(df: pd.DataFrame):
 
     # ---- % contribution columns ----
     if eq_total != 0 and not eq_pnl_by_sym.empty:
-        eq_pnl_by_sym["Pct of Equity PnL (%)"] = (
-            eq_pnl_by_sym["Net PnL ($)"] / eq_total * 100.0
-        )
+        eq_pnl_by_sym["Pct of Equity PnL (%)"] = (eq_pnl_by_sym["Net PnL ($)"] / eq_total * 100.0)
     else:
         eq_pnl_by_sym["Pct of Equity PnL (%)"] = 0.0
 
     if opt_total != 0 and not opt_pnl_by_sym.empty:
-        opt_pnl_by_sym["Pct of Options PnL (%)"] = (
-            opt_pnl_by_sym["Net PnL ($)"] / opt_total * 100.0
-        )
+        opt_pnl_by_sym["Pct of Options PnL (%)"] = (opt_pnl_by_sym["Net PnL ($)"] / opt_total * 100.0)
     else:
         opt_pnl_by_sym["Pct of Options PnL (%)"] = 0.0
 
     if company_div_total != 0 and not company_div_by_sym.empty:
-        company_div_by_sym["Pct of Dividends (%)"] = (
-            company_div_by_sym["Dividends ($)"] / company_div_total * 100.0
-        )
+        company_div_by_sym["Pct of Dividends (%)"] = (company_div_by_sym["Dividends ($)"] / company_div_total * 100.0)
     else:
         company_div_by_sym["Pct of Dividends (%)"] = 0.0
 
     if vm_div_total != 0 and not vm_div_monthly.empty:
-        vm_div_monthly["Pct of VMFXX Divs (%)"] = (
-            vm_div_monthly["VMFXX Dividends ($)"] / vm_div_total * 100.0
-        )
+        vm_div_monthly["Pct of VMFXX Divs (%)"] = (vm_div_monthly["VMFXX Dividends ($)"] / vm_div_total * 100.0)
     else:
         vm_div_monthly["Pct of VMFXX Divs (%)"] = 0.0
 
     if mmf_interest_total != 0 and not mmf_interest_credits.empty:
-        mmf_interest_credits["Pct of MMF Int (%)"] = (
-            mmf_interest_credits["Amount"] / mmf_interest_total * 100.0
-        )
+        mmf_interest_credits["Pct of MMF Int (%)"] = (mmf_interest_credits["Amount"] / mmf_interest_total * 100.0)
     else:
         mmf_interest_credits["Pct of MMF Int (%)"] = 0.0
 
@@ -441,9 +431,23 @@ def _safe_align(a: str) -> str:
     return a if a in {"L", "C", "R"} else "L"
 
 
-def _fit_widths_to_page(
-    pdf: FPDF, widths: List[float], min_w: float = 6.0
-) -> List[float]:
+def _clamp_int(x, lo: int, hi: int, default: int) -> int:
+    """
+    Robust clamp for Streamlit widgets that have min/max.
+    Prevents StreamlitValueAboveMaxError / BelowMinError when session_state has old values.
+    """
+    try:
+        v = int(x)
+    except Exception:
+        v = int(default)
+    if v < lo:
+        return lo
+    if v > hi:
+        return hi
+    return v
+
+
+def _fit_widths_to_page(pdf: FPDF, widths: List[float], min_w: float = 6.0) -> List[float]:
     """
     Ensures widths fit the available PDF width.
     If sum(widths) != usable, scale proportionally and enforce a minimum width.
@@ -452,18 +456,14 @@ def _fit_widths_to_page(
     widths = [float(w) for w in widths]
     s = sum(widths) if widths else 0.0
     if s <= 0:
-        # fallback equal widths
         n = max(1, len(widths))
         return [usable / n] * n
 
-    # proportional scale to usable
     scale = usable / s
     scaled = [max(min_w, w * scale) for w in widths]
 
-    # if min widths push beyond usable, compress while respecting min_w as best-effort
     s2 = sum(scaled)
     if s2 > usable and len(scaled) > 0:
-        # reduce from columns above min_w
         over = s2 - usable
         adjustable = [i for i, w in enumerate(scaled) if w > min_w]
         if adjustable:
@@ -477,7 +477,6 @@ def _fit_widths_to_page(
                     if scaled[i] > min_w + 1e-6:
                         new_adjustable.append(i)
                 adjustable = new_adjustable
-        # last resort: normalize exactly (tiny drift)
         s3 = sum(scaled)
         if s3 > 0:
             drift = s3 - usable
@@ -487,9 +486,7 @@ def _fit_widths_to_page(
 
 
 def add_key_value(pdf: FPDF, label: str, value: str, body_font: int):
-    """
-    Print 'Label ..... Value' with dotted leader across the available width.
-    """
+    """Print 'Label ..... Value' with dotted leader across the available width."""
     pdf.set_font("Times", "", body_font)
     pdf.set_text_color(0, 0, 0)
 
@@ -502,11 +499,7 @@ def add_key_value(pdf: FPDF, label: str, value: str, body_font: int):
     dot_w = pdf.get_string_width(".") or 0.5
 
     dots_w = usable - label_w - value_w
-    if dots_w < dot_w * 3:
-        n_dots = 3
-    else:
-        n_dots = int(dots_w / dot_w)
-
+    n_dots = 3 if dots_w < dot_w * 3 else int(dots_w / dot_w)
     dots = "." * max(3, n_dots)
     line = f"{label_text}{dots} {value_text}"
 
@@ -534,7 +527,6 @@ def add_table_row(
     pdf.set_text_color(0, 0, 0)
     aligns = [_safe_align(a) for a in (aligns or ["L"] * len(vals))]
     for val, w, a in zip(vals, widths, aligns):
-        # hard-trim long strings so they don't overflow; keeps layout stable
         s = "" if val is None else str(val)
         pdf.cell(w, row_h, s, border=0, align=a)
     pdf.ln(row_h)
@@ -545,7 +537,7 @@ def add_table_row(
 # -----------------------------
 class EarningsPDF(FPDF):
     def header(self):
-        # Title is controlled in build_pdf (we still keep a basic header here)
+        # Header rendered in build_pdf
         pass
 
 
@@ -579,20 +571,23 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
     vm_div_monthly = report["vm_div_monthly"]
     mmf_interest_credits = report["mmf_interest_credits"]
 
-    # Section definitions (data + rendering config)
-    sections = {
-        "Summary": {},
-        "Equity Realized PnL": {},
-        "Options PnL": {},
-        "Company Dividends": {},
-        "VMFXX Monthly Dividends": {},
-        "Other MMF / Bank Interest": {},
-    }
+    order = layout.get("section_order") or [
+        "Summary",
+        "Equity Realized PnL",
+        "Options PnL",
+        "Company Dividends",
+        "VMFXX Monthly Dividends",
+        "Other MMF / Bank Interest",
+    ]
+    order = [s for s in order if s in {
+        "Summary",
+        "Equity Realized PnL",
+        "Options PnL",
+        "Company Dividends",
+        "VMFXX Monthly Dividends",
+        "Other MMF / Bank Interest",
+    }]
 
-    order = layout.get("section_order") or list(sections.keys())
-    order = [s for s in order if s in sections]
-
-    # -------- Render each section in chosen order --------
     for idx, sec in enumerate(order, start=1):
         pdf.set_font("Times", "B", section_font)
         pdf.cell(0, 7, f"{idx}. {sec}", ln=1)
@@ -617,12 +612,11 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
             default_aligns = ["L", "L", "R", "R"]
 
             cfg = layout.get("tables", {}).get("equity", {})
-            widths = cfg.get("widths", default_widths)
+            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
             aligns = cfg.get("aligns", default_aligns)
-            widths = _fit_widths_to_page(pdf, widths)
+            max_rows = int(cfg.get("max_rows", 5000))
 
             add_table_header(pdf, cols, widths, header_font)
-            max_rows = int(cfg.get("max_rows", 9999))
             for r_i, (_, row) in enumerate(eq_pnl_by_sym.iterrows()):
                 if r_i >= max_rows:
                     pdf.set_font("Times", "", body_font)
@@ -668,12 +662,11 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
             default_aligns = ["L", "L", "R", "R"]
 
             cfg = layout.get("tables", {}).get("options", {})
-            widths = cfg.get("widths", default_widths)
+            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
             aligns = cfg.get("aligns", default_aligns)
-            widths = _fit_widths_to_page(pdf, widths)
+            max_rows = int(cfg.get("max_rows", 5000))
 
             add_table_header(pdf, cols, widths, header_font)
-            max_rows = int(cfg.get("max_rows", 9999))
             for r_i, (_, row) in enumerate(opt_pnl_by_sym.iterrows()):
                 if r_i >= max_rows:
                     pdf.set_font("Times", "", body_font)
@@ -719,12 +712,11 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
             default_aligns = ["L", "L", "R", "R"]
 
             cfg = layout.get("tables", {}).get("dividends", {})
-            widths = cfg.get("widths", default_widths)
+            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
             aligns = cfg.get("aligns", default_aligns)
-            widths = _fit_widths_to_page(pdf, widths)
+            max_rows = int(cfg.get("max_rows", 5000))
 
             add_table_header(pdf, cols, widths, header_font)
-            max_rows = int(cfg.get("max_rows", 9999))
             for r_i, (_, row) in enumerate(company_div_by_sym.iterrows()):
                 if r_i >= max_rows:
                     pdf.set_font("Times", "", body_font)
@@ -770,12 +762,11 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
             default_aligns = ["L", "R", "R"]
 
             cfg = layout.get("tables", {}).get("vmfxx", {})
-            widths = cfg.get("widths", default_widths)
+            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
             aligns = cfg.get("aligns", default_aligns)
-            widths = _fit_widths_to_page(pdf, widths)
+            max_rows = int(cfg.get("max_rows", 5000))
 
             add_table_header(pdf, cols, widths, header_font)
-            max_rows = int(cfg.get("max_rows", 9999))
             for r_i, (_, row) in enumerate(vm_div_monthly.iterrows()):
                 if r_i >= max_rows:
                     pdf.set_font("Times", "", body_font)
@@ -805,12 +796,11 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
             default_aligns = ["L", "R", "R"]
 
             cfg = layout.get("tables", {}).get("mmf", {})
-            widths = cfg.get("widths", default_widths)
+            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
             aligns = cfg.get("aligns", default_aligns)
-            widths = _fit_widths_to_page(pdf, widths)
+            max_rows = int(cfg.get("max_rows", 5000))
 
             add_table_header(pdf, cols, widths, header_font)
-            max_rows = int(cfg.get("max_rows", 9999))
             for r_i, (_, row) in enumerate(mmf_interest_credits.iterrows()):
                 if r_i >= max_rows:
                     pdf.set_font("Times", "", body_font)
@@ -845,7 +835,7 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
 def render_pdf_page1_png(pdf_bytes: bytes, zoom: float = 1.5) -> bytes:
     """
     Render first page of PDF -> PNG bytes for Streamlit preview.
-    Requires PyMuPDF (fitz). If not available, raises RuntimeError.
+    Requires PyMuPDF (fitz).
     """
     if fitz is None:
         raise RuntimeError("PyMuPDF (fitz) not installed.")
@@ -866,6 +856,7 @@ def _md5(b: bytes) -> str:
 # Streamlit UI (Bloomberg Orange + layout controls + preview)
 # -----------------------------
 def _default_layout() -> Dict[str, Any]:
+    # IMPORTANT: max_rows defaults to 5000 to match widget max_value and avoid state crashes.
     return {
         "title_font": 14,
         "sub_font": 8,
@@ -883,11 +874,11 @@ def _default_layout() -> Dict[str, Any]:
             "Other MMF / Bank Interest",
         ],
         "tables": {
-            "equity": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 9999},
-            "options": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 9999},
-            "dividends": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 9999},
-            "vmfxx": {"widths": [90, 35, 25], "aligns": ["L", "R", "R"], "max_rows": 9999},
-            "mmf": {"widths": [95, 30, 25], "aligns": ["L", "R", "R"], "max_rows": 9999},
+            "equity": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 5000},
+            "options": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 5000},
+            "dividends": {"widths": [70, 55, 30, 25], "aligns": ["L", "L", "R", "R"], "max_rows": 5000},
+            "vmfxx": {"widths": [90, 35, 25], "aligns": ["L", "R", "R"], "max_rows": 5000},
+            "mmf": {"widths": [95, 30, 25], "aligns": ["L", "R", "R"], "max_rows": 5000},
         },
     }
 
@@ -934,15 +925,14 @@ def main():
         lay = st.session_state.layout
 
         st.subheader("Fonts & Spacing")
-        lay["title_font"] = st.slider("Title font", 10, 20, int(lay["title_font"]))
-        lay["section_font"] = st.slider("Section header font", 10, 16, int(lay["section_font"]))
-        lay["header_font"] = st.slider("Table header font", 8, 14, int(lay["header_font"]))
-        lay["body_font"] = st.slider("Body font", 8, 12, int(lay["body_font"]))
-        lay["row_height"] = st.slider("Row height", 4.0, 7.0, float(lay["row_height"]), 0.1)
-        lay["section_gap"] = st.slider("Gap between sections", 0.0, 6.0, float(lay["section_gap"]), 0.5)
+        lay["title_font"] = st.slider("Title font", 10, 20, int(lay.get("title_font", 14)))
+        lay["section_font"] = st.slider("Section header font", 10, 16, int(lay.get("section_font", 12)))
+        lay["header_font"] = st.slider("Table header font", 8, 14, int(lay.get("header_font", 10)))
+        lay["body_font"] = st.slider("Body font", 8, 12, int(lay.get("body_font", 10)))
+        lay["row_height"] = st.slider("Row height", 4.0, 7.0, float(lay.get("row_height", 5.0)), 0.1)
+        lay["section_gap"] = st.slider("Gap between sections", 0.0, 6.0, float(lay.get("section_gap", 2.0)), 0.5)
 
         st.subheader("Section Order")
-        # drag-like reorder via multiselect ordering (Streamlit preserves selection order)
         lay["section_order"] = st.multiselect(
             "Order (top → bottom)",
             options=[
@@ -953,82 +943,119 @@ def main():
                 "VMFXX Monthly Dividends",
                 "Other MMF / Bank Interest",
             ],
-            default=lay["section_order"],
+            default=lay.get("section_order", _default_layout()["section_order"]),
         )
 
         st.subheader("Table Columns")
-        def _align_picker(label: str, current: str) -> str:
-            return st.selectbox(label, options=["L", "C", "R"], index=["L","C","R"].index(_safe_align(current)))
+
+        def _align_picker(label: str, current: str, key: str) -> str:
+            cur = _safe_align(current)
+            return st.selectbox(label, options=["L", "C", "R"], index=["L", "C", "R"].index(cur), key=key)
 
         # Equity
         with st.expander("Equity table settings", expanded=False):
             t = lay["tables"]["equity"]
-            t["max_rows"] = st.number_input("Max rows (Equity)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
-            w1 = st.slider("Col1 width (Symbol/Name)", 30, 120, int(t["widths"][0]))
-            w2 = st.slider("Col2 width (Dates)", 20, 100, int(t["widths"][1]))
-            w3 = st.slider("Col3 width (PnL)", 15, 70, int(t["widths"][2]))
-            w4 = st.slider("Col4 width (% سهم)", 15, 70, int(t["widths"][3]))
+            t["max_rows"] = st.number_input(
+                "Max rows (Equity)",
+                min_value=5,
+                max_value=5000,
+                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
+                step=5,
+                key="max_rows_equity",
+            )
+            w1 = st.slider("Col1 width (Symbol/Name)", 30, 120, int(t["widths"][0]), key="eq_w1")
+            w2 = st.slider("Col2 width (Dates)", 20, 100, int(t["widths"][1]), key="eq_w2")
+            w3 = st.slider("Col3 width (PnL)", 15, 70, int(t["widths"][2]), key="eq_w3")
+            w4 = st.slider("Col4 width (% share)", 15, 70, int(t["widths"][3]), key="eq_w4")
             t["widths"] = [w1, w2, w3, w4]
-            a1 = _align_picker("Col1 align", t["aligns"][0])
-            a2 = _align_picker("Col2 align", t["aligns"][1])
-            a3 = _align_picker("Col3 align", t["aligns"][2])
-            a4 = _align_picker("Col4 align", t["aligns"][3])
+            a1 = _align_picker("Col1 align", t["aligns"][0], "eq_a1")
+            a2 = _align_picker("Col2 align", t["aligns"][1], "eq_a2")
+            a3 = _align_picker("Col3 align", t["aligns"][2], "eq_a3")
+            a4 = _align_picker("Col4 align", t["aligns"][3], "eq_a4")
             t["aligns"] = [a1, a2, a3, a4]
 
         # Options
         with st.expander("Options table settings", expanded=False):
             t = lay["tables"]["options"]
-            t["max_rows"] = st.number_input("Max rows (Options)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
-            w1 = st.slider("Col1 width (Contract)", 30, 120, int(t["widths"][0]))
-            w2 = st.slider("Col2 width (Dates)", 20, 100, int(t["widths"][1]))
-            w3 = st.slider("Col3 width (PnL)", 15, 70, int(t["widths"][2]))
-            w4 = st.slider("Col4 width (% share)", 15, 70, int(t["widths"][3]))
+            t["max_rows"] = st.number_input(
+                "Max rows (Options)",
+                min_value=5,
+                max_value=5000,
+                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
+                step=5,
+                key="max_rows_options",
+            )
+            w1 = st.slider("Col1 width (Contract)", 30, 120, int(t["widths"][0]), key="op_w1")
+            w2 = st.slider("Col2 width (Dates)", 20, 100, int(t["widths"][1]), key="op_w2")
+            w3 = st.slider("Col3 width (PnL)", 15, 70, int(t["widths"][2]), key="op_w3")
+            w4 = st.slider("Col4 width (% share)", 15, 70, int(t["widths"][3]), key="op_w4")
             t["widths"] = [w1, w2, w3, w4]
-            a1 = _align_picker("Col1 align", t["aligns"][0])
-            a2 = _align_picker("Col2 align", t["aligns"][1])
-            a3 = _align_picker("Col3 align", t["aligns"][2])
-            a4 = _align_picker("Col4 align", t["aligns"][3])
+            a1 = _align_picker("Col1 align", t["aligns"][0], "op_a1")
+            a2 = _align_picker("Col2 align", t["aligns"][1], "op_a2")
+            a3 = _align_picker("Col3 align", t["aligns"][2], "op_a3")
+            a4 = _align_picker("Col4 align", t["aligns"][3], "op_a4")
             t["aligns"] = [a1, a2, a3, a4]
 
         # Dividends
         with st.expander("Dividends table settings", expanded=False):
             t = lay["tables"]["dividends"]
-            t["max_rows"] = st.number_input("Max rows (Dividends)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
-            w1 = st.slider("Col1 width (Symbol/Name)", 30, 120, int(t["widths"][0]))
-            w2 = st.slider("Col2 width (Date range)", 20, 100, int(t["widths"][1]))
-            w3 = st.slider("Col3 width ($)", 15, 70, int(t["widths"][2]))
-            w4 = st.slider("Col4 width (% share)", 15, 70, int(t["widths"][3]))
+            t["max_rows"] = st.number_input(
+                "Max rows (Dividends)",
+                min_value=5,
+                max_value=5000,
+                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
+                step=5,
+                key="max_rows_dividends",
+            )
+            w1 = st.slider("Col1 width (Symbol/Name)", 30, 120, int(t["widths"][0]), key="dv_w1")
+            w2 = st.slider("Col2 width (Date range)", 20, 100, int(t["widths"][1]), key="dv_w2")
+            w3 = st.slider("Col3 width ($)", 15, 70, int(t["widths"][2]), key="dv_w3")
+            w4 = st.slider("Col4 width (% share)", 15, 70, int(t["widths"][3]), key="dv_w4")
             t["widths"] = [w1, w2, w3, w4]
-            a1 = _align_picker("Col1 align", t["aligns"][0])
-            a2 = _align_picker("Col2 align", t["aligns"][1])
-            a3 = _align_picker("Col3 align", t["aligns"][2])
-            a4 = _align_picker("Col4 align", t["aligns"][3])
+            a1 = _align_picker("Col1 align", t["aligns"][0], "dv_a1")
+            a2 = _align_picker("Col2 align", t["aligns"][1], "dv_a2")
+            a3 = _align_picker("Col3 align", t["aligns"][2], "dv_a3")
+            a4 = _align_picker("Col4 align", t["aligns"][3], "dv_a4")
             t["aligns"] = [a1, a2, a3, a4]
 
         # VMFXX
         with st.expander("VMFXX table settings", expanded=False):
             t = lay["tables"]["vmfxx"]
-            t["max_rows"] = st.number_input("Max rows (VMFXX)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
-            w1 = st.slider("Col1 width (Month)", 40, 140, int(t["widths"][0]))
-            w2 = st.slider("Col2 width ($)", 15, 80, int(t["widths"][1]))
-            w3 = st.slider("Col3 width (% share)", 15, 80, int(t["widths"][2]))
+            t["max_rows"] = st.number_input(
+                "Max rows (VMFXX)",
+                min_value=5,
+                max_value=5000,
+                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
+                step=5,
+                key="max_rows_vmfxx",
+            )
+            w1 = st.slider("Col1 width (Month)", 40, 140, int(t["widths"][0]), key="vm_w1")
+            w2 = st.slider("Col2 width ($)", 15, 80, int(t["widths"][1]), key="vm_w2")
+            w3 = st.slider("Col3 width (% share)", 15, 80, int(t["widths"][2]), key="vm_w3")
             t["widths"] = [w1, w2, w3]
-            a1 = _align_picker("Col1 align", t["aligns"][0])
-            a2 = _align_picker("Col2 align", t["aligns"][1])
-            a3 = _align_picker("Col3 align", t["aligns"][2])
+            a1 = _align_picker("Col1 align", t["aligns"][0], "vm_a1")
+            a2 = _align_picker("Col2 align", t["aligns"][1], "vm_a2")
+            a3 = _align_picker("Col3 align", t["aligns"][2], "vm_a3")
             t["aligns"] = [a1, a2, a3]
 
         # MMF
         with st.expander("Other MMF/Interest table settings", expanded=False):
             t = lay["tables"]["mmf"]
-            t["max_rows"] = st.number_input("Max rows (MMF/Interest)", min_value=5, max_value=5000, value=int(t["max_rows"]), step=5)
-            w1 = st.slider("Col1 width (Date/Desc)", 40, 160, int(t["widths"][0]))
-            w2 = st.slider("Col2 width ($)", 15, 80, int(t["widths"][1]))
-            w3 = st.slider("Col3 width (% share)", 15, 80, int(t["widths"][2]))
+            t["max_rows"] = st.number_input(
+                "Max rows (MMF/Interest)",
+                min_value=5,
+                max_value=5000,
+                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
+                step=5,
+                key="max_rows_mmf",
+            )
+            w1 = st.slider("Col1 width (Date/Desc)", 40, 160, int(t["widths"][0]), key="mm_w1")
+            w2 = st.slider("Col2 width ($)", 15, 80, int(t["widths"][1]), key="mm_w2")
+            w3 = st.slider("Col3 width (% share)", 15, 80, int(t["widths"][2]), key="mm_w3")
             t["widths"] = [w1, w2, w3]
-            a1 = _align_picker("Col1 align", t["aligns"][0])
-            a2 = _align_picker("Col2 align", t["aligns"][1])
-            a3 = _align_picker("Col3 align", t["aligns"][2])
+            a1 = _align_picker("Col1 align", t["aligns"][0], "mm_a1")
+            a2 = _align_picker("Col2 align", t["aligns"][1], "mm_a2")
+            a3 = _align_picker("Col3 align", t["aligns"][2], "mm_a3")
             t["aligns"] = [a1, a2, a3]
 
         st.caption("Note: widths are auto-scaled to fit the PDF page margins.")
@@ -1091,8 +1118,7 @@ def main():
         st.info("PDF preview requires PyMuPDF. Install: `pip install pymupdf`")
     else:
         try:
-            # cache key driven by bytes hash + zoom
-            _ = _md5(pdf_bytes)
+            _ = _md5(pdf_bytes)  # stable cache key basis
             png_bytes = render_pdf_page1_png(pdf_bytes, zoom=1.6)
             st.image(png_bytes, caption="Preview updates as you change Layout Controls", use_container_width=True)
         except Exception as e:
