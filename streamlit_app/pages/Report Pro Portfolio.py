@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 Asset Allocation Report Generator (E*TRADE PortfolioDownload.csv)
