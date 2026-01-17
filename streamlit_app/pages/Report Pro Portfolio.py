@@ -1,21 +1,18 @@
 # app.py / Report Pro.py
 # E*TRADE Asset Allocation Analyzer + 1-Page PDF Report
-# - Parses E*TRADE PortfolioDownload.csv (holdings export)
+# - Parses E*TRADE PortfolioDownload.csv (holdings export) robustly (cell-by-cell)
+# - Fixes malformed rows (e.g., CASH line has extra trailing comma -> 16 fields)
 # - Calculates allocation % by: Asset Class, Sector, Industry
 # - Pulls metadata via yfinance: quoteType, name, sector, industry, category, fundFamily, yields/expense ratio (when available)
 # - Generates concise client-friendly descriptions per holding
-# - PDF filename: "<last4> Allocation Report <Mon YY>.pdf" (or "XXXX" if not found)
+# - PDF filename: "<last4> Allocation Report <Mon YY>.pdf"
 # - PDF body font 10, headers 12
 # - Summary lines use dotted leaders: "Label .... Value"
 # + OPTION A: PDF preview + robust layout controls (column widths, alignments, font sizes, section order)
-#
-# Notes:
-# - yfinance metadata varies by ticker (ETFs often have category/fundFamily; equities have sector/industry)
-# - Sector/Industry may be blank for some funds; allocation tables still work
-# - Uses portfolio Value $ for weights (more reliable than "% of Portfolio" column)
 
 import io
 import re
+import csv
 import hashlib
 from datetime import datetime
 from functools import lru_cache
@@ -39,7 +36,7 @@ except ImportError:
 
 
 # -----------------------------
-# Helpers: Load & Clean CSV + Metadata
+# Helpers: Safe parsing / formatting
 # -----------------------------
 def _safe_float(x: Any) -> Optional[float]:
     if x is None:
@@ -57,50 +54,78 @@ def _safe_float(x: Any) -> Optional[float]:
 def _to_num_series(s: pd.Series) -> pd.Series:
     return (
         s.astype(str)
-        .str.replace(",", "", regex=False)
         .replace({"": None, "--": None})
         .apply(_safe_float)
     )
 
 
-def _find_holdings_table(lines: List[str]) -> Tuple[int, List[str]]:
+def _shorten(s: str, max_len: int) -> str:
+    s = (s or "").strip()
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 1].rstrip() + "…"
+
+
+def _pct_from_decimal_or_pct(x: Any) -> Optional[float]:
+    v = _safe_float(x)
+    if v is None:
+        return None
+    if v <= 1:
+        return v * 100.0
+    return v
+
+
+def _fmt_money(x: Any) -> str:
+    v = _safe_float(x)
+    if v is None:
+        return ""
+    return f"${v:,.2f}"
+
+
+def _fmt_pct(x: Any, digits: int = 2) -> str:
+    v = _safe_float(x)
+    if v is None:
+        return ""
+    return f"{v:.{digits}f}%"
+
+
+# -----------------------------
+# E*TRADE PortfolioDownload.csv loader (cell-by-cell, robust)
+# -----------------------------
+def _find_holdings_header_row(rows: List[List[str]]) -> Tuple[int, List[str]]:
     """
-    Find the holdings header row:
+    Find holdings table header row. We expect something like:
       Symbol,% of Portfolio,Last Price $,Cost/Share,Qty #,Total Cost,Total Gain $,Value $,...
-
-    Returns: (header_idx, header_cols)
     """
-    header_idx = None
-    header_cols: List[str] = []
-    for i, line in enumerate(lines):
-        if line.startswith("Symbol,") and ("% of Portfolio" in line) and ("Value $" in line):
-            header_idx = i
-            header_cols = [c.strip() for c in line.split(",")]
-            break
-
-    if header_idx is None:
-        raise ValueError("Could not find holdings header row starting with 'Symbol,' containing '% of Portfolio' and 'Value $'.")
-
-    return header_idx, header_cols
+    for i, r in enumerate(rows):
+        if not r:
+            continue
+        first = (r[0] or "").strip()
+        if first == "Symbol" and ("% of Portfolio" in r) and ("Value $" in r):
+            header = [c.strip() for c in r]
+            return i, header
+    raise ValueError("Could not find holdings header row (Symbol + % of Portfolio + Value $).")
 
 
-def _extract_account_last4(lines: List[str], header_idx: int) -> Optional[str]:
-    """
-    E*TRADE exports often have a line like:
-      For Account: XXXX1234
-    somewhere above the holdings table.
-    """
-    for i in range(max(0, header_idx - 50), header_idx):
-        line = lines[i]
+def _extract_account_last4(text_lines: List[str], header_idx_line_guess: int) -> Optional[str]:
+    # Search the top part of file for "For Account" or account line
+    for i in range(0, min(len(text_lines), max(0, header_idx_line_guess + 1))):
+        line = text_lines[i]
         if "For Account" in line:
             m = re.search(r"(\d{4})\D*$", line.strip())
             if m:
                 return m.group(1)
+    # Fallback: sometimes account appears as "Name -0057"
+    for i in range(0, min(len(text_lines), 40)):
+        if " -0" in text_lines[i]:
+            m = re.search(r"-0(\d{3,4})", text_lines[i])
+            if m:
+                return m.group(1)[-4:]
     return None
 
 
-def _extract_generated_at(lines: List[str]) -> Optional[str]:
-    for line in lines:
+def _extract_generated_at(text_lines: List[str]) -> Optional[str]:
+    for line in text_lines:
         if line.startswith("Generated at"):
             return line.replace("Generated at", "").strip()
     return None
@@ -108,35 +133,54 @@ def _extract_generated_at(lines: List[str]) -> Optional[str]:
 
 def load_etrade_portfolio_csv(uploaded_file):
     """
-    Load E*TRADE PortfolioDownload.csv (holdings).
+    Reads E*TRADE PortfolioDownload.csv safely using csv.reader (cell-by-cell).
 
     Returns:
       df_holdings, account_last4, generated_at_label, report_month_label
     """
     content_bytes = uploaded_file.getvalue()
     text = content_bytes.decode("utf-8", errors="ignore")
-    lines = text.splitlines()
+    text_lines = text.splitlines()
 
-    header_idx, header_cols = _find_holdings_table(lines)
-    account_last4 = _extract_account_last4(lines, header_idx)
-    generated_at = _extract_generated_at(lines) or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Cell-by-cell parse (this avoids pandas C-engine tokenization crashes)
+    rows: List[List[str]] = list(csv.reader(io.StringIO(text)))
 
-    # Load from header down until TOTAL / Generated at / blank end
-    data_lines = lines[header_idx:]
-    # Stop at TOTAL row if present
-    cleaned_lines = []
-    for ln in data_lines:
-        if ln.strip().upper().startswith("TOTAL"):
+    header_idx, header = _find_holdings_header_row(rows)
+    n = len(header)
+
+    account_last4 = _extract_account_last4(text_lines, header_idx_line_guess=header_idx)
+    generated_at = _extract_generated_at(text_lines) or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Read holdings rows until TOTAL / Generated at
+    data_rows: List[List[str]] = []
+    for r in rows[header_idx + 1 :]:
+        if not r:
+            continue
+        first = (r[0] or "").strip().upper()
+        if first == "TOTAL":
             break
-        if ln.startswith("Generated at"):
+        if (r[0] or "").startswith("Generated at"):
             break
-        cleaned_lines.append(ln)
+        if (r[0] or "").strip() == "":
+            continue
 
-    data_io = io.StringIO("\n".join(cleaned_lines))
-    df = pd.read_csv(data_io)
+        # Normalize row length to header length:
+        # - If extra trailing commas => extra empty cells -> truncate
+        # - If extra non-empty cells => merge into last column
+        if len(r) < n:
+            r = r + [""] * (n - len(r))
+        elif len(r) > n:
+            extra = r[n:]
+            if any(str(x).strip() for x in extra):
+                r = r[: n - 1] + [",".join(r[n - 1 :])]
+            else:
+                r = r[:n]
 
-    # Standardize column names we care about
-    # (Keep originals too; E*TRADE sometimes changes minor punctuation)
+        data_rows.append([c.strip() if isinstance(c, str) else c for c in r])
+
+    df = pd.DataFrame(data_rows, columns=header)
+
+    # Standardize columns
     rename_map = {
         "Symbol": "Ticker",
         "% of Portfolio": "PctOfPortfolio",
@@ -158,28 +202,21 @@ def load_etrade_portfolio_csv(uploaded_file):
         if k in df.columns:
             df.rename(columns={k: v}, inplace=True)
 
-    if "Ticker" not in df.columns:
-        raise ValueError("Holdings table loaded but missing 'Symbol' column.")
+    if "Ticker" not in df.columns or "Value" not in df.columns:
+        raise ValueError("Holdings table missing required columns (Ticker/Symbol or Value $).")
 
-    if "Value" not in df.columns:
-        raise ValueError("Holdings table loaded but missing 'Value $' column.")
-
-    # Clean
+    # Clean core fields
     df["Ticker"] = df["Ticker"].astype(str).str.strip().str.upper()
     df = df[df["Ticker"] != ""].copy()
 
-    # Numeric coercion
     for c in ["PctOfPortfolio", "LastPrice", "CostPerShare", "Qty", "TotalCost", "TotalGain", "Value", "DividendYield"]:
         if c in df.columns:
             df[c] = _to_num_series(df[c])
 
-    # Report month label from generated_at
+    # Month label for filename
     try:
         dt = pd.to_datetime(generated_at, errors="coerce")
-        if pd.notna(dt):
-            report_month_label = dt.strftime("%b %y")
-        else:
-            report_month_label = datetime.now().strftime("%b %y")
+        report_month_label = dt.strftime("%b %y") if pd.notna(dt) else datetime.now().strftime("%b %y")
     except Exception:
         report_month_label = datetime.now().strftime("%b %y")
 
@@ -189,28 +226,24 @@ def load_etrade_portfolio_csv(uploaded_file):
 # -----------------------------
 # yfinance metadata + classification + descriptions
 # -----------------------------
-def _ensure_yfinance():
+def _ensure_yfinance() -> bool:
     if yf is None:
-        st.warning("yfinance is not installed in this environment. Install with: pip install yfinance")
+        st.warning("yfinance is not installed. Install: pip install yfinance")
         return False
     return True
 
 
-def _pct_from_decimal_or_pct(x: Any) -> Optional[float]:
-    v = _safe_float(x)
-    if v is None:
-        return None
-    # If <=1 assume decimal (0.035) -> 3.5%
-    if v <= 1:
-        return v * 100.0
-    return v
-
-
-def _shorten(s: str, max_len: int) -> str:
-    s = (s or "").strip()
-    if len(s) <= max_len:
-        return s
-    return s[: max_len - 1].rstrip() + "…"
+@lru_cache(maxsize=None)
+def lookup_yf_info(ticker: str) -> Dict[str, Any]:
+    if not _ensure_yfinance():
+        return {}
+    if not isinstance(ticker, str) or not ticker.strip():
+        return {}
+    base = ticker.strip().upper()
+    try:
+        return yf.Ticker(base).info or {}
+    except Exception:
+        return {}
 
 
 def classify_asset_class(
@@ -226,7 +259,6 @@ def classify_asset_class(
     qt = (quote_type or "").upper().strip()
     nm = (name or "").upper()
     cat = (category or "").upper()
-    fam = (fund_family or "").upper()
 
     if t == "CASH":
         return "Cash"
@@ -263,29 +295,10 @@ def classify_asset_class(
             return "Equity"
         return "Fund / Other"
 
-    # If it's some known cash-like symbol or unclassified, keep Other
     return "Other"
 
 
-@lru_cache(maxsize=None)
-def lookup_yf_info(ticker: str) -> Dict[str, Any]:
-    if not _ensure_yfinance():
-        return {}
-    if not isinstance(ticker, str) or not ticker.strip():
-        return {}
-    base = ticker.strip().upper()
-    try:
-        return yf.Ticker(base).info or {}
-    except Exception:
-        return {}
-
-
 def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> str:
-    """
-    Concise, client-friendly description:
-    - Name + wrapper type + core exposure (category or sector/industry)
-    - Optional: yield / expense ratio (when available)
-    """
     qt = (meta.get("quoteType") or "").strip()
     name = (meta.get("shortName") or meta.get("longName") or ticker).strip()
     sector = (meta.get("sector") or "").strip()
@@ -293,7 +306,6 @@ def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> st
     category = (meta.get("category") or "").strip()
     fund_family = (meta.get("fundFamily") or "").strip()
 
-    # Stats
     exp = meta.get("annualReportExpenseRatio")
     if exp is None:
         exp = meta.get("expenseRatio")
@@ -304,7 +316,6 @@ def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> st
         yld = meta.get("trailingAnnualDividendYield")
     yld_pct = _pct_from_decimal_or_pct(yld)
 
-    # Exposure line
     exposure = ""
     if category:
         exposure = category
@@ -315,10 +326,10 @@ def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> st
     elif fund_family:
         exposure = fund_family
 
-    wrapper = (qt.title() if qt else "Holding")
-    bits = [wrapper, asset_class]
+    wrapper = qt.title() if qt else "Holding"
     head = f"{name} ({ticker})"
-    mid = " — ".join([b for b in bits if b]).strip()
+    mid = f"{wrapper} — {asset_class}".strip()
+
     stats = []
     if exp_pct is not None:
         stats.append(f"Exp {exp_pct:.2f}%")
@@ -335,22 +346,12 @@ def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> st
 
 
 def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.DataFrame:
-    """
-    meta_mode:
-      - "Top N by Value": fetch yfinance info only for top N holdings
-      - "All": fetch for all tickers
-      - "None": no yfinance calls
-    """
     df = df.copy()
     df["Value"] = df["Value"].fillna(0.0)
 
     total_value = float(df["Value"].sum())
-    if total_value <= 0:
-        df["WeightPct"] = 0.0
-    else:
-        df["WeightPct"] = (df["Value"] / total_value) * 100.0
+    df["WeightPct"] = (df["Value"] / total_value * 100.0) if total_value > 0 else 0.0
 
-    # Determine which tickers to fetch
     tickers = df["Ticker"].astype(str).str.upper().tolist()
     unique = list(dict.fromkeys([t for t in tickers if t]))
 
@@ -360,26 +361,16 @@ def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.Dat
     elif meta_mode == "Top N by Value":
         top = df.sort_values("Value", ascending=False).head(int(meta_top_n))
         fetch_set = set(top["Ticker"].astype(str).str.upper().tolist())
-    else:
-        fetch_set = set()
 
-    # Pull metadata
     metas: Dict[str, Dict[str, Any]] = {}
     if fetch_set and _ensure_yfinance():
         for t in fetch_set:
             metas[t] = lookup_yf_info(t)
-    else:
-        metas = {}
 
-    # Columns
     def meta_get(t: str, k: str) -> str:
         m = metas.get(t, {}) if metas else {}
         v = m.get(k)
         return (str(v).strip() if v is not None else "")
-
-    def meta_get_num(t: str, k: str) -> Optional[float]:
-        m = metas.get(t, {}) if metas else {}
-        return _safe_float(m.get(k))
 
     df["QuoteType"] = df["Ticker"].map(lambda t: meta_get(t, "quoteType"))
     df["Name"] = df["Ticker"].map(lambda t: _shorten(meta_get(t, "shortName") or meta_get(t, "longName") or t, 28))
@@ -388,7 +379,6 @@ def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.Dat
     df["Category"] = df["Ticker"].map(lambda t: meta_get(t, "category"))
     df["FundFamily"] = df["Ticker"].map(lambda t: meta_get(t, "fundFamily"))
 
-    # Compute ExpenseRatio / TrailingYield (optional)
     def _expense_ratio_pct(t: str) -> Optional[float]:
         m = metas.get(t, {}) if metas else {}
         v = m.get("annualReportExpenseRatio")
@@ -406,7 +396,6 @@ def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.Dat
     df["ExpenseRatio"] = df["Ticker"].map(_expense_ratio_pct)
     df["TrailingYield"] = df["Ticker"].map(_trailing_yield_pct)
 
-    # Asset class
     df["AssetClass"] = df.apply(
         lambda r: classify_asset_class(
             ticker=r.get("Ticker", ""),
@@ -420,21 +409,20 @@ def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.Dat
         axis=1,
     )
 
-    # Description
-    df["Description"] = df["Ticker"].map(
-        lambda t: build_description(metas.get(t, {}), asset_class=str(df.loc[df["Ticker"] == t, "AssetClass"].iloc[0]) if (df["Ticker"] == t).any() else "Other", ticker=t)
-        if t in metas else _shorten(f"{t}: Holding (metadata not fetched).", 210)
-    )
+    def _desc(t: str) -> str:
+        if t == "CASH":
+            return "Cash position."
+        if t in metas:
+            # asset class is on the df row
+            ac = str(df.loc[df["Ticker"] == t, "AssetClass"].iloc[0]) if (df["Ticker"] == t).any() else "Other"
+            return build_description(metas.get(t, {}), ac, t)
+        return _shorten(f"{t}: Holding (metadata not fetched).", 210)
 
-    # Ensure CASH readable
-    df.loc[df["Ticker"] == "CASH", ["Name", "QuoteType", "AssetClass", "Sector", "Industry", "Category", "Description"]] = [
-        "Cash",
-        "CASH",
-        "Cash",
-        "",
-        "",
-        "",
-        "Cash position.",
+    df["Description"] = df["Ticker"].map(_desc)
+
+    # Ensure CASH line is clean
+    df.loc[df["Ticker"] == "CASH", ["Name", "QuoteType", "AssetClass", "Sector", "Industry", "Category"]] = [
+        "Cash", "CASH", "Cash", "", "", ""
     ]
 
     return df
@@ -558,20 +546,6 @@ def add_table_row(
     pdf.ln(row_h)
 
 
-def _fmt_money(x: Any) -> str:
-    v = _safe_float(x)
-    if v is None:
-        return ""
-    return f"${v:,.2f}"
-
-
-def _fmt_pct(x: Any, digits: int = 2) -> str:
-    v = _safe_float(x)
-    if v is None:
-        return ""
-    return f"{v:.{digits}f}%"
-
-
 # -----------------------------
 # PDF Builder (layout-controlled)
 # -----------------------------
@@ -585,7 +559,6 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Layout basics
     title_font = int(layout.get("title_font", 14))
     sub_font = int(layout.get("sub_font", 8))
     section_font = int(layout.get("section_font", 12))
@@ -594,7 +567,6 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
     row_h = float(layout.get("row_height", 5.0))
     section_gap = float(layout.get("section_gap", 2.0))
 
-    # Header
     pdf.set_font("Times", "B", title_font)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 8, "E*TRADE Asset Allocation Report", ln=1, align="C")
@@ -615,14 +587,6 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
         "Allocation by Industry",
         "Top Holdings",
     ]
-    allowed = {
-        "Summary",
-        "Allocation by Asset Class",
-        "Allocation by Sector",
-        "Allocation by Industry",
-        "Top Holdings",
-    }
-    order = [s for s in order if s in allowed]
 
     for idx, sec in enumerate(order, start=1):
         pdf.set_font("Times", "B", section_font)
@@ -718,7 +682,7 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
             cfg = layout.get("tables", {}).get("holdings", {})
             widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
             aligns = cfg.get("aligns", default_aligns)
-            max_rows = int(cfg.get("max_rows", 25))  # usually smaller for a 1-pager
+            max_rows = int(cfg.get("max_rows", 25))
 
             add_table_header(pdf, cols, widths, header_font)
             shown = 0
@@ -800,7 +764,6 @@ def compute_report(df_raw: pd.DataFrame, meta_mode: str, meta_top_n: int, holdin
     total_value = float(df["Value"].fillna(0).sum())
     holdings_count = int(df.shape[0])
 
-    # Largest holding
     if holdings_count > 0:
         top = df.sort_values("Value", ascending=False).head(1).iloc[0]
         largest_holding = f"{top['Ticker']} {top['Name']}"
@@ -810,8 +773,6 @@ def compute_report(df_raw: pd.DataFrame, meta_mode: str, meta_top_n: int, holdin
         largest_wt = 0.0
 
     tables = allocation_tables(df)
-
-    # Top holdings table for PDF
     holdings_pdf = df.sort_values("Value", ascending=False).head(int(holdings_top_n)).copy()
 
     totals = {
@@ -891,93 +852,6 @@ def main():
             default=lay.get("section_order", _default_layout()["section_order"]),
         )
 
-        st.subheader("Table Columns")
-
-        def _align_picker(label: str, current: str, key: str) -> str:
-            cur = _safe_align(current)
-            return st.selectbox(label, options=["L", "C", "R"], index=["L", "C", "R"].index(cur), key=key)
-
-        with st.expander("Allocation by Asset Class table", expanded=False):
-            t = lay["tables"]["asset"]
-            t["max_rows"] = st.number_input(
-                "Max rows (Asset Class)",
-                min_value=5,
-                max_value=5000,
-                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
-                step=5,
-                key="max_rows_asset",
-            )
-            w1 = st.slider("Col1 width (Asset Class)", 30, 120, int(t["widths"][0]), key="ac_w1")
-            w2 = st.slider("Col2 width (Value)", 20, 100, int(t["widths"][1]), key="ac_w2")
-            w3 = st.slider("Col3 width (% Weight)", 20, 100, int(t["widths"][2]), key="ac_w3")
-            t["widths"] = [w1, w2, w3]
-            a1 = _align_picker("Col1 align", t["aligns"][0], "ac_a1")
-            a2 = _align_picker("Col2 align", t["aligns"][1], "ac_a2")
-            a3 = _align_picker("Col3 align", t["aligns"][2], "ac_a3")
-            t["aligns"] = [a1, a2, a3]
-
-        with st.expander("Allocation by Sector table", expanded=False):
-            t = lay["tables"]["sector"]
-            t["max_rows"] = st.number_input(
-                "Max rows (Sector)",
-                min_value=5,
-                max_value=5000,
-                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
-                step=5,
-                key="max_rows_sector",
-            )
-            w1 = st.slider("Col1 width (Sector)", 30, 120, int(t["widths"][0]), key="se_w1")
-            w2 = st.slider("Col2 width (Value)", 20, 100, int(t["widths"][1]), key="se_w2")
-            w3 = st.slider("Col3 width (% Weight)", 20, 100, int(t["widths"][2]), key="se_w3")
-            t["widths"] = [w1, w2, w3]
-            a1 = _align_picker("Col1 align", t["aligns"][0], "se_a1")
-            a2 = _align_picker("Col2 align", t["aligns"][1], "se_a2")
-            a3 = _align_picker("Col3 align", t["aligns"][2], "se_a3")
-            t["aligns"] = [a1, a2, a3]
-
-        with st.expander("Allocation by Industry table", expanded=False):
-            t = lay["tables"]["industry"]
-            t["max_rows"] = st.number_input(
-                "Max rows (Industry)",
-                min_value=5,
-                max_value=5000,
-                value=_clamp_int(t.get("max_rows", 5000), 5, 5000, 5000),
-                step=5,
-                key="max_rows_industry",
-            )
-            w1 = st.slider("Col1 width (Industry)", 30, 120, int(t["widths"][0]), key="in_w1")
-            w2 = st.slider("Col2 width (Value)", 20, 100, int(t["widths"][1]), key="in_w2")
-            w3 = st.slider("Col3 width (% Weight)", 20, 100, int(t["widths"][2]), key="in_w3")
-            t["widths"] = [w1, w2, w3]
-            a1 = _align_picker("Col1 align", t["aligns"][0], "in_a1")
-            a2 = _align_picker("Col2 align", t["aligns"][1], "in_a2")
-            a3 = _align_picker("Col3 align", t["aligns"][2], "in_a3")
-            t["aligns"] = [a1, a2, a3]
-
-        with st.expander("Top Holdings table", expanded=False):
-            t = lay["tables"]["holdings"]
-            t["max_rows"] = st.number_input(
-                "Max rows (Top Holdings)",
-                min_value=5,
-                max_value=200,
-                value=_clamp_int(t.get("max_rows", 25), 5, 200, 25),
-                step=1,
-                key="max_rows_holdings",
-            )
-            w1 = st.slider("Col1 width (Ticker/Name)", 40, 140, int(t["widths"][0]), key="ho_w1")
-            w2 = st.slider("Col2 width (Asset)", 15, 80, int(t["widths"][1]), key="ho_w2")
-            w3 = st.slider("Col3 width (% Wt)", 15, 80, int(t["widths"][2]), key="ho_w3")
-            w4 = st.slider("Col4 width (Value)", 15, 90, int(t["widths"][3]), key="ho_w4")
-            t["widths"] = [w1, w2, w3, w4]
-            a1 = _align_picker("Col1 align", t["aligns"][0], "ho_a1")
-            a2 = _align_picker("Col2 align", t["aligns"][1], "ho_a2")
-            a3 = _align_picker("Col3 align", t["aligns"][2], "ho_a3")
-            a4 = _align_picker("Col4 align", t["aligns"][3], "ho_a4")
-            t["aligns"] = [a1, a2, a3, a4]
-
-        st.caption("Note: widths are auto-scaled to fit the PDF page margins.")
-
-    # Controls for metadata / performance
     c1, c2, c3 = st.columns([1, 1, 1])
     with c1:
         meta_mode = st.selectbox("Metadata fetch", ["Top N by Value", "All", "None"], index=0)
@@ -1005,7 +879,6 @@ def main():
 
     df_full = report_calc["holdings_full"].copy()
 
-    # Header line for PDF
     acct = account_last4 or "XXXX"
     header_line = f"Account {acct} | Generated {generated_at}"
 
@@ -1014,7 +887,6 @@ def main():
         **report_calc,
     }
 
-    # ---- Top Summary ----
     st.subheader("Summary")
     t = report_calc["totals"]
     colA, colB, colC, colD = st.columns(4)
@@ -1029,7 +901,6 @@ def main():
 
     st.markdown("---")
 
-    # ---- Details (tables in-app) ----
     st.subheader("Details")
     tab1, tab2, tab3, tab4 = st.tabs(["Holdings", "Asset Class", "Sector", "Industry"])
 
@@ -1074,10 +945,8 @@ def main():
 
     st.markdown("---")
 
-    # ---- Build PDF with current layout settings ----
     pdf_bytes = build_pdf(report_for_pdf, st.session_state.layout)
 
-    # ---- PDF Preview ----
     st.subheader("PDF Preview (Page 1)")
     if fitz is None:
         st.info("PDF preview requires PyMuPDF. Install: `pip install pymupdf`")
@@ -1089,7 +958,6 @@ def main():
         except Exception as e:
             st.warning(f"Could not render PDF preview: {e}")
 
-    # ---- One-click PDF Download ----
     file_name = f"{acct} Allocation Report {report_month_label}.pdf"
     st.download_button(
         label="Download PDF Asset Allocation Report",
