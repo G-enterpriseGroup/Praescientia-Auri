@@ -1,18 +1,10 @@
 # app.py / Report Pro.py
 # E*TRADE Asset Allocation Analyzer + 1-Page PDF Report
-# - Parses E*TRADE PortfolioDownload.csv (holdings export) robustly (cell-by-cell)
-# - Fixes malformed rows (e.g., CASH line has extra trailing comma -> 16 fields)
-# - Calculates allocation % by: Asset Class, Sector, Industry
-# - Pulls metadata via yfinance: quoteType, name, sector, industry, category, fundFamily, yields/expense ratio (when available)
-# - Generates concise client-friendly descriptions per holding
-# - PDF filename: "<last4> Allocation Report <Mon YY>.pdf"
-# - PDF body font 10, headers 12
-# - Summary lines use dotted leaders: "Label .... Value"
-# + OPTION A: PDF preview + robust layout controls (column widths, alignments, font sizes, section order)
-#
-# IMPORTANT FIX:
-# - FPDF core fonts are Latin-1 only. Any Unicode (… — – smart quotes) will crash.
-# - We sanitize all PDF text through pdf_safe().
+# - Robust PortfolioDownload.csv parser (cell-by-cell)
+# - Allocation % by: Asset Class, Sector, Industry
+# - yfinance metadata per ticker
+# - NEW: richer client descriptions: What it is + How it makes money + Key risks
+# - PDF-safe text sanitization (prevents FPDFUnicodeEncodingException)
 
 import io
 import re
@@ -31,8 +23,6 @@ try:
 except ImportError:
     yf = None
 
-# Optional: PDF preview renderer (recommended)
-# pip install pymupdf
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -40,50 +30,36 @@ except ImportError:
 
 
 # -----------------------------
-# PDF text sanitizer (fixes FPDFUnicodeEncodingException)
+# PDF text sanitizer
 # -----------------------------
 _PDF_CHAR_MAP = {
-    "\u2013": "-",   # en dash
-    "\u2014": "-",   # em dash
-    "\u2212": "-",   # minus
-    "\u2026": "...", # ellipsis
-    "\u2018": "'",   # left single quote
-    "\u2019": "'",   # right single quote
-    "\u201C": '"',   # left double quote
-    "\u201D": '"',   # right double quote
-    "\u00A0": " ",   # non-breaking space
-    "\u2022": "-",   # bullet
-    "\u2122": "TM",  # trademark
-    "\u00AE": "(R)", # registered
-    "\u00A9": "(C)", # copyright
+    "\u2013": "-", "\u2014": "-", "\u2212": "-",
+    "\u2026": "...",
+    "\u2018": "'", "\u2019": "'",
+    "\u201C": '"', "\u201D": '"',
+    "\u00A0": " ",
+    "\u2022": "-",
+    "\u2122": "TM",
+    "\u00AE": "(R)",
+    "\u00A9": "(C)",
 }
 
 def pdf_safe(x: Any) -> str:
-    """
-    Convert any text to something FPDF (core fonts) can render:
-    - Replace common Unicode punctuation with ASCII
-    - Force Latin-1 encoding with replacement for anything else
-    """
     if x is None:
         s = ""
     else:
         s = str(x)
-
-    # Map common unicode to ASCII
     for k, v in _PDF_CHAR_MAP.items():
         s = s.replace(k, v)
-
-    # Force latin-1 safe
     try:
         s = s.encode("latin-1", errors="replace").decode("latin-1")
     except Exception:
         s = "".join(ch if ord(ch) < 256 else "?" for ch in s)
-
     return s
 
 
 # -----------------------------
-# Helpers: Safe parsing / formatting
+# Helpers
 # -----------------------------
 def _safe_float(x: Any) -> Optional[float]:
     if x is None:
@@ -99,18 +75,13 @@ def _safe_float(x: Any) -> Optional[float]:
 
 
 def _to_num_series(s: pd.Series) -> pd.Series:
-    return (
-        s.astype(str)
-        .replace({"": None, "--": None})
-        .apply(_safe_float)
-    )
+    return s.astype(str).replace({"": None, "--": None}).apply(_safe_float)
 
 
 def _shorten(s: str, max_len: int) -> str:
     s = (s or "").strip()
     if len(s) <= max_len:
         return s
-    # ASCII only (avoid Unicode ellipsis)
     return s[: max_len - 3].rstrip() + "..."
 
 
@@ -118,40 +89,29 @@ def _pct_from_decimal_or_pct(x: Any) -> Optional[float]:
     v = _safe_float(x)
     if v is None:
         return None
-    if v <= 1:
-        return v * 100.0
-    return v
+    return v * 100.0 if v <= 1 else v
 
 
 def _fmt_money(x: Any) -> str:
     v = _safe_float(x)
-    if v is None:
-        return ""
-    return f"${v:,.2f}"
+    return "" if v is None else f"${v:,.2f}"
 
 
 def _fmt_pct(x: Any, digits: int = 2) -> str:
     v = _safe_float(x)
-    if v is None:
-        return ""
-    return f"{v:.{digits}f}%"
+    return "" if v is None else f"{v:.{digits}f}%"
 
 
 # -----------------------------
-# E*TRADE PortfolioDownload.csv loader (cell-by-cell, robust)
+# CSV loader (cell-by-cell robust)
 # -----------------------------
 def _find_holdings_header_row(rows: List[List[str]]) -> Tuple[int, List[str]]:
-    """
-    Find holdings table header row. We expect something like:
-      Symbol,% of Portfolio,Last Price $,Cost/Share,Qty #,Total Cost,Total Gain $,Value $,...
-    """
     for i, r in enumerate(rows):
         if not r:
             continue
         first = (r[0] or "").strip()
         if first == "Symbol" and ("% of Portfolio" in r) and ("Value $" in r):
-            header = [c.strip() for c in r]
-            return i, header
+            return i, [c.strip() for c in r]
     raise ValueError("Could not find holdings header row (Symbol + % of Portfolio + Value $).")
 
 
@@ -178,18 +138,11 @@ def _extract_generated_at(text_lines: List[str]) -> Optional[str]:
 
 
 def load_etrade_portfolio_csv(uploaded_file):
-    """
-    Reads E*TRADE PortfolioDownload.csv safely using csv.reader (cell-by-cell).
-
-    Returns:
-      df_holdings, account_last4, generated_at_label, report_month_label
-    """
     content_bytes = uploaded_file.getvalue()
     text = content_bytes.decode("utf-8", errors="ignore")
     text_lines = text.splitlines()
 
     rows: List[List[str]] = list(csv.reader(io.StringIO(text)))
-
     header_idx, header = _find_holdings_header_row(rows)
     n = len(header)
 
@@ -262,7 +215,7 @@ def load_etrade_portfolio_csv(uploaded_file):
 
 
 # -----------------------------
-# yfinance metadata + classification + descriptions
+# yfinance metadata + classification + richer descriptions
 # -----------------------------
 def _ensure_yfinance() -> bool:
     if yf is None:
@@ -331,6 +284,84 @@ def classify_asset_class(
     return "Other"
 
 
+def _money_engine_text(asset_class: str, quote_type: str, category: str, sector: str, industry: str, name: str, ticker: str) -> str:
+    ac = (asset_class or "").lower()
+    qt = (quote_type or "").lower()
+    cat = (category or "").lower()
+    nm = (name or "").lower()
+
+    if ticker.upper() == "CASH":
+        return "Acts as cash on hand; it does not earn much unless the broker pays interest."
+
+    if "commod" in ac or "gold" in nm or "silver" in nm or "precious" in cat:
+        return "Tracks commodity prices. Returns come from price moves (and sometimes futures roll yield); typically no operating cash flow."
+
+    if "fixed income" in ac or "bond" in cat or "treasury" in cat:
+        return "Earns interest (coupon income) from bonds/loans held in the fund; price also moves with rates and credit spreads."
+
+    if "cash & cash" in ac or "money market" in nm:
+        return "Earns short-term interest from very short maturity instruments; designed for stability/liquidity."
+
+    if qt in {"etf", "mutualfund"}:
+        # Equity ETF default
+        if "equity" in cat or (sector or industry):
+            return "Owns a basket of stocks. Returns come from underlying companies' earnings growth and dividends (minus fees)."
+        return "Owns a diversified basket of assets. Returns come from the underlying holdings' income and price changes (minus fees)."
+
+    # Single stocks
+    if "equity" in ac or qt == "equity":
+        # Slightly tailored based on sector
+        s = (sector or "").lower()
+        if "financial" in s:
+            return "Makes money via lending/spreads, fees, and investment income; stock returns come from profits and valuation changes."
+        if "technology" in s:
+            return "Makes money by selling software/hardware/services; returns come from revenue growth, margins, and valuation changes."
+        if "health" in s:
+            return "Makes money via drugs/devices/services; returns come from product demand, pricing, and innovation pipeline outcomes."
+        if "consumer" in s:
+            return "Makes money by selling goods/services to consumers; returns depend on demand, pricing power, and margins."
+        if "energy" in s:
+            return "Makes money from producing/transporting energy; returns depend heavily on commodity prices and costs."
+        if "industrials" in s:
+            return "Makes money by manufacturing/building/services; returns depend on economic cycle, orders, and operating efficiency."
+        if "utilities" in s:
+            return "Makes money from regulated services; returns often driven by dividends, rates, and regulatory environment."
+        if "real estate" in s:
+            return "Makes money from rents/leases and property values; returns depend on occupancy, cap rates, and financing costs."
+        return "Makes money from selling products/services. Stock returns come from earnings, dividends, and changes in market valuation."
+
+    return "Returns depend on the asset's income (if any) and market price changes."
+
+
+def _risk_text(asset_class: str, quote_type: str, category: str, sector: str, industry: str, name: str, ticker: str) -> str:
+    ac = (asset_class or "").lower()
+    qt = (quote_type or "").lower()
+    cat = (category or "").lower()
+    nm = (name or "").lower()
+
+    if ticker.upper() == "CASH":
+        return "Low market risk; inflation risk and potential opportunity cost."
+
+    if "commod" in ac or "gold" in nm or "silver" in nm or "precious" in cat:
+        return "High price volatility; no cash-flow support; can be sensitive to USD and real rates."
+
+    if "fixed income" in ac or "bond" in cat or "treasury" in cat:
+        return "Interest-rate risk; credit risk (if not Treasuries); liquidity risk in stressed markets."
+
+    if "cash & cash" in ac or "money market" in nm:
+        return "Low risk; yield moves with short-term rates; small chance of liquidity stress in extreme events."
+
+    if qt in {"etf", "mutualfund"}:
+        if "equity" in cat or (sector or industry):
+            return "Equity market risk; sector/style concentration if specialized; fee drag."
+        return "Underlying asset risks plus fund structure risks (tracking error/fees)."
+
+    if "equity" in ac or qt == "equity":
+        return "Business/earnings risk; valuation risk; broader market drawdowns."
+
+    return "Risk depends on underlying holdings and market conditions."
+
+
 def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> str:
     qt = (meta.get("quoteType") or "").strip()
     name = (meta.get("shortName") or meta.get("longName") or ticker).strip()
@@ -349,6 +380,16 @@ def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> st
         yld = meta.get("trailingAnnualDividendYield")
     yld_pct = _pct_from_decimal_or_pct(yld)
 
+    # What it is (client friendly)
+    if ticker.upper() == "CASH":
+        what = "Cash position"
+    elif (qt or "").lower() in {"etf", "mutualfund"}:
+        what = "Fund (ETF/Mutual Fund)"
+    elif (qt or "").lower() == "equity":
+        what = "Single stock"
+    else:
+        what = "Holding"
+
     exposure = ""
     if category:
         exposure = category
@@ -359,23 +400,23 @@ def build_description(meta: Dict[str, Any], asset_class: str, ticker: str) -> st
     elif fund_family:
         exposure = fund_family
 
-    wrapper = qt.title() if qt else "Holding"
-    head = f"{name} ({ticker})"
-    mid = f"{wrapper} - {asset_class}".strip()
+    how = _money_engine_text(asset_class, qt, category, sector, industry, name, ticker)
+    risk = _risk_text(asset_class, qt, category, sector, industry, name, ticker)
 
     stats = []
-    if exp_pct is not None:
-        stats.append(f"Exp {exp_pct:.2f}%")
-    if yld_pct is not None:
+    if exp_pct is not None and exp_pct >= 0:
+        stats.append(f"Fee {exp_pct:.2f}%")
+    if yld_pct is not None and yld_pct >= 0:
         stats.append(f"Yield {yld_pct:.2f}%")
-    stats_txt = f" | {', '.join(stats)}" if stats else ""
+    stats_txt = (" | " + ", ".join(stats)) if stats else ""
 
+    title = f"{name} ({ticker})"
+    line = f"{title}: {what}. Focus: {asset_class}"
     if exposure:
-        s = f"{head}: {mid} focused on {exposure}.{stats_txt}"
-    else:
-        s = f"{head}: {mid}.{stats_txt}"
+        line += f" - {exposure}"
+    line += f". How it makes money: {how} Key risks: {risk}{stats_txt}"
 
-    return _shorten(s.strip(), 210)
+    return _shorten(line.strip(), 340)
 
 
 def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.DataFrame:
@@ -394,6 +435,8 @@ def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.Dat
     elif meta_mode == "Top N by Value":
         top = df.sort_values("Value", ascending=False).head(int(meta_top_n))
         fetch_set = set(top["Ticker"].astype(str).str.upper().tolist())
+    elif meta_mode == "None":
+        fetch_set = set()
 
     metas: Dict[str, Dict[str, Any]] = {}
     if fetch_set and _ensure_yfinance():
@@ -444,11 +487,11 @@ def enrich_holdings(df: pd.DataFrame, meta_mode: str, meta_top_n: int) -> pd.Dat
 
     def _desc(t: str) -> str:
         if t == "CASH":
-            return "Cash position."
+            return "Cash position. How it makes money: typically none (or broker interest). Key risks: inflation/opportunity cost."
         if t in metas:
             ac = str(df.loc[df["Ticker"] == t, "AssetClass"].iloc[0]) if (df["Ticker"] == t).any() else "Other"
             return build_description(metas.get(t, {}), ac, t)
-        return _shorten(f"{t}: Holding (metadata not fetched).", 210)
+        return _shorten(f"{t}: Holding (metadata not fetched).", 340)
 
     df["Description"] = df["Ticker"].map(_desc)
 
@@ -470,31 +513,15 @@ def allocation_tables(df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         t["WeightPct"] = t["WeightPct"].round(4)
         return t
 
-    return {
-        "AssetClass": agg("AssetClass"),
-        "Sector": agg("Sector"),
-        "Industry": agg("Industry"),
-    }
+    return {"AssetClass": agg("AssetClass"), "Sector": agg("Sector"), "Industry": agg("Industry")}
 
 
 # -----------------------------
-# Layout + PDF Helpers
+# Layout + PDF helpers
 # -----------------------------
 def _safe_align(a: str) -> str:
     a = (a or "").upper().strip()
     return a if a in {"L", "C", "R"} else "L"
-
-
-def _clamp_int(x, lo: int, hi: int, default: int) -> int:
-    try:
-        v = int(x)
-    except Exception:
-        v = int(default)
-    if v < lo:
-        return lo
-    if v > hi:
-        return hi
-    return v
 
 
 def _fit_widths_to_page(pdf: FPDF, widths: List[float], min_w: float = 6.0) -> List[float]:
@@ -504,38 +531,19 @@ def _fit_widths_to_page(pdf: FPDF, widths: List[float], min_w: float = 6.0) -> L
     if s <= 0:
         n = max(1, len(widths))
         return [usable / n] * n
-
     scale = usable / s
     scaled = [max(min_w, w * scale) for w in widths]
-
     s2 = sum(scaled)
     if s2 > usable and len(scaled) > 0:
-        over = s2 - usable
-        adjustable = [i for i, w in enumerate(scaled) if w > min_w]
-        if adjustable:
-            while over > 1e-6 and adjustable:
-                per = over / len(adjustable)
-                new_adjustable = []
-                for i in adjustable:
-                    take = min(per, scaled[i] - min_w)
-                    scaled[i] -= take
-                    over -= take
-                    if scaled[i] > min_w + 1e-6:
-                        new_adjustable.append(i)
-                adjustable = new_adjustable
-        s3 = sum(scaled)
-        if s3 > 0:
-            drift = s3 - usable
-            scaled[-1] = max(min_w, scaled[-1] - drift)
-
+        drift = s2 - usable
+        scaled[-1] = max(min_w, scaled[-1] - drift)
     return scaled
 
 
 def add_key_value(pdf: FPDF, label: str, value: str, body_font: int):
     pdf.set_font("Times", "", body_font)
-    pdf.set_text_color(0, 0, 0)
-
     usable = pdf.w - pdf.l_margin - pdf.r_margin
+
     label_text = pdf_safe(f"{label} ")
     value_text = pdf_safe(str(value))
 
@@ -546,40 +554,27 @@ def add_key_value(pdf: FPDF, label: str, value: str, body_font: int):
     dots_w = usable - label_w - value_w
     n_dots = 3 if dots_w < dot_w * 3 else int(dots_w / dot_w)
     dots = "." * max(3, n_dots)
-    line = pdf_safe(f"{label_text}{dots} {value_text}")
 
+    line = pdf_safe(f"{label_text}{dots} {value_text}")
     pdf.set_x(pdf.l_margin)
     pdf.cell(usable, 5, line, 0, 1, "L")
 
 
 def add_table_header(pdf: FPDF, cols: List[str], widths: List[float], header_font: int):
     pdf.set_font("Times", "B", header_font)
-    pdf.set_text_color(0, 0, 0)
     for col, w in zip(cols, widths):
         pdf.cell(w, 6, pdf_safe(col), border="B", align="L")
     pdf.ln(6)
 
 
-def add_table_row(
-    pdf: FPDF,
-    vals: List[str],
-    widths: List[float],
-    aligns: List[str],
-    body_font: int,
-    row_h: float = 5.0,
-):
+def add_table_row(pdf: FPDF, vals: List[str], widths: List[float], aligns: List[str], body_font: int, row_h: float = 5.0):
     pdf.set_font("Times", "", body_font)
-    pdf.set_text_color(0, 0, 0)
     aligns = [_safe_align(a) for a in (aligns or ["L"] * len(vals))]
     for val, w, a in zip(vals, widths, aligns):
-        s = pdf_safe("" if val is None else str(val))
-        pdf.cell(w, row_h, s, border=0, align=a)
+        pdf.cell(w, row_h, pdf_safe(val), border=0, align=a)
     pdf.ln(row_h)
 
 
-# -----------------------------
-# PDF Builder (layout-controlled)
-# -----------------------------
 class AllocationPDF(FPDF):
     def header(self):
         pass
@@ -599,7 +594,6 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
     section_gap = float(layout.get("section_gap", 2.0))
 
     pdf.set_font("Times", "B", title_font)
-    pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 8, pdf_safe("E*TRADE Asset Allocation Report"), ln=1, align="C")
     pdf.set_font("Times", "", sub_font)
     pdf.cell(0, 4, pdf_safe(report.get("header_line", "")), ln=1, align="C")
@@ -610,6 +604,7 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
     alloc_sector = report["alloc_sector"]
     alloc_industry = report["alloc_industry"]
     holdings = report["holdings"]
+    holdings_full = report["holdings_full"]
 
     order = layout.get("section_order") or [
         "Summary",
@@ -617,6 +612,7 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
         "Allocation by Sector",
         "Allocation by Industry",
         "Top Holdings",
+        "Holding Descriptions (Top N)",
     ]
 
     for idx, sec in enumerate(order, start=1):
@@ -634,104 +630,59 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
 
         if sec == "Allocation by Asset Class":
             cols = ["Asset Class", "Value", "% Weight"]
-            default_widths = [70, 40, 30]
-            default_aligns = ["L", "R", "R"]
-            cfg = layout.get("tables", {}).get("asset", {})
-            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
-            aligns = cfg.get("aligns", default_aligns)
-            max_rows = int(cfg.get("max_rows", 5000))
-
+            widths = _fit_widths_to_page(pdf, layout.get("tables", {}).get("asset", {}).get("widths", [70, 40, 30]))
+            aligns = layout.get("tables", {}).get("asset", {}).get("aligns", ["L", "R", "R"])
             add_table_header(pdf, cols, widths, header_font)
-            for r_i, (_, row) in enumerate(alloc_asset.iterrows()):
-                if r_i >= max_rows:
-                    pdf.set_font("Times", "", body_font)
-                    pdf.cell(0, 5, pdf_safe(f"... ({len(alloc_asset) - max_rows} more rows not shown)"), ln=1)
-                    break
-                vals = [
-                    str(row["AssetClass"])[:35],
-                    _fmt_money(row["Value"]),
-                    _fmt_pct(row["WeightPct"], 2),
-                ]
+            for _, row in alloc_asset.iterrows():
+                vals = [str(row["AssetClass"])[:35], _fmt_money(row["Value"]), _fmt_pct(row["WeightPct"], 2)]
                 add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
             pdf.ln(section_gap)
             continue
 
         if sec == "Allocation by Sector":
             cols = ["Sector", "Value", "% Weight"]
-            default_widths = [70, 40, 30]
-            default_aligns = ["L", "R", "R"]
-            cfg = layout.get("tables", {}).get("sector", {})
-            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
-            aligns = cfg.get("aligns", default_aligns)
-            max_rows = int(cfg.get("max_rows", 5000))
-
+            widths = _fit_widths_to_page(pdf, layout.get("tables", {}).get("sector", {}).get("widths", [70, 40, 30]))
+            aligns = layout.get("tables", {}).get("sector", {}).get("aligns", ["L", "R", "R"])
             add_table_header(pdf, cols, widths, header_font)
-            for r_i, (_, row) in enumerate(alloc_sector.iterrows()):
-                if r_i >= max_rows:
-                    pdf.set_font("Times", "", body_font)
-                    pdf.cell(0, 5, pdf_safe(f"... ({len(alloc_sector) - max_rows} more rows not shown)"), ln=1)
-                    break
+            for _, row in alloc_sector.iterrows():
                 sector = row["Sector"] if str(row["Sector"]).strip() else "(Unclassified)"
-                vals = [
-                    _shorten(str(sector), 35),
-                    _fmt_money(row["Value"]),
-                    _fmt_pct(row["WeightPct"], 2),
-                ]
+                vals = [_shorten(str(sector), 35), _fmt_money(row["Value"]), _fmt_pct(row["WeightPct"], 2)]
                 add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
             pdf.ln(section_gap)
             continue
 
         if sec == "Allocation by Industry":
             cols = ["Industry", "Value", "% Weight"]
-            default_widths = [70, 40, 30]
-            default_aligns = ["L", "R", "R"]
-            cfg = layout.get("tables", {}).get("industry", {})
-            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
-            aligns = cfg.get("aligns", default_aligns)
-            max_rows = int(cfg.get("max_rows", 5000))
-
+            widths = _fit_widths_to_page(pdf, layout.get("tables", {}).get("industry", {}).get("widths", [70, 40, 30]))
+            aligns = layout.get("tables", {}).get("industry", {}).get("aligns", ["L", "R", "R"])
             add_table_header(pdf, cols, widths, header_font)
-            for r_i, (_, row) in enumerate(alloc_industry.iterrows()):
-                if r_i >= max_rows:
-                    pdf.set_font("Times", "", body_font)
-                    pdf.cell(0, 5, pdf_safe(f"... ({len(alloc_industry) - max_rows} more rows not shown)"), ln=1)
-                    break
+            for _, row in alloc_industry.iterrows():
                 ind = row["Industry"] if str(row["Industry"]).strip() else "(Unclassified)"
-                vals = [
-                    _shorten(str(ind), 35),
-                    _fmt_money(row["Value"]),
-                    _fmt_pct(row["WeightPct"], 2),
-                ]
+                vals = [_shorten(str(ind), 35), _fmt_money(row["Value"]), _fmt_pct(row["WeightPct"], 2)]
                 add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
             pdf.ln(section_gap)
             continue
 
         if sec == "Top Holdings":
             cols = ["Ticker / Name", "Asset", "% Wt", "Value"]
-            default_widths = [70, 20, 20, 30]
-            default_aligns = ["L", "L", "R", "R"]
-            cfg = layout.get("tables", {}).get("holdings", {})
-            widths = _fit_widths_to_page(pdf, cfg.get("widths", default_widths))
-            aligns = cfg.get("aligns", default_aligns)
-            max_rows = int(cfg.get("max_rows", 25))
-
+            widths = _fit_widths_to_page(pdf, layout.get("tables", {}).get("holdings", {}).get("widths", [70, 20, 20, 30]))
+            aligns = layout.get("tables", {}).get("holdings", {}).get("aligns", ["L", "L", "R", "R"])
             add_table_header(pdf, cols, widths, header_font)
-            shown = 0
             for _, row in holdings.iterrows():
-                if shown >= max_rows:
-                    pdf.set_font("Times", "", body_font)
-                    pdf.cell(0, 5, pdf_safe(f"... ({len(holdings) - max_rows} more holdings not shown)"), ln=1)
-                    break
                 label = f"{row['Ticker']}  {row['Name']}".strip()
-                vals = [
-                    _shorten(label, 45),
-                    _shorten(str(row["AssetClass"]), 12),
-                    _fmt_pct(row["WeightPct"], 2),
-                    _fmt_money(row["Value"]),
-                ]
+                vals = [_shorten(label, 45), _shorten(str(row["AssetClass"]), 12), _fmt_pct(row["WeightPct"], 2), _fmt_money(row["Value"])]
                 add_table_row(pdf, vals, widths, aligns, body_font, row_h=row_h)
-                shown += 1
+            pdf.ln(section_gap)
+            continue
 
+        if sec == "Holding Descriptions (Top N)":
+            pdf.set_font("Times", "", body_font)
+            top_desc = holdings_full.sort_values("Value", ascending=False).head(12)
+            for _, r in top_desc.iterrows():
+                # Multi-line wrap using multi_cell
+                txt = pdf_safe(r.get("Description", ""))
+                pdf.multi_cell(0, 5, txt)
+                pdf.ln(1)
             pdf.ln(section_gap)
             continue
 
@@ -741,9 +692,6 @@ def build_pdf(report: dict, layout: Dict[str, Any]) -> bytes:
     return bytes(out)
 
 
-# -----------------------------
-# PDF Preview (Page 1 image)
-# -----------------------------
 @st.cache_data(show_spinner=False)
 def render_pdf_page1_png(pdf_bytes: bytes, zoom: float = 1.5) -> bytes:
     if fitz is None:
@@ -761,9 +709,6 @@ def _md5(b: bytes) -> str:
     return hashlib.md5(b).hexdigest()
 
 
-# -----------------------------
-# Streamlit UI (Bloomberg Orange + preview)
-# -----------------------------
 def _default_layout() -> Dict[str, Any]:
     return {
         "title_font": 14,
@@ -779,12 +724,13 @@ def _default_layout() -> Dict[str, Any]:
             "Allocation by Sector",
             "Allocation by Industry",
             "Top Holdings",
+            "Holding Descriptions (Top N)",
         ],
         "tables": {
-            "asset": {"widths": [70, 40, 30], "aligns": ["L", "R", "R"], "max_rows": 5000},
-            "sector": {"widths": [70, 40, 30], "aligns": ["L", "R", "R"], "max_rows": 5000},
-            "industry": {"widths": [70, 40, 30], "aligns": ["L", "R", "R"], "max_rows": 5000},
-            "holdings": {"widths": [70, 20, 20, 30], "aligns": ["L", "L", "R", "R"], "max_rows": 25},
+            "asset": {"widths": [70, 40, 30], "aligns": ["L", "R", "R"]},
+            "sector": {"widths": [70, 40, 30], "aligns": ["L", "R", "R"]},
+            "industry": {"widths": [70, 40, 30], "aligns": ["L", "R", "R"]},
+            "holdings": {"widths": [70, 20, 20, 30], "aligns": ["L", "L", "R", "R"]},
         },
     }
 
@@ -826,30 +772,8 @@ def compute_report(df_raw: pd.DataFrame, meta_mode: str, meta_top_n: int, holdin
 def main():
     st.set_page_config(page_title="E*TRADE Asset Allocation Report Generator", layout="wide")
 
-    st.markdown(
-        """
-        <style>
-        :root { --primary-color: #ff7f0e; }
-        body { background-color: #000000; }
-        [data-testid="stAppViewContainer"] { background-color: #000000; color: #f3f3f3; }
-        [data-testid="stSidebar"] { background-color: #111111; }
-        .stMarkdown, .stDataFrame, .stMetric { color: #f3f3f3; }
-        .stMetric label { color: #ffbf69 !important; }
-        .stMetric div[data-testid="stMetricValue"] { color: #ffffff !important; }
-        .stDownloadButton button, .stButton button {
-            background-color: #ff7f0e; color: #000000; border-radius: 4px; border: 1px solid #ffbf69;
-        }
-        .stDownloadButton button:hover, .stButton button:hover {
-            background-color: #ffa64d; color: #000000;
-        }
-        hr { border-color: #333333; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
     st.title("E*TRADE Asset Allocation Report Generator")
-    st.caption("Upload PortfolioDownload.csv -> compute allocation -> preview & download 1-page PDF.")
+    st.caption("Upload PortfolioDownload.csv -> allocation + richer descriptions -> 1-page PDF.")
 
     if "layout" not in st.session_state:
         st.session_state.layout = _default_layout()
@@ -860,14 +784,6 @@ def main():
             st.session_state.layout = _default_layout()
 
         lay = st.session_state.layout
-        st.subheader("Fonts & Spacing")
-        lay["title_font"] = st.slider("Title font", 10, 20, int(lay.get("title_font", 14)))
-        lay["section_font"] = st.slider("Section header font", 10, 16, int(lay.get("section_font", 12)))
-        lay["header_font"] = st.slider("Table header font", 8, 14, int(lay.get("header_font", 10)))
-        lay["body_font"] = st.slider("Body font", 8, 12, int(lay.get("body_font", 10)))
-        lay["row_height"] = st.slider("Row height", 4.0, 7.0, float(lay.get("row_height", 5.0)), 0.1)
-        lay["section_gap"] = st.slider("Gap between sections", 0.0, 6.0, float(lay.get("section_gap", 2.0)), 0.5)
-
         st.subheader("Section Order")
         lay["section_order"] = st.multiselect(
             "Order (top -> bottom)",
@@ -877,6 +793,7 @@ def main():
                 "Allocation by Sector",
                 "Allocation by Industry",
                 "Top Holdings",
+                "Holding Descriptions (Top N)",
             ],
             default=lay.get("section_order", _default_layout()["section_order"]),
         )
@@ -885,7 +802,7 @@ def main():
     with c1:
         meta_mode = st.selectbox("Metadata fetch", ["Top N by Value", "All", "None"], index=0)
     with c2:
-        meta_top_n = st.number_input("Top N (for metadata)", min_value=5, max_value=300, value=40, step=5)
+        meta_top_n = st.number_input("Top N (for metadata)", min_value=5, max_value=300, value=60, step=5)
     with c3:
         holdings_top_n = st.number_input("Top holdings shown in PDF", min_value=10, max_value=200, value=30, step=5)
 
@@ -906,71 +823,28 @@ def main():
         holdings_top_n=int(holdings_top_n),
     )
 
-    df_full = report_calc["holdings_full"].copy()
-
     acct = account_last4 or "XXXX"
     header_line = f"Account {acct} | Generated {generated_at}"
 
-    report_for_pdf = {
-        "header_line": header_line,
-        **report_calc,
-    }
+    report_for_pdf = {"header_line": header_line, **report_calc}
 
-    st.subheader("Summary")
-    t = report_calc["totals"]
-    colA, colB, colC, colD = st.columns(4)
-    with colA:
-        st.metric("Total Value", _fmt_money(t.get("TotalValue")))
-    with colB:
-        st.metric("Holdings", str(int(t.get("HoldingsCount", 0))))
-    with colC:
-        st.metric("Largest Holding", _shorten(str(t.get("LargestHolding", "")), 26))
-    with colD:
-        st.metric("Largest Weight", _fmt_pct(t.get("LargestHoldingWeight"), 2))
-
-    st.markdown("---")
-
-    st.subheader("Details")
-    tab1, tab2, tab3, tab4 = st.tabs(["Holdings", "Asset Class", "Sector", "Industry"])
-
-    with tab1:
-        show_cols = [
-            "Ticker", "Name", "AssetClass", "QuoteType", "Sector", "Industry", "Category",
-            "Value", "WeightPct", "DividendYield", "TrailingYield", "ExpenseRatio", "Description"
-        ]
-        existing = [c for c in show_cols if c in df_full.columns]
-        df_show = df_full[existing].copy()
-        if "Value" in df_show.columns:
-            df_show["Value"] = df_show["Value"].map(_fmt_money)
-        if "WeightPct" in df_show.columns:
-            df_show["WeightPct"] = df_show["WeightPct"].map(lambda x: _fmt_pct(x, 2))
-        if "DividendYield" in df_show.columns:
-            df_show["DividendYield"] = df_show["DividendYield"].map(lambda x: _fmt_pct(x, 2))
-        if "TrailingYield" in df_show.columns:
-            df_show["TrailingYield"] = df_show["TrailingYield"].map(lambda x: _fmt_pct(x, 2))
-        if "ExpenseRatio" in df_show.columns:
-            df_show["ExpenseRatio"] = df_show["ExpenseRatio"].map(lambda x: _fmt_pct(x, 2))
-        st.dataframe(df_show, use_container_width=True)
-
-    with tab2:
-        a = report_calc["alloc_asset"].copy()
-        a["Value"] = a["Value"].map(_fmt_money)
-        a["WeightPct"] = a["WeightPct"].map(lambda x: _fmt_pct(x, 2))
-        st.dataframe(a, use_container_width=True)
-
-    with tab3:
-        s = report_calc["alloc_sector"].copy()
-        s["Sector"] = s["Sector"].replace({"": "(Unclassified)"})
-        s["Value"] = s["Value"].map(_fmt_money)
-        s["WeightPct"] = s["WeightPct"].map(lambda x: _fmt_pct(x, 2))
-        st.dataframe(s, use_container_width=True)
-
-    with tab4:
-        i = report_calc["alloc_industry"].copy()
-        i["Industry"] = i["Industry"].replace({"": "(Unclassified)"})
-        i["Value"] = i["Value"].map(_fmt_money)
-        i["WeightPct"] = i["WeightPct"].map(lambda x: _fmt_pct(x, 2))
-        st.dataframe(i, use_container_width=True)
+    # UI Tables
+    st.subheader("Holdings (with descriptions)")
+    df_full = report_calc["holdings_full"].copy()
+    show_cols = ["Ticker","Name","AssetClass","Sector","Industry","Category","Value","WeightPct","DividendYield","TrailingYield","ExpenseRatio","Description"]
+    existing = [c for c in show_cols if c in df_full.columns]
+    df_show = df_full[existing].copy()
+    if "Value" in df_show.columns:
+        df_show["Value"] = df_show["Value"].map(_fmt_money)
+    if "WeightPct" in df_show.columns:
+        df_show["WeightPct"] = df_show["WeightPct"].map(lambda x: _fmt_pct(x, 2))
+    if "DividendYield" in df_show.columns:
+        df_show["DividendYield"] = df_show["DividendYield"].map(lambda x: _fmt_pct(x, 2))
+    if "TrailingYield" in df_show.columns:
+        df_show["TrailingYield"] = df_show["TrailingYield"].map(lambda x: _fmt_pct(x, 2))
+    if "ExpenseRatio" in df_show.columns:
+        df_show["ExpenseRatio"] = df_show["ExpenseRatio"].map(lambda x: _fmt_pct(x, 2))
+    st.dataframe(df_show, use_container_width=True)
 
     st.markdown("---")
 
@@ -981,9 +855,8 @@ def main():
         st.info("PDF preview requires PyMuPDF. Install: `pip install pymupdf`")
     else:
         try:
-            _ = _md5(pdf_bytes)
             png_bytes = render_pdf_page1_png(pdf_bytes, zoom=1.6)
-            st.image(png_bytes, caption="Preview updates as you change Layout Controls", use_container_width=True)
+            st.image(png_bytes, caption="Preview", use_container_width=True)
         except Exception as e:
             st.warning(f"Could not render PDF preview: {e}")
 
