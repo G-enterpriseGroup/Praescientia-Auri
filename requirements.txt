@@ -1,13 +1,12 @@
+streamlit>=1.30,<2
+altair>=5,<7
+
 yfinance
 pandas
 matplotlib
 scikit-learn
 statsmodels
 plotly
-datetime
-reportlab
-streamlit
-datetime
 kaleido
 seaborn
 pyperclip
@@ -26,6 +25,5 @@ selenium
 webdriver-manager
 python-dateutil
 xlsxwriter
-streamlit
 fpdf2
 pymupdf
