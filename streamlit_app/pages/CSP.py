@@ -263,7 +263,7 @@ def main():
 
     colA, colB, colC, colD = st.columns([1.1, 1, 1, 1])
     with colA:
-        ticker_symbol = st.text_input("Ticker", "AAPL").upper().strip()
+        ticker_symbol = st.text_input("Ticker", "TQQQ").upper().strip()
     with colB:
         r_pct = st.number_input("Risk-Free Rate (%)", value=4.50, step=0.05)
     with colC:
