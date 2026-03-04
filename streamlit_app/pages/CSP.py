@@ -283,13 +283,13 @@ def main():
 
     t1, t2, t3, t4 = st.columns([1, 1, 1, 1])
     with t1:
-        use_max_dte = st.toggle("Use Max DTE", value=True)
+        use_max_dte = st.toggle("Use Max DTE", value=False)
     with t2:
-        use_min_oi = st.toggle("Use Min OI", value=True)
+        use_min_oi = st.toggle("Use Min OI", value=False)
     with t3:
-        use_max_prob = st.toggle("Use Max Prob Assign", value=True)
+        use_max_prob = st.toggle("Use Max Prob Assign", value=False)
     with t4:
-        use_min_otm = st.toggle("Use Min % OTM", value=True)
+        use_min_otm = st.toggle("Use Min % OTM", value=False)
 
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1])
     with f1:
