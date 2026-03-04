@@ -8,7 +8,6 @@ import pandas as pd
 # Helpers (no extra deps)
 # =========================
 def _norm_cdf(x: float) -> float:
-    # Standard normal CDF via erf
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 def _parse_exp_date(exp_str: str) -> date:
@@ -102,7 +101,6 @@ def fetch_puts_with_analysis(
             if puts.empty:
                 continue
 
-            # Keep useful columns if present (yfinance varies)
             keep = [
                 "contractSymbol", "strike", "bid", "ask", "lastPrice",
                 "impliedVolatility", "volume", "openInterest", "inTheMoney"
@@ -110,7 +108,6 @@ def fetch_puts_with_analysis(
             cols = [c for c in keep if c in puts.columns]
             puts = puts[cols].copy()
 
-            # Normalize column names (simple labels)
             rename = {
                 "contractSymbol": "Contract",
                 "strike": "Strike",
@@ -126,11 +123,8 @@ def fetch_puts_with_analysis(
 
             puts["Expiration"] = exp_str
             puts["DTE"] = dte
-
-            # Spot (same for all rows)
             puts["Spot"] = spot
 
-            # % OTM (puts): (Spot - Strike)/Spot
             puts["% OTM"] = puts.apply(
                 lambda r_: (
                     (float(r_["Spot"]) - float(r_["Strike"])) / float(r_["Spot"])
@@ -139,12 +133,9 @@ def fetch_puts_with_analysis(
                 axis=1
             )
 
-            # Premium used for yield (your request: use Ask Price)
-            # NOTE: CSP seller typically receives BID, but we keep BOTH.
             puts["Premium (Ask)"] = puts["Ask Price"]
             puts["Premium (Bid)"] = puts["Bid Price"]
 
-            # Breakeven for short put (credit): Strike - premium
             puts["BE (Ask)"] = puts.apply(
                 lambda r_: (
                     float(r_["Strike"]) - float(r_["Premium (Ask)"])
@@ -162,13 +153,11 @@ def fetch_puts_with_analysis(
                 axis=1
             )
 
-            # Cash required (collateral) per contract
             puts["Cash Req ($)"] = puts.apply(
                 lambda r_: (float(r_["Strike"]) * 100.0 if _safe_float(r_.get("Strike")) is not None else None),
                 axis=1
             )
 
-            # Yield (simple ROI) = premium / strike
             puts["Yield % (Ask)"] = puts.apply(
                 lambda r_: (
                     (float(r_["Premium (Ask)"]) / float(r_["Strike"])) * 100.0
@@ -186,7 +175,6 @@ def fetch_puts_with_analysis(
                 axis=1
             )
 
-            # Annualized yield = (premium/strike) / (DTE/365)
             puts["Ann. Yield % (Ask)"] = puts.apply(
                 lambda r_: (
                     ((float(r_["Premium (Ask)"]) / float(r_["Strike"])) / (float(r_["DTE"]) / 365.0)) * 100.0
@@ -208,9 +196,6 @@ def fetch_puts_with_analysis(
                 axis=1
             )
 
-            # Probability of assignment proxy:
-            # Primary: Black-Scholes risk-neutral P(ITM) using IV (more "advanced" than delta-proxy)
-            # Fallback: simple heuristic based on moneyness if IV missing.
             def prob_assign_row(r_):
                 S = _safe_float(r_.get("Spot"))
                 K = _safe_float(r_.get("Strike"))
@@ -221,14 +206,10 @@ def fetch_puts_with_analysis(
 
                 p_itm = _risk_neutral_prob_itm_put(S, K, T, r, q, iv)
                 if p_itm is not None:
-                    return p_itm  # already 0..1
+                    return p_itm
 
-                # Fallback: if no IV, use rough distance-to-strike heuristic
-                # (NOT a true probability, but still gives a ranking signal)
                 if S and K and S > 0:
-                    m = (S - K) / S  # %OTM
-                    # Map %OTM to a 0..1 "risk score" (closer to ATM -> higher)
-                    # 0% OTM => ~0.50, 10% OTM => ~0.25, 20% OTM => ~0.12, etc
+                    m = (S - K) / S
                     return max(0.01, min(0.99, 0.5 * math.exp(-10.0 * max(0.0, m))))
                 return None
 
@@ -237,10 +218,8 @@ def fetch_puts_with_analysis(
                 lambda x: (1.0 - x) if x is not None and not pd.isna(x) else None
             )
 
-            # “CSP Score” (simple, straight ranking):
-            # Higher annualized yield, higher OTM, lower assignment probability, higher liquidity
             def csp_score_row(r_):
-                ay = _safe_float(r_.get("Ann. Yield % (Bid)"))  # use Bid for realism
+                ay = _safe_float(r_.get("Ann. Yield % (Bid)"))
                 potm = _safe_float(r_.get("% OTM"))
                 p = _safe_float(r_.get("Prob Assign (Est)"))
                 oi = _safe_float(r_.get("OI"), 0.0) or 0.0
@@ -249,24 +228,16 @@ def fetch_puts_with_analysis(
                 if ay is None:
                     return None
 
-                # Liquidity bump (soft)
                 liq = math.log10(1.0 + oi) + 0.5 * math.log10(1.0 + vol)
-
-                # Penalize higher assignment probability
                 p_pen = (p * 100.0) if p is not None else 35.0
-
-                # Reward OTM modestly
                 otm_bonus = (potm * 100.0) if potm is not None else 0.0
 
                 return ay + 0.25 * otm_bonus + 2.0 * liq - 0.6 * p_pen
 
             puts["CSP Score"] = puts.apply(csp_score_row, axis=1)
-
-            # Append
             all_rows.append(puts)
 
         except Exception:
-            # skip bad expiration silently; UI handles empties
             continue
 
     if not all_rows:
@@ -274,7 +245,6 @@ def fetch_puts_with_analysis(
 
     df = pd.concat(all_rows, ignore_index=True)
 
-    # Clean numeric types
     for c in ["Strike", "Bid Price", "Ask Price", "Last Price", "IV", "Volume", "OI", "DTE", "Spot",
               "% OTM", "Yield % (Ask)", "Yield % (Bid)", "Ann. Yield % (Ask)", "Ann. Yield % (Bid)",
               "BE (Ask)", "BE (Bid)", "Cash Req ($)", "Prob Assign (Est)", "Prob Expire W/O Assign (Est)", "CSP Score"]:
@@ -306,18 +276,32 @@ def main():
         "I show yields using both, but the default ranking uses **Bid** for realism."
     )
 
-    # Filters
+    # =========================
+    # Filters + toggles
+    # =========================
+    st.subheader("Filters")
+
+    t1, t2, t3, t4 = st.columns([1, 1, 1, 1])
+    with t1:
+        use_max_dte = st.toggle("Use Max DTE", value=True)
+    with t2:
+        use_min_oi = st.toggle("Use Min OI", value=True)
+    with t3:
+        use_max_prob = st.toggle("Use Max Prob Assign", value=True)
+    with t4:
+        use_min_otm = st.toggle("Use Min % OTM", value=True)
+
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1])
     with f1:
         min_dte = st.number_input("Min DTE", value=7, step=1)
     with f2:
-        max_dte = st.number_input("Max DTE", value=60, step=1)
+        max_dte = st.number_input("Max DTE", value=60, step=1, disabled=not use_max_dte)
     with f3:
-        min_oi = st.number_input("Min OI", value=50, step=10)
+        min_oi = st.number_input("Min OI", value=50, step=10, disabled=not use_min_oi)
     with f4:
-        max_prob = st.slider("Max Prob Assign (Est)", 0.0, 1.0, 0.35, 0.01)
+        max_prob = st.slider("Max Prob Assign (Est)", 0.0, 1.0, 0.35, 0.01, disabled=not use_max_prob)
     with f5:
-        min_otm = st.slider("Min % OTM", 0.0, 0.5, 0.05, 0.01)
+        min_otm = st.slider("Min % OTM", 0.0, 0.5, 0.05, 0.01, disabled=not use_min_otm)
 
     if st.button("Fetch CSP Ideas", type="primary"):
         with st.spinner("Pulling options chain + calculating CSP metrics..."):
@@ -330,18 +314,26 @@ def main():
         if spot is None or pd.isna(spot):
             st.warning("Could not reliably fetch spot price; probabilities/%OTM may be blank.")
 
-        # Apply filters
+        # Apply filters (respect toggles)
         view = df.copy()
-        view = view[(view["DTE"] >= min_dte) & (view["DTE"] <= max_dte)]
-        if "OI" in view.columns:
-            view = view[view["OI"].fillna(0) >= min_oi]
-        view = view[view["% OTM"].fillna(0) >= min_otm]
-        view = view[view["Prob Assign (Est)"].fillna(1.0) <= max_prob]
 
-        # Sort by best score
+        # Min DTE always on (you didn't ask for toggle)
+        view = view[view["DTE"] >= min_dte]
+
+        if use_max_dte:
+            view = view[view["DTE"] <= max_dte]
+
+        if use_min_oi and "OI" in view.columns:
+            view = view[view["OI"].fillna(0) >= min_oi]
+
+        if use_min_otm:
+            view = view[view["% OTM"].fillna(0) >= min_otm]
+
+        if use_max_prob:
+            view = view[view["Prob Assign (Est)"].fillna(1.0) <= max_prob]
+
         view = view.sort_values(["CSP Score", "Ann. Yield % (Bid)"], ascending=[False, False])
 
-        # A clean, simple column set (still “advanced” underneath)
         display_cols = [
             "Expiration", "DTE", "Contract",
             "Spot", "Strike", "% OTM",
@@ -355,7 +347,6 @@ def main():
         ]
         display_cols = [c for c in display_cols if c in view.columns]
 
-        # Format
         fmt = view[display_cols].copy()
 
         def pct(x):
@@ -394,11 +385,9 @@ def main():
         if "CSP Score" in fmt.columns:
             fmt["CSP Score"] = fmt["CSP Score"].apply(lambda x: "" if pd.isna(x) else f"{x:,.2f}")
 
-        # Top summary
         st.subheader("Top CSP candidates (filtered + ranked)")
         st.dataframe(fmt, use_container_width=True, hide_index=True)
 
-        # Download (raw numeric + full columns)
         csv_bytes = view.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Download CSV (filtered + scored)",
@@ -407,7 +396,6 @@ def main():
             mime="text/csv",
         )
 
-        # Optional: show by expiration (clean grouping)
         with st.expander("Show grouped by expiration"):
             for exp, g in view.groupby("Expiration", sort=True):
                 st.markdown(f"**Expiration: {exp}**  —  {len(g)} contracts")
